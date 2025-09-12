@@ -37,6 +37,11 @@ install:
 	@echo "Installing Node.js dependencies..."
 	@cd ui && npm install
 
+# Reinstall Python dependencies (for new packages)
+install-python:
+	@echo "Reinstalling Python dependencies..."
+	@cd services/ml-py && pip install -r requirements.txt
+
 # Clean build artifacts
 clean:
 	@echo "Cleaning build artifacts..."

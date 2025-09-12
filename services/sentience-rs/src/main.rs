@@ -5,6 +5,11 @@ async fn main() {
     println!("Sentience service starting on :8082");
     println!("I am Sentience service");
 
+    let cors = warp::cors()
+        .allow_any_origin()
+        .allow_headers(vec!["content-type"])
+        .allow_methods(vec!["GET", "POST", "OPTIONS"]);
+
     let ping = warp::path("ping")
         .and(warp::get())
         .map(|| {
@@ -18,7 +23,9 @@ async fn main() {
     let root = warp::path::end()
         .map(|| "I am Sentience service");
 
-    let routes = ping.or(root);
+    let routes = ping
+        .or(root)
+        .with(cors);
 
     warp::serve(routes)
         .run(([0, 0, 0, 0], 8082))
