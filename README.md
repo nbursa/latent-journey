@@ -51,18 +51,41 @@ latent-journey/
 
 ---
 
-## Running (dev mode)
+## Quick Start
 
 Make sure you have Go, Python, Rust, and Node.js installed.
 
+### 1. Install Dependencies
+
 ```bash
-make sentience    # Rust service on :7070
-make ml           # Python ML service on :9090
-make gateway      # Go backend on :8080
-make ui           # Vite UI on :5173
+make install
 ```
 
-Then open <http://localhost:5173> in your browser.
+### 2. Start All Services
+
+```bash
+make dev
+```
+
+This will start all services simultaneously:
+
+- **Gateway** (Go): <http://localhost:8080>
+- **ML Service** (Python): <http://localhost:8081>  
+- **Sentience Service** (Rust): <http://localhost:8082>
+- **UI** (React): <http://localhost:5173>
+
+### 3. Open the Application
+
+Visit <http://localhost:5173> in your browser to see the latent-journey interface.
+
+### Other Commands
+
+```bash
+make build    # Build all services
+make test     # Test all services (requires them to be running)
+make clean    # Clean build artifacts
+make help     # Show all available commands
+```
 
 ## More
 
