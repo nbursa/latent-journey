@@ -11,16 +11,16 @@ graph TD
   end
 
   subgraph Perception
-    B1[CLIP / OpenCLIP] --> C[Sentience DSL]
+    B1[CLIP / OpenCLIP] --> C
     B2[Whisper STT] --> C
     B3[Direct Text Tokenizer] --> C
   end
 
-  C --> D[Short-Term Memory (STM)]
-  C --> G[Thought Loop (AI‑Ego)]
+  C --> D[Short-Term Memory]
+  C --> G[AI-Ego]
 
   subgraph Memory
-    D --> E[Long-Term Memory (LTM - Inception)]
+    D --> E[Long-Term Memory]
   end
 
   G --> D
@@ -34,7 +34,7 @@ graph TD
     D --> UI4[Panel: Memory Timeline]
   end
 
-  click F href "<https://github.com/nbursa/latent-journey>" "Project Repo"
+  click F href "https://github.com/nbursa/latent-journey" "Project Repo"
 ```
 
 ## Modules
