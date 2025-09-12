@@ -11,7 +11,7 @@ graph TD
   end
 
   subgraph Perception
-    B1[CLIP / OpenCLIP] --> C
+    B1[CLIP / OpenCLIP] --> C[Perception Core]
     B2[Whisper STT] --> C
     B3[Direct Text Tokenizer] --> C
   end
@@ -33,8 +33,6 @@ graph TD
     B1 --> UI3[Panel: Live Perception]
     D --> UI4[Panel: Memory Timeline]
   end
-
-  click F href "https://github.com/nbursa/latent-journey" "Project Repo"
 ```
 
 ## Modules
