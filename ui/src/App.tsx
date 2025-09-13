@@ -545,27 +545,66 @@ export default function App() {
                 <div className="text-xs text-gray-400 mb-3">
                   Embedding: {lastSentienceToken.embedding_id}
                 </div>
+                {lastSentienceToken.ts && (
+                  <div className="text-xs text-gray-500 mb-3">
+                    Timestamp:{" "}
+                    {new Date(
+                      lastSentienceToken.ts * 1000
+                    ).toLocaleTimeString()}
+                  </div>
+                )}
                 {lastSentienceToken.facets && (
                   <div className="space-y-2">
                     <div className="text-xs text-gray-300 mb-2">Facets:</div>
-                    {Object.entries(lastSentienceToken.facets).map(
-                      ([key, value]) => (
+                    {(() => {
+                      // Label mapping for better display names
+                      const labelMap: Record<string, string> = {
+                        "speech.transcript": "Speech Transcript",
+                        "speech.intent": "Speech Intent",
+                        "speech.sentiment": "Speech Sentiment",
+                        "vision.object": "Vision Object",
+                        "color.dominant": "Dominant Color",
+                        "affect.valence": "Affect Valence",
+                        "affect.arousal": "Affect Arousal",
+                      };
+
+                      // Sort facets by category: speech.*, vision.*, color.*, affect.*
+                      const sortedEntries = Object.entries(
+                        lastSentienceToken.facets
+                      ).sort(([a], [b]) => {
+                        const getCategory = (key: string) => {
+                          if (key.startsWith("speech.")) return 0;
+                          if (key.startsWith("vision.")) return 1;
+                          if (key.startsWith("color.")) return 2;
+                          if (key.startsWith("affect.")) return 3;
+                          return 4;
+                        };
+                        return getCategory(a) - getCategory(b);
+                      });
+
+                      return sortedEntries.map(([key, value]) => (
                         <div key={key} className="flex items-center gap-2">
                           <span className="text-xs text-white min-w-0 flex-1 truncate">
-                            {key}:
+                            {labelMap[key] || key}:
                           </span>
-                          {key === "affect.valence" &&
+                          {(key === "affect.valence" ||
+                            key === "affect.arousal") &&
                           typeof value === "number" ? (
                             <div className="flex-1 flex items-center gap-2">
                               <div className="flex-1 progress-bar">
                                 <div
                                   className="progress-fill"
                                   style={{
-                                    width: `${((value + 1) / 2) * 100}%`,
+                                    width:
+                                      key === "affect.valence"
+                                        ? `${((value + 1) / 2) * 100}%`
+                                        : `${value * 100}%`,
                                     background:
-                                      value >= 0
-                                        ? "linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))"
-                                        : "linear-gradient(90deg, var(--accent-secondary), var(--accent-primary))",
+                                      key === "affect.valence"
+                                        ? value >= 0
+                                          ? "linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))"
+                                          : "linear-gradient(90deg, var(--accent-secondary), var(--accent-primary))"
+                                        : "linear-gradient(90deg, var(--accent-tertiary), var(--accent-quaternary))",
                                   }}
                                 />
                               </div>
@@ -579,8 +618,8 @@ export default function App() {
                             </span>
                           )}
                         </div>
-                      )
-                    )}
+                      ));
+                    })()}
                   </div>
                 )}
               </div>
