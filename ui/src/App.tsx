@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
-import Layout from "./components/Layout";
+import Layout from "./layouts/Layout";
 import ExplorationPage from "./pages/ExplorationPage";
 import LatentSpacePage from "./pages/LatentSpacePage";
 import MemoryAnalysisPage from "./pages/MemoryAnalysisPage";

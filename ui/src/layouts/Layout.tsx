@@ -1,8 +1,8 @@
 import { ReactNode, useEffect } from "react";
 import { useMediaRecording } from "../hooks/useMediaRecording";
 import { useAppStore } from "../stores/appStore";
-import Header from "./Header";
-import Navigation from "./Navigation";
+import Header from "../components/Header";
+import Navigation from "../components/Navigation";
 
 interface LayoutProps {
   children: ReactNode;

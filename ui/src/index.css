@@ -380,3 +380,17 @@ button:disabled:hover,
 .glass-border {
   border: 1px solid var(--glass-border);
 }
+
+/* 3D Tooltip Styles - Fixed size regardless of camera zoom */
+.three-tooltip {
+  transform: scale(1) !important;
+  transform-origin: center !important;
+  will-change: auto !important;
+  backface-visibility: hidden !important;
+  -webkit-backface-visibility: hidden !important;
+}
+
+.three-tooltip * {
+  transform: none !important;
+  scale: 1 !important;
+}
