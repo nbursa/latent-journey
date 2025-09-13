@@ -112,6 +112,53 @@ body,
   transform: none;
 }
 
+.btn-secondary {
+  background: linear-gradient(
+    135deg,
+    var(--bg-tertiary),
+    var(--bg-secondary),
+    var(--bg-primary),
+    var(--bg-tertiary)
+  );
+  background-size: 300% 300%;
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-glow);
+}
+
+.btn-secondary:hover {
+  cursor: pointer;
+  animation: gradientInvert 1.2s ease-in-out infinite;
+  box-shadow: var(--shadow-glow-hover);
+  transform: translateY(-2px);
+}
+
+.btn-danger {
+  background: linear-gradient(135deg, #ff006e, #ff4081, #ff006e, #ff4081);
+  background-size: 300% 300%;
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  border: 1px solid #ff006e;
+  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+}
+
+.btn-danger:hover {
+  cursor: pointer;
+  animation: gradientInvert 1.2s ease-in-out infinite;
+  box-shadow: 0 6px 16px rgba(255, 0, 110, 0.4);
+  transform: translateY(-2px);
+}
+
+.btn-secondary:disabled,
+.btn-danger:disabled {
+  background: var(--text-muted);
+  color: var(--bg-secondary);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
+}
+
 /* Animated Background */
 .animated-bg {
   background: linear-gradient(-45deg, #0a0a0a, #111111, #1a1a1a, #0a0a0a);

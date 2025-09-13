@@ -13,6 +13,7 @@ var hub = NewSSEHub()
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/events", hub)
 	mux.HandleFunc("/api/vision/frame", postVisionFrame)
+	mux.HandleFunc("/api/speech/transcript", postSpeechTranscript)
 	mux.HandleFunc("/api/sentience/tokenize", postSentienceTokenize)
 	// add others...
 }
@@ -29,6 +30,10 @@ type frameIn struct {
 	ImageBase64 string `json:"image_base64"`
 }
 
+type speechIn struct {
+	AudioBase64 string `json:"audio_base64"`
+}
+
 type tokenizeIn struct {
 	EmbeddingID string `json:"embedding_id"`
 	ClipTopK    []struct {
@@ -42,6 +47,12 @@ type sentienceTokenResp struct {
 	Ts          int64                  `json:"ts"`
 	EmbeddingID string                 `json:"embedding_id"`
 	Facets      map[string]interface{} `json:"facets"`
+}
+
+type whisperResp struct {
+	Transcript string  `json:"transcript"`
+	Confidence float64 `json:"confidence"`
+	Language   string  `json:"language"`
 }
 
 func postVisionFrame(w http.ResponseWriter, r *http.Request) {
@@ -135,6 +146,62 @@ func postSentienceTokenize(w http.ResponseWriter, r *http.Request) {
 	// broadcast SSE event
 	evBytes, _ := json.Marshal(out)
 	hub.Broadcast(string(evBytes))
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
+}
+
+func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 10MB for audio
+	const maxSize = 10 << 20 // 10MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+	var in speechIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.AudioBase64 == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// call ML service for Whisper
+	body, _ := json.Marshal(map[string]string{"audio_base64": in.AudioBase64})
+	resp, err := http.Post("http://localhost:8081/infer/whisper", "application/json", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+
+	var out whisperResp
+	if err := json.Unmarshal(b, &out); err != nil {
+		http.Error(w, "whisper parse error", http.StatusBadGateway)
+		return
+	}
+
+	// broadcast SSE event
+	ev := map[string]any{
+		"type":         "speech.transcript",
+		"transcript":   out.Transcript,
+		"confidence":   out.Confidence,
+		"language":     out.Language,
+		"embedding_id": "speech-1",
+	}
+	evBytes, _ := json.Marshal(ev)
+	hub.Broadcast(string(evBytes))
+
+	// Also call sentience tokenize for speech
+	tokenizeReq := map[string]interface{}{
+		"embedding_id": "speech-1",
+		"transcript":   out.Transcript,
+	}
+	tokenizeBody, _ := json.Marshal(tokenizeReq)
+	tokenizeClient := &http.Client{Timeout: 5 * time.Second}
+	tokenizeResp, err := tokenizeClient.Post("http://localhost:8082/tokenize", "application/json", bytes.NewReader(tokenizeBody))
+	if err == nil && tokenizeResp.StatusCode < 400 {
+		tokenizeData, _ := io.ReadAll(tokenizeResp.Body)
+		tokenizeResp.Body.Close()
+		hub.Broadcast(string(tokenizeData))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write([]byte(`{"ok":true}`))

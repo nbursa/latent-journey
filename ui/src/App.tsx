@@ -4,6 +4,9 @@ interface Event {
   type: string;
   message?: string;
   clip_topk?: Array<{ label: string; score: number }>;
+  transcript?: string;
+  confidence?: number;
+  language?: string;
   embedding_id?: string;
   ts?: number;
   facets?: Record<string, string | number>;
@@ -12,6 +15,7 @@ interface Event {
 export default function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
   const [captures, setCaptures] = useState<string[]>([]);
   const [lastSentienceToken, setLastSentienceToken] = useState<Event | null>(
     null
@@ -21,8 +25,14 @@ export default function App() {
     ml: "unknown",
     sentience: "unknown",
   });
+  const [audioLevels, setAudioLevels] = useState<number[]>([]);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioChunksRef = useRef<Blob[]>([]);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const analyserRef = useRef<AnalyserNode | null>(null);
+  const animationFrameRef = useRef<number | null>(null);
 
   // Check services status
   const checkServices = async () => {
@@ -80,6 +90,22 @@ export default function App() {
       if (videoRef.current) videoRef.current.srcObject = stream;
     })();
 
+    // Initialize audio visualization with dummy data
+    const initializeAudioVisualization = () => {
+      // Create a simple animated pattern when no audio is available
+      const animateIdle = () => {
+        const dummyLevels = Array.from(
+          { length: 32 },
+          () => Math.random() * 0.1
+        );
+        setAudioLevels(dummyLevels);
+        animationFrameRef.current = requestAnimationFrame(animateIdle);
+      };
+      animateIdle();
+    };
+
+    initializeAudioVisualization();
+
     // SSE
     const es = new EventSource("/events");
     es.onmessage = (e) => {
@@ -106,6 +132,10 @@ export default function App() {
     return () => {
       es.close();
       clearInterval(statusInterval);
+      stopAudioVisualization();
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
     };
   }, []);
 
@@ -179,6 +209,131 @@ export default function App() {
     }
   };
 
+  const startAudioVisualization = (stream: MediaStream) => {
+    try {
+      const audioContext = new (window.AudioContext ||
+        (window as any).webkitAudioContext)();
+      const analyser = audioContext.createAnalyser();
+      const source = audioContext.createMediaStreamSource(stream);
+
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.8;
+      source.connect(analyser);
+
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+
+      const updateVisualization = () => {
+        if (analyserRef.current) {
+          analyserRef.current.getByteFrequencyData(dataArray);
+
+          // Convert to normalized levels (0-1)
+          const levels = Array.from(dataArray).map((value) => value / 255);
+          setAudioLevels(levels);
+
+          // Continue animation even when not recording
+          animationFrameRef.current =
+            requestAnimationFrame(updateVisualization);
+        }
+      };
+
+      updateVisualization();
+    } catch (error) {
+      console.error("Error setting up audio visualization:", error);
+    }
+  };
+
+  const stopAudioVisualization = () => {
+    if (animationFrameRef.current) {
+      cancelAnimationFrame(animationFrameRef.current);
+      animationFrameRef.current = null;
+    }
+
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+
+    analyserRef.current = null;
+    setAudioLevels([]);
+  };
+
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mediaRecorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = mediaRecorder;
+      audioChunksRef.current = [];
+
+      // Start audio visualization
+      startAudioVisualization(stream);
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunksRef.current.push(event.data);
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        stopAudioVisualization();
+
+        const audioBlob = new Blob(audioChunksRef.current, {
+          type: "audio/webm;codecs=opus",
+        });
+        console.log("Audio blob created:", audioBlob.size, "bytes");
+
+        const reader = new FileReader();
+        reader.onload = async () => {
+          const base64 = reader.result as string;
+          console.log("Audio base64 length:", base64.length);
+          await sendAudioToAPI(base64);
+        };
+        reader.readAsDataURL(audioBlob);
+      };
+
+      mediaRecorder.start();
+      setIsRecording(true);
+      console.log("Recording started");
+    } catch (error) {
+      console.error("Error starting recording:", error);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
+      setIsRecording(false);
+      stopAudioVisualization();
+      console.log("Recording stopped");
+    }
+  };
+
+  const sendAudioToAPI = async (audioBase64: string) => {
+    setIsProcessing(true);
+    console.log("Sending audio to API...");
+
+    try {
+      const response = await fetch("/api/speech/transcript", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ audio_base64: audioBase64 }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      console.log("API response:", result);
+    } catch (error) {
+      console.error("Error sending audio:", error);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   return (
     <div className="h-screen w-screen flex flex-col text-white animated-bg">
       {/* Header */}
@@ -187,8 +342,8 @@ export default function App() {
           Latent Journey
         </h1>
 
-        {/* Services Status and Last Capture */}
-        <div className="flex flex-col lg:flex-row gap-4">
+        {/* Services Status and Audio Visualizer */}
+        <div className="flex flex-col sm:flex-row gap-4">
           {/* Services Status */}
           <div className="w-fit glass flat p-3 flex-shrink-0">
             <h3 className="text-sm font-semibold mb-2">Services Status</h3>
@@ -232,28 +387,58 @@ export default function App() {
             </div>
           </div>
 
-          {/* Captures - Only on wider screens */}
-          {captures.length > 0 && (
-            <div className="hidden lg:block flex-1 min-w-0">
-              <div className="glass flat p-3 h-full">
-                <h3 className="text-sm font-semibold mb-2">
-                  Captures ({captures.length})
-                </h3>
-                <div className="overflow-x-auto">
-                  <div className="flex gap-2">
-                    {captures.map((capture, index) => (
-                      <img
-                        key={index}
-                        src={capture}
-                        alt={`Capture ${index + 1}`}
-                        className="h-16 w-auto flat glass-border object-cover flex-shrink-0 hover-scale"
-                      />
-                    ))}
-                  </div>
+          {/* Audio Visualizer - Always Visible */}
+          <div className="w-full sm:w-64 glass flat p-3 flex-shrink-0">
+            <div className="text-xs text-gray-300 mb-2">
+              Audio Level {isRecording ? "(Recording)" : "(Idle)"}
+            </div>
+            <div className="flex items-end gap-1 h-12">
+              {audioLevels.slice(0, 32).map((level, index) => (
+                <div
+                  key={index}
+                  className={`flex-1 transition-all duration-75 ${
+                    isRecording
+                      ? "bg-gradient-to-t from-blue-500 to-purple-500"
+                      : "bg-gradient-to-t from-gray-600 to-gray-500"
+                  }`}
+                  style={{
+                    height: `${Math.max(level * 100, 2)}%`,
+                    opacity: level > 0.1 ? 1 : 0.3,
+                  }}
+                />
+              ))}
+            </div>
+            <div className="text-xs text-gray-400 mt-1">
+              {isRecording
+                ? `Peak: ${(Math.max(...audioLevels) * 100).toFixed(1)}%`
+                : "Click 'Start Recording' to see audio levels"}
+            </div>
+          </div>
+
+          {/* Captures - Always visible with placeholder text */}
+          <div className="flex-1 min-w-0 glass flat p-3">
+            <h3 className="text-sm font-semibold mb-2">
+              Captures ({captures.length})
+            </h3>
+            {captures.length > 0 ? (
+              <div className="overflow-x-auto scrollbar-thin scrollbar-thumb-gray-600 scrollbar-track-transparent">
+                <div className="flex gap-2 min-w-max">
+                  {captures.map((capture, index) => (
+                    <img
+                      key={index}
+                      src={capture}
+                      alt={`Capture ${index + 1}`}
+                      className="h-16 w-auto flat glass-border object-cover flex-shrink-0 hover-scale"
+                    />
+                  ))}
                 </div>
               </div>
-            </div>
-          )}
+            ) : (
+              <div className="text-xs text-gray-400">
+                Click "Capture & Analyze" to take photos
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -269,15 +454,28 @@ export default function App() {
               playsInline
               className="w-full flat glass-border object-cover flex-1 min-h-0"
             />
-            <button
-              onClick={snapAndSend}
-              disabled={isProcessing}
-              className={`btn btn-primary w-full mt-2 text-sm flat hover-glow hover-scale ${
-                isProcessing ? "opacity-50 cursor-not-allowed" : ""
-              }`}
-            >
-              {isProcessing ? "Processing..." : "Capture & Analyze"}
-            </button>
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={snapAndSend}
+                disabled={isProcessing}
+                className={`btn btn-primary flex-1 text-sm flat hover-glow hover-scale ${
+                  isProcessing ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                {isProcessing ? "Processing..." : "Capture & Analyze"}
+              </button>
+              <button
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isProcessing}
+                className={`btn ${
+                  isRecording ? "btn-danger" : "btn-secondary"
+                } flex-1 text-sm flat hover-glow hover-scale ${
+                  isProcessing ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                {isRecording ? "Stop Recording" : "Start Recording"}
+              </button>
+            </div>
             <canvas ref={canvasRef} className="hidden" />
           </div>
         </div>
@@ -329,6 +527,26 @@ export default function App() {
                             </span>
                           </div>
                         ))}
+                      </div>
+                    )}
+                    {event.transcript && (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-300 mb-2">
+                          Speech Transcript:
+                        </div>
+                        <div className="text-xs text-white bg-gray-800/50 p-2 rounded">
+                          "{event.transcript}"
+                        </div>
+                        {event.confidence && (
+                          <div className="text-xs text-gray-400">
+                            Confidence: {(event.confidence * 100).toFixed(1)}%
+                          </div>
+                        )}
+                        {event.language && (
+                          <div className="text-xs text-gray-400">
+                            Language: {event.language}
+                          </div>
+                        )}
                       </div>
                     )}
                     {event.message && (
