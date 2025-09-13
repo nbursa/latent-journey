@@ -1,0 +1,14 @@
+{"ts":1757762589,"embedding_id":"emb-1","facets":{"affect.arousal":0.3,"vision.object":"banana","affect.valence":0.5,"color.dominant":"yellow"},"source":"vision"}
+{"ts":1757762671,"embedding_id":"speech-1","facets":{"affect.arousal":0.3,"speech.sentiment":"neutral","speech.intent":"statement","affect.valence":0.5,"speech.transcript":"Wayja-dent."},"source":"speech"}
+{"ts":1757762693,"embedding_id":"speech-1","facets":{"speech.sentiment":"neutral","affect.arousal":0.3,"speech.intent":"statement","affect.valence":0.5,"speech.transcript":""},"source":"vision"}
+{"ts":1757763031,"embedding_id":"emb-1","facets":{"affect.arousal":0.3,"vision.object":"banana","color.dominant":"yellow","affect.valence":0.5},"source":"vision"}
+{"ts":1757763075,"embedding_id":"speech-1","facets":{"affect.arousal":0.3,"speech.transcript":"Ouajin?","speech.intent":"question","speech.sentiment":"neutral","affect.valence":0.5},"source":"speech"}
+{"ts":1757763103,"embedding_id":"speech-1","facets":{"affect.valence":0.5,"speech.transcript":"You have a agent.","speech.sentiment":"neutral","speech.intent":"statement","affect.arousal":0.3},"source":"speech"}
+{"ts":1757763147,"embedding_id":"speech-1","facets":{"speech.intent":"statement","affect.arousal":0.3,"affect.valence":0.5,"speech.transcript":"Haangschulder.","speech.sentiment":"neutral"},"source":"speech"}
+{"ts":1757763154,"embedding_id":"emb-1","facets":{"affect.valence":0.5,"vision.object":"banana","affect.arousal":0.3,"color.dominant":"yellow"},"source":"vision"}
+{"ts":1757763164,"embedding_id":"speech-1","facets":{"affect.arousal":0.3,"speech.intent":"greeting","speech.transcript":"Hello Agent.","affect.valence":0.5,"speech.sentiment":"neutral"},"source":"speech"}
+{"ts":1757763579,"embedding_id":"emb-1","facets":{"affect.arousal":0.3,"color.dominant":"yellow","affect.valence":0.5,"vision.object":"banana"},"source":"vision"}
+{"ts":1757763758,"embedding_id":"emb-1","facets":{"color.dominant":"yellow","vision.object":"banana","affect.arousal":0.3,"affect.valence":0.5},"source":"vision"}
+{"ts":1757763806,"embedding_id":"emb-1","facets":{"affect.arousal":0.3,"vision.object":"banana","affect.valence":0.5,"color.dominant":"yellow"},"source":"vision"}
+{"ts":1757763814,"embedding_id":"emb-1","facets":{"color.dominant":"yellow","vision.object":"banana","affect.valence":0.5,"affect.arousal":0.3},"source":"vision"}
+{"ts":1757763815,"embedding_id":"emb-1","facets":{"color.dominant":"yellow","affect.valence":0.5,"vision.object":"banana","affect.arousal":0.3},"source":"vision"}

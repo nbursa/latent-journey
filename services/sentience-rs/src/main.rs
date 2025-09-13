@@ -1,7 +1,9 @@
 use sentience::SentienceAgent;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::fs;
+use std::io::Write;
+use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use warp::Filter;
 
@@ -18,6 +20,14 @@ struct ClipItem {
     score: f64,
 }
 
+#[derive(Serialize, Deserialize, Clone)]
+struct MemoryEvent {
+    ts: u64,
+    embedding_id: String,
+    facets: HashMap<String, serde_json::Value>,
+    source: String, // "vision" or "speech"
+}
+
 #[derive(Serialize)]
 struct SentienceToken {
     #[serde(rename = "type")]
@@ -28,21 +38,63 @@ struct SentienceToken {
 }
 
 // Global Sentience agent instance
-use std::sync::Arc;
-use std::sync::Mutex;
 
 lazy_static::lazy_static! {
     static ref SENTIENCE_AGENT: Arc<Mutex<SentienceAgent>> = Arc::new(Mutex::new(SentienceAgent::new()));
+    static ref MEMORY_STORE: Arc<Mutex<VecDeque<MemoryEvent>>> = Arc::new(Mutex::new(VecDeque::with_capacity(500)));
 }
 
 fn escape_dsl(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
 
+fn add_to_memory(event: MemoryEvent) {
+    if let Ok(mut memory) = MEMORY_STORE.lock() {
+        // Add to ring buffer
+        if memory.len() >= 500 {
+            memory.pop_front();
+        }
+        memory.push_back(event.clone());
+        
+        // Persist to JSONL file
+        if let Ok(mut file) = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("data/memory.jsonl")
+        {
+            if let Ok(json) = serde_json::to_string(&event) {
+                let _ = writeln!(file, "{}", json);
+            }
+        }
+    }
+}
+
+fn load_memory_from_file() {
+    if let Ok(content) = std::fs::read_to_string("data/memory.jsonl") {
+        if let Ok(mut memory) = MEMORY_STORE.lock() {
+            for line in content.lines() {
+                if let Ok(event) = serde_json::from_str::<MemoryEvent>(line) {
+                    if memory.len() >= 500 {
+                        memory.pop_front();
+                    }
+                    memory.push_back(event);
+                }
+            }
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() {
     println!("Sentience service starting on :8082");
     println!("I am Sentience service");
+
+    // Create data directory if it doesn't exist
+    let _ = std::fs::create_dir_all("data");
+
+    // Load memory from file
+    load_memory_from_file();
+    println!("Loaded memory from data/memory.jsonl");
 
     // Load the Sentience agent from file
     let agent_code = match fs::read_to_string("agent.sentience") {
@@ -345,8 +397,24 @@ agent MultiModalAnalyzer {
                     .as_str()
                     .unwrap_or("unknown")
                     .to_string(),
-                facets,
+                facets: facets.clone(),
             };
+
+            // Determine source type based on input
+            let source = if req.get("transcript").and_then(|v| v.as_str()).map_or(false, |s| !s.is_empty()) {
+                "speech"
+            } else {
+                "vision"
+            };
+
+            // Add to memory
+            let memory_event = MemoryEvent {
+                ts: timestamp,
+                embedding_id: token.embedding_id.clone(),
+                facets: facets,
+                source: source.to_string(),
+            };
+            add_to_memory(memory_event);
 
             warp::reply::json(&token)
         });
@@ -514,9 +582,52 @@ agent MultiModalAnalyzer {
             warp::reply::json(&token)
         });
 
+    let memory = warp::path("memory")
+        .and(warp::get())
+        .and(warp::query::<HashMap<String, String>>())
+        .map(|params: HashMap<String, String>| {
+            let limit = params.get("limit")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(200);
+            let since_ts = params.get("since_ts")
+                .and_then(|s| s.parse::<u64>().ok());
+
+            if let Ok(memory) = MEMORY_STORE.lock() {
+                let mut events: Vec<&MemoryEvent> = memory.iter().collect();
+                
+                // Filter by timestamp if provided
+                if let Some(since) = since_ts {
+                    events.retain(|e| e.ts >= since);
+                }
+                
+                // Sort by timestamp (newest first)
+                events.sort_by(|a, b| b.ts.cmp(&a.ts));
+                
+                // Apply limit
+                events.truncate(limit);
+                
+                warp::reply::json(&events)
+            } else {
+                warp::reply::json(&Vec::<&MemoryEvent>::new())
+            }
+        });
+
+    let memory_stream = warp::path("memory")
+        .and(warp::path("stream"))
+        .and(warp::get())
+        .map(|| {
+            // For now, return a simple SSE stream
+            // In a real implementation, this would be a proper SSE stream
+            warp::reply::with_header(
+                "data: {\"type\":\"memory.stream\",\"message\":\"Memory stream started\"}\n\n",
+                "content-type",
+                "text/event-stream"
+            )
+        });
+
     let root = warp::path::end().map(|| "I am Sentience service");
 
-    let routes = ping.or(healthz).or(run).or(tokenize).or(root).with(cors);
+    let routes = ping.or(healthz).or(run).or(tokenize).or(memory).or(memory_stream).or(root).with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 8082)).await;
 }
