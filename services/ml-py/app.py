@@ -8,14 +8,23 @@ import whisper
 import tempfile
 import os
 import requests
+import torch
+from transformers import CLIPProcessor, CLIPModel
 
 app = Flask(__name__)
 CORS(app)
 
-# Load Whisper model on startup
+# Load models on startup
 print("Loading Whisper model...")
 whisper_model = whisper.load_model("base")  # 39MB, fast on M2
 print("Whisper model loaded successfully")
+
+print("Loading CLIP model...")
+device = "cuda" if torch.cuda.is_available() else "cpu"
+clip_model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32")
+clip_processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
+clip_model.to(device)
+print(f"CLIP model loaded successfully on {device}")
 
 SENTIENCE_URL = os.environ.get("SENTIENCE_URL", "http://localhost:8082")
 
@@ -52,21 +61,76 @@ def infer_clip():
     if not b64:
         return jsonify({"error": "missing image_base64"}), 400
 
-    # decode image
-    img_bytes = base64.b64decode(b64.split(",")[-1])
-    img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+    try:
+        # decode image
+        img_bytes = base64.b64decode(b64.split(",")[-1])
+        img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
 
-    # TODO: run real CLIP/OpenCLIP here.
-    # Placeholder top-k to get the pipe flowing:
-    topk = [
-        {"label": "banana", "score": 0.83},
-        {"label": "fruit", "score": 0.74},
-        {"label": "yellow object", "score": 0.62},
-    ]
-    # optional: return a short embedding vector placeholder
-    embedding = [0.1, 0.2, 0.3]
+        # Process with CLIP
+        inputs = clip_processor(
+            text=None, images=img, return_tensors="pt", padding=True
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
 
-    return jsonify({"topk": topk, "embedding": embedding})
+        # Get image features
+        with torch.no_grad():
+            image_features = clip_model.get_image_features(**inputs)
+            image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+
+            # Get text features for common labels
+            text_labels = [
+                "a photo of a banana",
+                "a photo of an apple",
+                "a photo of an orange",
+                "a photo of a cup",
+                "a photo of a book",
+                "a photo of a phone",
+                "a photo of a laptop",
+                "a photo of a chair",
+                "a photo of a table",
+                "a photo of a car",
+                "a photo of a dog",
+                "a photo of a cat",
+                "a photo of a person",
+                "a photo of food",
+                "a photo of a building",
+            ]
+
+            text_inputs = clip_processor(
+                text=text_labels, return_tensors="pt", padding=True
+            )
+            text_inputs = {k: v.to(device) for k, v in text_inputs.items()}
+            text_features = clip_model.get_text_features(**text_inputs)
+            text_features = text_features / text_features.norm(dim=-1, keepdim=True)
+
+            # Calculate similarities
+            similarities = (100.0 * image_features @ text_features.T).softmax(dim=-1)
+            values, indices = similarities[0].topk(5)
+
+            # Format results
+            topk = []
+            for i, (value, idx) in enumerate(zip(values, indices)):
+                label = (
+                    text_labels[idx]
+                    .replace("a photo of ", "")
+                    .replace("an ", "")
+                    .replace("a ", "")
+                )
+                topk.append({"label": label, "score": float(value)})
+
+            # Return real embedding (truncated for efficiency)
+            embedding = (
+                image_features[0].cpu().numpy().tolist()[:128]
+            )  # First 128 dimensions
+
+        return jsonify({"topk": topk, "embedding": embedding})
+
+    except Exception as e:
+        print(f"CLIP error: {e}")
+        import traceback
+
+        traceback.print_exc()
+        return jsonify({"error": f"CLIP processing failed: {str(e)}"}), 500
 
 
 @app.route("/infer/whisper", methods=["POST"])

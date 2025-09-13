@@ -1,5 +1,14 @@
 import { MemoryEvent, MemoryFilter } from "../types";
-import { Brain, Mic, Eye, Clock, Sparkles, Filter } from "lucide-react";
+import {
+  Brain,
+  Mic,
+  Eye,
+  Clock,
+  Sparkles,
+  Filter,
+  Bookmark,
+} from "lucide-react";
+import { useWaypoints, useWaypointActions } from "../stores/appStore";
 
 interface MemoryTimelineProps {
   memoryEvents: MemoryEvent[];
@@ -16,6 +25,8 @@ export default function MemoryTimeline({
   onSetMemoryFilter,
   onSelectMemoryEvent,
 }: MemoryTimelineProps) {
+  const waypoints = useWaypoints();
+  const { toggleWaypoint, setWaypointA, setWaypointB } = useWaypointActions();
   const filterButtons: { key: MemoryFilter; label: string; icon: any }[] = [
     { key: "all", label: "All", icon: Filter },
     { key: "speech", label: "Speech", icon: Mic },
@@ -76,16 +87,60 @@ export default function MemoryTimeline({
                           NEW
                         </span>
                       )}
+                      {waypoints.has(event.ts) && (
+                        <span className="text-xs bg-yellow-500/20 text-yellow-300 px-1 py-0.5 rounded flex items-center gap-1">
+                          <Bookmark className="w-3 h-3" />
+                          WAYPOINT
+                        </span>
+                      )}
                     </div>
-                    <span
-                      className={`text-xs px-2 py-1 ${
-                        event.source === "speech"
-                          ? "bg-green-500/20 text-green-300"
-                          : "bg-blue-500/20 text-blue-300"
-                      }`}
-                    >
-                      {event.source}
-                    </span>
+                    <div className="flex items-center gap-1">
+                      <span
+                        className={`text-xs px-2 py-1 ${
+                          event.source === "speech"
+                            ? "bg-green-500/20 text-green-300"
+                            : "bg-blue-500/20 text-blue-300"
+                        }`}
+                      >
+                        {event.source}
+                      </span>
+                      <div className="flex gap-1">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleWaypoint(event.ts);
+                          }}
+                          className={`p-1 rounded transition-colors ${
+                            waypoints.has(event.ts)
+                              ? "bg-yellow-500/20 text-yellow-300"
+                              : "text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10"
+                          }`}
+                          title="Toggle waypoint"
+                        >
+                          <Bookmark className="w-3 h-3" />
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWaypointA(event);
+                          }}
+                          className="p-1 rounded text-gray-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
+                          title="Set as Waypoint A"
+                        >
+                          A
+                        </button>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setWaypointB(event);
+                          }}
+                          className="p-1 rounded text-gray-400 hover:text-green-300 hover:bg-green-500/10 transition-colors"
+                          title="Set as Waypoint B"
+                        >
+                          B
+                        </button>
+                      </div>
+                    </div>
                   </div>
                   <div className="text-xs text-gray-400 mb-1">
                     {event.embedding_id}

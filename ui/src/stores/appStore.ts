@@ -22,6 +22,11 @@ interface AppState {
   isRecording: boolean;
   isProcessing: boolean;
 
+  // Waypoint system
+  waypoints: Set<number>; // timestamps of waypoint events
+  waypointA: MemoryEvent | null;
+  waypointB: MemoryEvent | null;
+
   // Actions
   addEvent: (event: Event) => void;
   setLastSentienceToken: (token: Event | null) => void;
@@ -33,6 +38,12 @@ interface AppState {
   updateServicesStatus: (status: ServicesStatus) => void;
   setIsRecording: (recording: boolean) => void;
   setIsProcessing: (processing: boolean) => void;
+
+  // Waypoint actions
+  toggleWaypoint: (timestamp: number) => void;
+  setWaypointA: (event: MemoryEvent | null) => void;
+  setWaypointB: (event: MemoryEvent | null) => void;
+  clearWaypoints: () => void;
 
   // Cleanup actions
   clearAllData: () => void;
@@ -54,6 +65,9 @@ const initialState = {
   },
   isRecording: false,
   isProcessing: false,
+  waypoints: new Set<number>(),
+  waypointA: null,
+  waypointB: null,
 };
 
 export const useAppStore = create<AppState>()(
@@ -147,6 +161,35 @@ export const useAppStore = create<AppState>()(
       clearCaptures: () => {
         set({ captures: [] });
       },
+
+      // Waypoint actions
+      toggleWaypoint: (timestamp: number) => {
+        set((state) => {
+          const newWaypoints = new Set(state.waypoints);
+          if (newWaypoints.has(timestamp)) {
+            newWaypoints.delete(timestamp);
+          } else {
+            newWaypoints.add(timestamp);
+          }
+          return { waypoints: newWaypoints };
+        });
+      },
+
+      setWaypointA: (event: MemoryEvent | null) => {
+        set({ waypointA: event });
+      },
+
+      setWaypointB: (event: MemoryEvent | null) => {
+        set({ waypointB: event });
+      },
+
+      clearWaypoints: () => {
+        set({
+          waypoints: new Set<number>(),
+          waypointA: null,
+          waypointB: null,
+        });
+      },
     }),
     {
       name: "latent-journey-storage",
@@ -177,6 +220,9 @@ export const useServicesStatus = () =>
   useAppStore((state) => state.servicesStatus);
 export const useIsRecording = () => useAppStore((state) => state.isRecording);
 export const useIsProcessing = () => useAppStore((state) => state.isProcessing);
+export const useWaypoints = () => useAppStore((state) => state.waypoints);
+export const useWaypointA = () => useAppStore((state) => state.waypointA);
+export const useWaypointB = () => useAppStore((state) => state.waypointB);
 
 // Action selectors
 export const useEventActions = () => {
@@ -213,6 +259,20 @@ export const useUIActions = () => {
   const setIsRecording = useAppStore((state) => state.setIsRecording);
   const setIsProcessing = useAppStore((state) => state.setIsProcessing);
   return { setIsRecording, setIsProcessing };
+};
+
+export const useWaypointActions = () => {
+  const toggleWaypoint = useAppStore((state) => state.toggleWaypoint);
+  const setWaypointA = useAppStore((state) => state.setWaypointA);
+  const setWaypointB = useAppStore((state) => state.setWaypointB);
+  const clearWaypoints = useAppStore((state) => state.clearWaypoints);
+
+  return {
+    toggleWaypoint,
+    setWaypointA,
+    setWaypointB,
+    clearWaypoints,
+  };
 };
 
 export const useCleanupActions = () => {

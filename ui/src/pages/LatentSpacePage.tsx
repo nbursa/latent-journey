@@ -1,5 +1,6 @@
 import { useAppStore } from "../stores/appStore";
 import LatentSpaceView from "../components/LatentSpaceView";
+import WaypointComparison from "../components/WaypointComparison";
 
 export default function LatentSpacePage() {
   const memoryEvents = useAppStore((state) => state.memoryEvents);
@@ -9,12 +10,18 @@ export default function LatentSpacePage() {
   );
 
   return (
-    <div className="flex-1 p-4">
-      <LatentSpaceView
-        memoryEvents={memoryEvents}
-        selectedEvent={selectedMemoryEvent}
-        onSelectEvent={setSelectedMemoryEvent}
-      />
+    <div className="h-full flex flex-col xl:flex-row gap-4 p-4 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <LatentSpaceView
+          memoryEvents={memoryEvents}
+          selectedEvent={selectedMemoryEvent}
+          onSelectEvent={setSelectedMemoryEvent}
+        />
+      </div>
+
+      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+        <WaypointComparison />
+      </div>
     </div>
   );
 }
