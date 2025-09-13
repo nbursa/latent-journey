@@ -564,8 +564,8 @@ export default function App() {
                                     width: `${((value + 1) / 2) * 100}%`,
                                     background:
                                       value >= 0
-                                        ? "linear-gradient(90deg, #00d4ff, #ff006e)"
-                                        : "linear-gradient(90deg, #ff006e, #00d4ff)",
+                                        ? "linear-gradient(90deg, var(--accent-primary), var(--accent-secondary))"
+                                        : "linear-gradient(90deg, var(--accent-secondary), var(--accent-primary))",
                                   }}
                                 />
                               </div>

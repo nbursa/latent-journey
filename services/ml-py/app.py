@@ -7,6 +7,7 @@ import sys
 import whisper
 import tempfile
 import os
+import requests
 
 app = Flask(__name__)
 CORS(app)
@@ -15,6 +16,8 @@ CORS(app)
 print("Loading Whisper model...")
 whisper_model = whisper.load_model("base")  # 39MB, fast on M2
 print("Whisper model loaded successfully")
+
+SENTIENCE_URL = os.environ.get("SENTIENCE_URL", "http://localhost:8082")
 
 
 @app.route("/ping", methods=["GET"])
@@ -112,6 +115,8 @@ def infer_whisper():
             if not transcript:
                 print("Warning: Empty transcript from Whisper")
                 transcript = "No speech detected"
+
+            # Note: Gateway will handle sending transcript to Sentience
 
             return jsonify(
                 {

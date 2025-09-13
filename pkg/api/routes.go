@@ -3,6 +3,7 @@ package api
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -91,18 +92,25 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 	evBytes, _ := json.Marshal(ev)
 	hub.Broadcast(string(evBytes))
 
-	// Also call sentience tokenize
-	tokenizeReq := tokenizeIn{
-		EmbeddingID: "emb-1",
-		ClipTopK:    out.TopK,
+	// Also call sentience run for vision
+	runReq := map[string]interface{}{
+		"embedding_id":  "emb-1",
+		"context":       fmt.Sprintf("%s:%.2f %s:%.2f %s:%.2f", out.TopK[0].Label, out.TopK[0].Score, out.TopK[1].Label, out.TopK[1].Score, out.TopK[2].Label, out.TopK[2].Score),
+		"vision_object": out.TopK[0].Label,
+		"vision_color":  "yellow", // TODO: extract from CLIP or add color detection
 	}
-	tokenizeBody, _ := json.Marshal(tokenizeReq)
-	tokenizeClient := &http.Client{Timeout: 5 * time.Second}
-	tokenizeResp, err := tokenizeClient.Post("http://localhost:8082/tokenize", "application/json", bytes.NewReader(tokenizeBody))
-	if err == nil && tokenizeResp.StatusCode < 400 {
-		tokenizeData, _ := io.ReadAll(tokenizeResp.Body)
-		tokenizeResp.Body.Close()
-		hub.Broadcast(string(tokenizeData))
+	runBody, _ := json.Marshal(runReq)
+	runClient := &http.Client{Timeout: 5 * time.Second}
+	runResp, err := runClient.Post("http://localhost:8082/run", "application/json", bytes.NewReader(runBody))
+	if err == nil && runResp.StatusCode < 400 {
+		runData, _ := io.ReadAll(runResp.Body)
+		runResp.Body.Close()
+
+		// Parse the response and broadcast as sentience.token event
+		var sentienceResp map[string]interface{}
+		if err := json.Unmarshal(runData, &sentienceResp); err == nil {
+			hub.Broadcast(string(runData))
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -193,7 +201,7 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 	runReq := map[string]interface{}{
 		"embedding_id": "speech-1",
 		"context":      "",
-		"msg":          out.Transcript,
+		"transcript":   out.Transcript,
 	}
 	runBody, _ := json.Marshal(runReq)
 	runClient := &http.Client{Timeout: 5 * time.Second}

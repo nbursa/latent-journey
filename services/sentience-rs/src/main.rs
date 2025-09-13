@@ -166,6 +166,18 @@ agent MultiModalAnalyzer {
                 );
             }
 
+            // Vision data (if present)
+            if let Some(vision_obj) = req.get("vision_object").and_then(|v| v.as_str()) {
+                if !vision_obj.is_empty() {
+                    facets.insert("vision.object".into(), serde_json::Value::String(vision_obj.to_string()));
+                }
+            }
+            if let Some(vision_col) = req.get("vision_color").and_then(|v| v.as_str()) {
+                if !vision_col.is_empty() {
+                    facets.insert("color.dominant".into(), serde_json::Value::String(vision_col.to_string()));
+                }
+            }
+
             // Default affect seeds (agent may overwrite them)
             if !facets.contains_key("affect.valence") {
                 facets.insert("affect.valence".into(), serde_json::json!(0.5));
@@ -203,22 +215,59 @@ agent MultiModalAnalyzer {
                     }
                 }
 
-                let dsl = format!(
-                    ".use \"MultiModalWriter\"\n\
-                     mem.short[\"percept.context\"] = \"{ctx}\"\n\
-                     mem.short[\"percept.speech.transcript\"] = \"{t}\"\n\
-                     mem.short[\"percept.speech.intent\"] = \"{intent}\"\n\
-                     mem.short[\"percept.speech.sentiment\"] = \"{sentiment}\"\n\
-                     mem.short[\"percept.affect.valence\"] = 0.5\n\
-                     mem.short[\"percept.affect.arousal\"] = 0.3\n\
-                     mem.short[\"percept.vision.embedding_id\"] = \"{emb}\"\n\
-                     .input \"tick\"",
-                    ctx = ctx_esc,
-                    t = t_esc,
-                    intent = intent,
-                    sentiment = sentiment,
-                    emb = escape_dsl(embedding_id),
-                );
+                // Check if we have vision data
+                let vision_object = req.get("vision_object").and_then(|v| v.as_str()).unwrap_or("");
+                let vision_color = req.get("vision_color").and_then(|v| v.as_str()).unwrap_or("");
+                
+                let dsl = if !transcript.is_empty() {
+                    // Speech + Vision
+                    let vision_obj_line = if !vision_object.is_empty() {
+                        format!("mem.short[\"percept.vision.object\"] = \"{}\"\n", escape_dsl(vision_object))
+                    } else { String::new() };
+                    let vision_col_line = if !vision_color.is_empty() {
+                        format!("mem.short[\"percept.vision.color\"] = \"{}\"\n", escape_dsl(vision_color))
+                    } else { String::new() };
+                    
+                    format!(
+                        ".use \"MultiModalWriter\"\n\
+                         mem.short[\"percept.context\"] = \"{ctx}\"\n\
+                         {vision_obj}{vision_col}mem.short[\"percept.speech.transcript\"] = \"{t}\"\n\
+                         mem.short[\"percept.speech.intent\"] = \"{intent}\"\n\
+                         mem.short[\"percept.speech.sentiment\"] = \"{sentiment}\"\n\
+                         mem.short[\"percept.affect.valence\"] = 0.5\n\
+                         mem.short[\"percept.affect.arousal\"] = 0.3\n\
+                         mem.short[\"percept.vision.embedding_id\"] = \"{emb}\"\n\
+                         .input \"tick\"",
+                        ctx = ctx_esc,
+                        vision_obj = vision_obj_line,
+                        vision_col = vision_col_line,
+                        t = t_esc,
+                        intent = intent,
+                        sentiment = sentiment,
+                        emb = escape_dsl(embedding_id),
+                    )
+                } else {
+                    // Vision only
+                    let vision_obj_line = if !vision_object.is_empty() {
+                        format!("mem.short[\"percept.vision.object\"] = \"{}\"\n", escape_dsl(vision_object))
+                    } else { String::new() };
+                    let vision_col_line = if !vision_color.is_empty() {
+                        format!("mem.short[\"percept.vision.color\"] = \"{}\"\n", escape_dsl(vision_color))
+                    } else { String::new() };
+                    
+                    format!(
+                        ".use \"MultiModalWriter\"\n\
+                         mem.short[\"percept.context\"] = \"{ctx}\"\n\
+                         {vision_obj}{vision_col}mem.short[\"percept.affect.valence\"] = 0.5\n\
+                         mem.short[\"percept.affect.arousal\"] = 0.3\n\
+                         mem.short[\"percept.vision.embedding_id\"] = \"{emb}\"\n\
+                         .input \"tick\"",
+                        ctx = ctx_esc,
+                        vision_obj = vision_obj_line,
+                        vision_col = vision_col_line,
+                        emb = escape_dsl(embedding_id),
+                    )
+                };
                 println!("Sending to Sentience via DSL script:\n{}", dsl);
                 let _ = agent.run_sentience(&dsl);
 
@@ -228,35 +277,22 @@ agent MultiModalAnalyzer {
 
                 // Extract facets from agent's short-term memory
                 for (key, value) in short_mem.clone() {
-                    if key.starts_with("vision")
-                        || key.starts_with("speech")
-                        || key.starts_with("affect")
-                        || key.starts_with("color")
-                    {
+                    if key.starts_with("facets.") {
+                        let facet_key = key.strip_prefix("facets.").unwrap_or(&key);
                         if let Ok(num) = value.parse::<f64>() {
                             facets.insert(
-                                key,
+                                facet_key.to_string(),
                                 serde_json::Value::Number(
                                     serde_json::Number::from_f64(num).unwrap(),
                                 ),
                             );
                         } else {
-                            facets.insert(key, serde_json::Value::String(value));
+                            facets.insert(facet_key.to_string(), serde_json::Value::String(value));
                         }
                     }
                 }
 
-                // Merge explicit facets.* keys written by the agent
-                for (k, v) in short_mem.iter() {
-                    if let Some(stripped) = k.strip_prefix("facets.") {
-                        if let Ok(num) = v.parse::<f64>() {
-                            facets.insert(stripped.to_string(), serde_json::json!(num));
-                        } else {
-                            facets
-                                .insert(stripped.to_string(), serde_json::Value::String(v.clone()));
-                        }
-                    }
-                }
+                // Note: facets.* keys are already processed above
 
                 // Fallback/augment: map any remaining percept.* keys the agent left in memory
                 {
