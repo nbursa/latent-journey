@@ -19,14 +19,6 @@ func RegisterRoutes(mux *http.ServeMux) {
 	// add others...
 }
 
-type clipResp struct {
-	TopK []struct {
-		Label string  `json:"label"`
-		Score float64 `json:"score"`
-	} `json:"topk"`
-	Embedding []float64 `json:"embedding"`
-}
-
 type frameIn struct {
 	ImageBase64 string `json:"image_base64"`
 }
@@ -77,7 +69,16 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 	b, _ := io.ReadAll(resp.Body)
 
-	var out clipResp
+	var out struct {
+		TopK []struct {
+			Label string  `json:"label"`
+			Score float64 `json:"score"`
+		} `json:"topk"`
+		Embedding     []float64 `json:"embedding"`
+		DominantColor string    `json:"dominant_color"`
+		AffectValence float64   `json:"affect_valence"`
+		AffectArousal float64   `json:"affect_arousal"`
+	}
 	if err := json.Unmarshal(b, &out); err != nil {
 		http.Error(w, "ml parse error", http.StatusBadGateway)
 		return
@@ -94,10 +95,12 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 
 	// Also call sentience run for vision
 	runReq := map[string]interface{}{
-		"embedding_id":  "emb-1",
-		"context":       fmt.Sprintf("%s:%.2f %s:%.2f %s:%.2f", out.TopK[0].Label, out.TopK[0].Score, out.TopK[1].Label, out.TopK[1].Score, out.TopK[2].Label, out.TopK[2].Score),
-		"vision_object": out.TopK[0].Label,
-		"vision_color":  "yellow", // TODO: extract from CLIP or add color detection
+		"embedding_id":   "emb-1",
+		"context":        fmt.Sprintf("%s:%.2f %s:%.2f %s:%.2f", out.TopK[0].Label, out.TopK[0].Score, out.TopK[1].Label, out.TopK[1].Score, out.TopK[2].Label, out.TopK[2].Score),
+		"vision_object":  out.TopK[0].Label,
+		"vision_color":   out.DominantColor,
+		"affect_valence": out.AffectValence,
+		"affect_arousal": out.AffectArousal,
 	}
 	runBody, _ := json.Marshal(runReq)
 	runClient := &http.Client{Timeout: 5 * time.Second}

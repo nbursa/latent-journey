@@ -7,6 +7,62 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 use warp::Filter;
 
+// Helper functions for speech affect analysis
+fn analyze_speech_valence(transcript: &str) -> f64 {
+    let lower = transcript.to_lowercase();
+    
+    // Positive words increase valence
+    let positive_words = ["happy", "good", "great", "awesome", "amazing", "wonderful", "excellent", "fantastic", "love", "like", "enjoy", "pleased", "excited", "thrilled", "delighted"];
+    let negative_words = ["sad", "bad", "terrible", "awful", "hate", "dislike", "angry", "mad", "frustrated", "disappointed", "upset", "worried", "scared", "afraid"];
+    
+    let mut valence: f64 = 0.5; // neutral starting point
+    
+    for word in &positive_words {
+        if lower.contains(word) {
+            valence += 0.1;
+        }
+    }
+    
+    for word in &negative_words {
+        if lower.contains(word) {
+            valence -= 0.1;
+        }
+    }
+    
+    // Clamp between 0.0 and 1.0
+    valence.max(0.0_f64).min(1.0_f64)
+}
+
+fn analyze_speech_arousal(transcript: &str) -> f64 {
+    let lower = transcript.to_lowercase();
+    
+    // High arousal words
+    let high_arousal_words = ["excited", "thrilled", "amazing", "incredible", "wow", "oh my", "holy", "intense", "crazy", "wild", "furious", "angry", "scared", "terrified", "shocked", "surprised"];
+    let low_arousal_words = ["calm", "peaceful", "quiet", "relaxed", "bored", "tired", "sleepy", "slow", "gentle", "soft", "mellow", "chill"];
+    
+    let mut arousal: f64 = 0.5; // neutral starting point
+    
+    for word in &high_arousal_words {
+        if lower.contains(word) {
+            arousal += 0.15;
+        }
+    }
+    
+    for word in &low_arousal_words {
+        if lower.contains(word) {
+            arousal -= 0.15;
+        }
+    }
+    
+    // Check for exclamation marks and caps (indicators of high arousal)
+    if lower.contains('!') || transcript.chars().any(|c| c.is_uppercase()) {
+        arousal += 0.1;
+    }
+    
+    // Clamp between 0.0 and 1.0
+    arousal.max(0.0).min(1.0)
+}
+
 #[derive(Deserialize)]
 struct TokenizeRequest {
     embedding_id: String,
@@ -230,12 +286,23 @@ agent MultiModalAnalyzer {
                 }
             }
 
-            // Default affect seeds (agent may overwrite them)
-            if !facets.contains_key("affect.valence") {
-                facets.insert("affect.valence".into(), serde_json::json!(0.5));
+            // Use real affect data from CLIP if available, otherwise analyze speech for affect
+            if let Some(valence) = req.get("affect_valence").and_then(|v| v.as_f64()) {
+                facets.insert("affect.valence".into(), serde_json::json!(valence));
+            } else if !facets.contains_key("affect.valence") {
+                // Analyze speech transcript for affect if no CLIP data
+                let transcript = req.get("transcript").and_then(|v| v.as_str()).unwrap_or("");
+                let valence = analyze_speech_valence(transcript);
+                facets.insert("affect.valence".into(), serde_json::json!(valence));
             }
-            if !facets.contains_key("affect.arousal") {
-                facets.insert("affect.arousal".into(), serde_json::json!(0.3));
+            
+            if let Some(arousal) = req.get("affect_arousal").and_then(|v| v.as_f64()) {
+                facets.insert("affect.arousal".into(), serde_json::json!(arousal));
+            } else if !facets.contains_key("affect.arousal") {
+                // Analyze speech transcript for affect if no CLIP data
+                let transcript = req.get("transcript").and_then(|v| v.as_str()).unwrap_or("");
+                let arousal = analyze_speech_arousal(transcript);
+                facets.insert("affect.arousal".into(), serde_json::json!(arousal));
             }
 
             // Use real Sentience agent to analyze input

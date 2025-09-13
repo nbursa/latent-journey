@@ -47,32 +47,88 @@ export default function LatentSpaceView({
 
   // Extract embeddings from memory events
   const extractEmbeddings = () => {
-    // For now, create mock embeddings based on facets
+    // Create embeddings based on stored facets
     return memoryEvents.map((event) => {
       const facets = event.facets;
       const embedding = new Array(128).fill(0);
 
-      // Create mock embedding based on facets
+      // Vision object features (dimensions 0-19)
       if (facets["vision.object"]) {
         const object = String(facets["vision.object"]).toLowerCase();
-        embedding[0] = object.includes("banana") ? 0.8 : 0.2;
-        embedding[1] = object.includes("apple") ? 0.8 : 0.2;
-        embedding[2] = object.includes("cup") ? 0.8 : 0.2;
+        const objectHash = object.split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        // Distribute object features across multiple dimensions
+        for (let i = 0; i < 20; i++) {
+          embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
+        }
       }
 
+      // Vision color features (dimensions 20-29)
+      if (facets["vision.color"]) {
+        const color = String(facets["vision.color"]).toLowerCase();
+        const colorHash = color.split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        for (let i = 20; i < 30; i++) {
+          embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
+        }
+      }
+
+      // Speech intent features (dimensions 30-49)
       if (facets["speech.intent"]) {
         const intent = String(facets["speech.intent"]).toLowerCase();
-        embedding[3] = intent.includes("greeting") ? 0.8 : 0.2;
-        embedding[4] = intent.includes("question") ? 0.8 : 0.2;
-        embedding[5] = intent.includes("statement") ? 0.8 : 0.2;
+        const intentHash = intent.split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        for (let i = 30; i < 50; i++) {
+          embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
+        }
       }
 
+      // Affect features (dimensions 50-69)
       if (facets["affect.valence"]) {
-        embedding[6] = Number(facets["affect.valence"]);
+        const valence = Number(facets["affect.valence"]);
+        // Spread valence across multiple dimensions
+        for (let i = 50; i < 60; i++) {
+          embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
+        }
       }
 
       if (facets["affect.arousal"]) {
-        embedding[7] = Number(facets["affect.arousal"]);
+        const arousal = Number(facets["affect.arousal"]);
+        for (let i = 60; i < 70; i++) {
+          embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
+        }
+      }
+
+      // Source type features (dimensions 70-79)
+      const sourceHash = event.source.split("").reduce((a, b) => {
+        a = (a << 5) - a + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      for (let i = 70; i < 80; i++) {
+        embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
+      }
+
+      // Temporal features (dimensions 80-89)
+      const timeHash = event.ts
+        .toString()
+        .split("")
+        .reduce((a, b) => {
+          a = (a << 5) - a + parseInt(b);
+          return a & a;
+        }, 0);
+      for (let i = 80; i < 90; i++) {
+        embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
+      }
+
+      // Add some noise to make the embedding more realistic
+      for (let i = 90; i < 128; i++) {
+        embedding[i] = Math.random() * 0.1 - 0.05;
       }
 
       return embedding;

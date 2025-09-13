@@ -96,6 +96,38 @@ def infer_clip():
                 "a photo of a building",
             ]
 
+            # Get text features for color detection
+            color_labels = [
+                "a red object",
+                "a blue object",
+                "a green object",
+                "a yellow object",
+                "a orange object",
+                "a purple object",
+                "a pink object",
+                "a brown object",
+                "a black object",
+                "a white object",
+                "a gray object",
+                "a silver object",
+                "a gold object",
+            ]
+
+            # Get text features for affect detection
+            affect_labels = [
+                "a happy and energetic scene",
+                "a sad and calm scene",
+                "a angry and intense scene",
+                "a peaceful and relaxed scene",
+                "a exciting and dynamic scene",
+                "a boring and static scene",
+                "a scary and tense scene",
+                "a joyful and lively scene",
+                "a melancholic and slow scene",
+                "a aggressive and fast scene",
+            ]
+
+            # Process object detection
             text_inputs = clip_processor(
                 text=text_labels, return_tensors="pt", padding=True
             )
@@ -103,11 +135,11 @@ def infer_clip():
             text_features = clip_model.get_text_features(**text_inputs)
             text_features = text_features / text_features.norm(dim=-1, keepdim=True)
 
-            # Calculate similarities
+            # Calculate object similarities
             similarities = (100.0 * image_features @ text_features.T).softmax(dim=-1)
             values, indices = similarities[0].topk(5)
 
-            # Format results
+            # Format object results
             topk = []
             for i, (value, idx) in enumerate(zip(values, indices)):
                 label = (
@@ -118,12 +150,77 @@ def infer_clip():
                 )
                 topk.append({"label": label, "score": float(value)})
 
-            # Return real embedding (truncated for efficiency)
+            # Process color detection
+            color_inputs = clip_processor(
+                text=color_labels, return_tensors="pt", padding=True
+            )
+            color_inputs = {k: v.to(device) for k, v in color_inputs.items()}
+            color_features = clip_model.get_text_features(**color_inputs)
+            color_features = color_features / color_features.norm(dim=-1, keepdim=True)
+
+            # Calculate color similarities
+            color_similarities = (100.0 * image_features @ color_features.T).softmax(
+                dim=-1
+            )
+            color_values, color_indices = color_similarities[0].topk(1)
+
+            # Get the most likely color
+            dominant_color = (
+                color_labels[color_indices[0]].replace("a ", "").replace(" object", "")
+            )
+
+            # Process affect detection
+            affect_inputs = clip_processor(
+                text=affect_labels, return_tensors="pt", padding=True
+            )
+            affect_inputs = {k: v.to(device) for k, v in affect_inputs.items()}
+            affect_features = clip_model.get_text_features(**affect_inputs)
+            affect_features = affect_features / affect_features.norm(
+                dim=-1, keepdim=True
+            )
+
+            # Calculate affect similarities
+            affect_similarities = (100.0 * image_features @ affect_features.T).softmax(
+                dim=-1
+            )
+            affect_values, affect_indices = affect_similarities[0].topk(1)
+
+            # Get the most likely affect and convert to valence/arousal
+            affect_scene = affect_labels[affect_indices[0]]
+
+            # Map affect scenes to valence/arousal values
+            if "happy" in affect_scene or "joyful" in affect_scene:
+                valence, arousal = 0.8, 0.7
+            elif "sad" in affect_scene or "melancholic" in affect_scene:
+                valence, arousal = 0.2, 0.3
+            elif "angry" in affect_scene or "aggressive" in affect_scene:
+                valence, arousal = 0.3, 0.9
+            elif "peaceful" in affect_scene or "calm" in affect_scene:
+                valence, arousal = 0.7, 0.2
+            elif "exciting" in affect_scene or "dynamic" in affect_scene:
+                valence, arousal = 0.8, 0.8
+            elif "boring" in affect_scene or "static" in affect_scene:
+                valence, arousal = 0.4, 0.1
+            elif "scary" in affect_scene or "tense" in affect_scene:
+                valence, arousal = 0.1, 0.9
+            else:
+                # Default neutral
+                valence, arousal = 0.5, 0.5
+
+            # Return embedding (truncated for efficiency)
             embedding = (
                 image_features[0].cpu().numpy().tolist()[:128]
             )  # First 128 dimensions
 
-        return jsonify({"topk": topk, "embedding": embedding})
+        return jsonify(
+            {
+                "topk": topk,
+                "embedding": embedding,
+                "dominant_color": dominant_color,
+                "affect_valence": valence,
+                "affect_arousal": arousal,
+            }
+        )
 
     except Exception as e:
         print(f"CLIP error: {e}")

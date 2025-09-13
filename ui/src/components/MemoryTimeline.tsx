@@ -8,7 +8,12 @@ import {
   Filter,
   Bookmark,
 } from "lucide-react";
-import { useWaypoints, useWaypointActions } from "../stores/appStore";
+import {
+  useWaypoints,
+  useWaypointActions,
+  useWaypointA,
+  useWaypointB,
+} from "../stores/appStore";
 
 interface MemoryTimelineProps {
   memoryEvents: MemoryEvent[];
@@ -26,6 +31,8 @@ export default function MemoryTimeline({
   onSelectMemoryEvent,
 }: MemoryTimelineProps) {
   const waypoints = useWaypoints();
+  const waypointA = useWaypointA();
+  const waypointB = useWaypointB();
   const { toggleWaypoint, setWaypointA, setWaypointB } = useWaypointActions();
   const filterButtons: { key: MemoryFilter; label: string; icon: any }[] = [
     { key: "all", label: "All", icon: Filter },
@@ -87,12 +94,6 @@ export default function MemoryTimeline({
                           NEW
                         </span>
                       )}
-                      {waypoints.has(event.ts) && (
-                        <span className="text-xs bg-yellow-500/20 text-yellow-300 px-1 py-0.5 rounded flex items-center gap-1">
-                          <Bookmark className="w-3 h-3" />
-                          WAYPOINT
-                        </span>
-                      )}
                     </div>
                     <div className="flex items-center gap-1">
                       <span
@@ -110,7 +111,7 @@ export default function MemoryTimeline({
                             e.stopPropagation();
                             toggleWaypoint(event.ts);
                           }}
-                          className={`p-1 rounded transition-colors ${
+                          className={`p-1 rounded transition-colors cursor-pointer ${
                             waypoints.has(event.ts)
                               ? "bg-yellow-500/20 text-yellow-300"
                               : "text-gray-400 hover:text-yellow-300 hover:bg-yellow-500/10"
@@ -122,20 +123,44 @@ export default function MemoryTimeline({
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setWaypointA(event);
+                            if (waypointA?.ts === event.ts) {
+                              setWaypointA(null);
+                            } else {
+                              setWaypointA(event);
+                            }
                           }}
-                          className="p-1 rounded text-gray-400 hover:text-blue-300 hover:bg-blue-500/10 transition-colors"
-                          title="Set as Waypoint A"
+                          className={`p-1 rounded transition-colors cursor-pointer ${
+                            waypointA?.ts === event.ts
+                              ? "bg-blue-500/20 text-blue-300"
+                              : "text-gray-400 hover:text-blue-300 hover:bg-blue-500/10"
+                          }`}
+                          title={
+                            waypointA?.ts === event.ts
+                              ? "Remove Waypoint A"
+                              : "Set as Waypoint A"
+                          }
                         >
                           A
                         </button>
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setWaypointB(event);
+                            if (waypointB?.ts === event.ts) {
+                              setWaypointB(null);
+                            } else {
+                              setWaypointB(event);
+                            }
                           }}
-                          className="p-1 rounded text-gray-400 hover:text-green-300 hover:bg-green-500/10 transition-colors"
-                          title="Set as Waypoint B"
+                          className={`p-1 rounded transition-colors cursor-pointer ${
+                            waypointB?.ts === event.ts
+                              ? "bg-green-500/20 text-green-300"
+                              : "text-gray-400 hover:text-green-300 hover:bg-green-500/10"
+                          }`}
+                          title={
+                            waypointB?.ts === event.ts
+                              ? "Remove Waypoint B"
+                              : "Set as Waypoint B"
+                          }
                         >
                           B
                         </button>
