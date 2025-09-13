@@ -5,12 +5,17 @@ interface Event {
   message?: string;
   clip_topk?: Array<{ label: string; score: number }>;
   embedding_id?: string;
+  ts?: number;
+  facets?: Record<string, string | number>;
 }
 
 export default function App() {
   const [events, setEvents] = useState<Event[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [captures, setCaptures] = useState<string[]>([]);
+  const [lastSentienceToken, setLastSentienceToken] = useState<Event | null>(
+    null
+  );
   const [servicesStatus, setServicesStatus] = useState({
     gateway: "unknown",
     ml: "unknown",
@@ -83,6 +88,11 @@ export default function App() {
         // Filter out connection and ping events
         if (event.type !== "connection" && event.type !== "ping") {
           setEvents((prev) => [event, ...prev].slice(0, 50));
+
+          // Track last sentience token for Panel B
+          if (event.type === "sentience.token") {
+            setLastSentienceToken(event);
+          }
         }
       } catch {
         /* ignore */
@@ -333,6 +343,65 @@ export default function App() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Panel B: Latent Insight */}
+        <div className="flex-1 flex flex-col min-h-0">
+          <h2 className="text-lg font-semibold mb-2">Latent Insight</h2>
+          <div className="glass flat p-3 flex-1 overflow-auto min-h-0">
+            {lastSentienceToken ? (
+              <div className="space-y-3">
+                <div className="text-sm font-semibold text-purple-300 mb-2">
+                  {lastSentienceToken.type}
+                </div>
+                <div className="text-xs text-gray-400 mb-3">
+                  Embedding: {lastSentienceToken.embedding_id}
+                </div>
+                {lastSentienceToken.facets && (
+                  <div className="space-y-2">
+                    <div className="text-xs text-gray-300 mb-2">Facets:</div>
+                    {Object.entries(lastSentienceToken.facets).map(
+                      ([key, value]) => (
+                        <div key={key} className="flex items-center gap-2">
+                          <span className="text-xs text-white min-w-0 flex-1 truncate">
+                            {key}:
+                          </span>
+                          {key === "affect.valence" &&
+                          typeof value === "number" ? (
+                            <div className="flex-1 flex items-center gap-2">
+                              <div className="flex-1 progress-bar">
+                                <div
+                                  className="progress-fill"
+                                  style={{
+                                    width: `${((value + 1) / 2) * 100}%`,
+                                    background:
+                                      value >= 0
+                                        ? "linear-gradient(90deg, #00d4ff, #ff006e)"
+                                        : "linear-gradient(90deg, #ff006e, #00d4ff)",
+                                  }}
+                                />
+                              </div>
+                              <span className="text-xs text-gray-400 min-w-0">
+                                {value.toFixed(2)}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-300 min-w-0">
+                              {String(value)}
+                            </span>
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-gray-400 text-sm">
+                No sentience tokens yet...
               </div>
             )}
           </div>

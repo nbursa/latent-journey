@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"time"
 )
 
 var hub = NewSSEHub()
@@ -12,6 +13,7 @@ var hub = NewSSEHub()
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/events", hub)
 	mux.HandleFunc("/api/vision/frame", postVisionFrame)
+	mux.HandleFunc("/api/sentience/tokenize", postSentienceTokenize)
 	// add others...
 }
 
@@ -25,6 +27,21 @@ type clipResp struct {
 
 type frameIn struct {
 	ImageBase64 string `json:"image_base64"`
+}
+
+type tokenizeIn struct {
+	EmbeddingID string `json:"embedding_id"`
+	ClipTopK    []struct {
+		Label string  `json:"label"`
+		Score float64 `json:"score"`
+	} `json:"clip_topk"`
+}
+
+type sentienceTokenResp struct {
+	Type        string                 `json:"type"`
+	Ts          int64                  `json:"ts"`
+	EmbeddingID string                 `json:"embedding_id"`
+	Facets      map[string]interface{} `json:"facets"`
 }
 
 func postVisionFrame(w http.ResponseWriter, r *http.Request) {
@@ -61,6 +78,62 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 		"embedding_id": "emb-1",
 	}
 	evBytes, _ := json.Marshal(ev)
+	hub.Broadcast(string(evBytes))
+
+	// Also call sentience tokenize
+	tokenizeReq := tokenizeIn{
+		EmbeddingID: "emb-1",
+		ClipTopK:    out.TopK,
+	}
+	tokenizeBody, _ := json.Marshal(tokenizeReq)
+	tokenizeClient := &http.Client{Timeout: 5 * time.Second}
+	tokenizeResp, err := tokenizeClient.Post("http://localhost:8082/tokenize", "application/json", bytes.NewReader(tokenizeBody))
+	if err == nil && tokenizeResp.StatusCode < 400 {
+		tokenizeData, _ := io.ReadAll(tokenizeResp.Body)
+		tokenizeResp.Body.Close()
+		hub.Broadcast(string(tokenizeData))
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write([]byte(`{"ok":true}`))
+}
+
+func postSentienceTokenize(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 1MB
+	const maxSize = 1 << 20 // 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+	var in tokenizeIn
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.EmbeddingID == "" {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// call Sentience service
+	body, _ := json.Marshal(in)
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Post("http://localhost:8082/tokenize", "application/json", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		http.Error(w, "sentience service error", http.StatusBadGateway)
+		return
+	}
+
+	b, _ := io.ReadAll(resp.Body)
+
+	var out sentienceTokenResp
+	if err := json.Unmarshal(b, &out); err != nil {
+		http.Error(w, "sentience parse error", http.StatusBadGateway)
+		return
+	}
+
+	// broadcast SSE event
+	evBytes, _ := json.Marshal(out)
 	hub.Broadcast(string(evBytes))
 
 	w.Header().Set("Content-Type", "application/json")
