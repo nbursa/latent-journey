@@ -59,6 +59,7 @@ agent MultiModalAnalyzer {
     goal: "Analyze visual and speech input to extract meaningful insights"
     
     on input(msg) {
+        mem.short["debug.writer_ran"] = "1"
         embed msg -> mem.short
         
         // Basic fallback analysis
@@ -80,7 +81,7 @@ agent MultiModalAnalyzer {
     // Register the agent
     if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
         let _ = agent.run_sentience(&agent_code);
-        println!("MultiModalAnalyzer agent registered");
+        println!("Sentience agent registered from agent.sentience");
     }
 
     let cors = warp::cors()
@@ -120,18 +121,103 @@ agent MultiModalAnalyzer {
 
             let mut facets = HashMap::new();
 
+            // ---- Prefill facets from incoming JSON so UI always shows something,
+            // even if the DSL agent doesn't persist mem.short correctly.
+            if let Some(t) = req.get("transcript").and_then(|v| v.as_str()) {
+                facets.insert(
+                    "speech.transcript".into(),
+                    serde_json::Value::String(t.to_string()),
+                );
+
+                // Lightweight intent/sentiment heuristics
+                let lower = t.to_lowercase();
+                let mut intent = "statement";
+                let mut sentiment = "neutral";
+                if !t.is_empty() {
+                    if lower.contains('?')
+                        || lower.starts_with("what ")
+                        || lower.starts_with("who ")
+                        || lower.starts_with("why ")
+                        || lower.starts_with("how ")
+                        || lower.starts_with("when ")
+                        || lower.starts_with("where ")
+                    {
+                        intent = "question";
+                    } else if lower.starts_with("hello") || lower.starts_with("hi") {
+                        intent = "greeting";
+                    }
+                    // very rough sentiment seed
+                    if lower.contains("bad") || lower.contains("terrible") {
+                        sentiment = "negative";
+                    } else if lower.contains("good")
+                        || lower.contains("great")
+                        || lower.contains("awesome")
+                    {
+                        sentiment = "positive";
+                    }
+                }
+                facets.insert(
+                    "speech.intent".into(),
+                    serde_json::Value::String(intent.to_string()),
+                );
+                facets.insert(
+                    "speech.sentiment".into(),
+                    serde_json::Value::String(sentiment.to_string()),
+                );
+            }
+
+            // Default affect seeds (agent may overwrite them)
+            if !facets.contains_key("affect.valence") {
+                facets.insert("affect.valence".into(), serde_json::json!(0.5));
+            }
+            if !facets.contains_key("affect.arousal") {
+                facets.insert("affect.arousal".into(), serde_json::json!(0.3));
+            }
+
             // Use real Sentience agent to analyze input
             if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
-                let context = req["context"].as_str().unwrap_or("");
-                let msg = req["msg"].as_str().unwrap_or("");
-                let _embedding_id = req["embedding_id"].as_str().unwrap_or("unknown");
+                // Map incoming JSON to percept.* keys expected by the agent.
+                let transcript = req["transcript"].as_str().unwrap_or("");
+                let embedding_id = req["embedding_id"].as_str().unwrap_or("unknown");
+                let ctx = req["context"].as_str().unwrap_or("");
 
-                // Send to Sentience agent by executing a DSL snippet that sets memory and invokes `.input`
-                let ctx_esc = escape_dsl(context);
-                let msg_esc = escape_dsl(msg);
+                let t_esc = escape_dsl(transcript);
+                let ctx_esc = escape_dsl(ctx);
+
+                // Extremely lightweight intent/sentiment defaults (gateway may overwrite later).
+                let mut intent = "statement";
+                let sentiment = "neutral";
+                if !transcript.is_empty() {
+                    let lower = transcript.to_lowercase();
+                    if lower.contains('?')
+                        || lower.starts_with("what ")
+                        || lower.starts_with("who ")
+                        || lower.starts_with("why ")
+                        || lower.starts_with("how ")
+                        || lower.starts_with("when ")
+                        || lower.starts_with("where ")
+                    {
+                        intent = "question";
+                    } else if lower.starts_with("hello") || lower.starts_with("hi") {
+                        intent = "greeting";
+                    }
+                }
+
                 let dsl = format!(
-                    "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"{}\"\n.input {}",
-                    ctx_esc, msg_esc, msg_esc
+                    ".use \"MultiModalWriter\"\n\
+                     mem.short[\"percept.context\"] = \"{ctx}\"\n\
+                     mem.short[\"percept.speech.transcript\"] = \"{t}\"\n\
+                     mem.short[\"percept.speech.intent\"] = \"{intent}\"\n\
+                     mem.short[\"percept.speech.sentiment\"] = \"{sentiment}\"\n\
+                     mem.short[\"percept.affect.valence\"] = 0.5\n\
+                     mem.short[\"percept.affect.arousal\"] = 0.3\n\
+                     mem.short[\"percept.vision.embedding_id\"] = \"{emb}\"\n\
+                     .input \"tick\"",
+                    ctx = ctx_esc,
+                    t = t_esc,
+                    intent = intent,
+                    sentiment = sentiment,
+                    emb = escape_dsl(embedding_id),
                 );
                 println!("Sending to Sentience via DSL script:\n{}", dsl);
                 let _ = agent.run_sentience(&dsl);
@@ -141,13 +227,12 @@ agent MultiModalAnalyzer {
                 println!("Short memory: {:?}", short_mem);
 
                 // Extract facets from agent's short-term memory
-                for (key, value) in short_mem {
+                for (key, value) in short_mem.clone() {
                     if key.starts_with("vision")
                         || key.starts_with("speech")
                         || key.starts_with("affect")
                         || key.starts_with("color")
                     {
-                        // Try to parse as number, otherwise keep as string
                         if let Ok(num) = value.parse::<f64>() {
                             facets.insert(
                                 key,
@@ -157,6 +242,61 @@ agent MultiModalAnalyzer {
                             );
                         } else {
                             facets.insert(key, serde_json::Value::String(value));
+                        }
+                    }
+                }
+
+                // Merge explicit facets.* keys written by the agent
+                for (k, v) in short_mem.iter() {
+                    if let Some(stripped) = k.strip_prefix("facets.") {
+                        if let Ok(num) = v.parse::<f64>() {
+                            facets.insert(stripped.to_string(), serde_json::json!(num));
+                        } else {
+                            facets
+                                .insert(stripped.to_string(), serde_json::Value::String(v.clone()));
+                        }
+                    }
+                }
+
+                // Fallback/augment: map any remaining percept.* keys the agent left in memory
+                {
+                    if let Some(obj) = short_mem.get("percept.vision.object") {
+                        facets
+                            .entry("vision.object".into())
+                            .or_insert_with(|| serde_json::Value::String(obj.clone()));
+                    }
+                    if let Some(col) = short_mem.get("percept.vision.color") {
+                        facets
+                            .entry("color.dominant".into())
+                            .or_insert_with(|| serde_json::Value::String(col.clone()));
+                    }
+                    if let Some(tr) = short_mem.get("percept.speech.transcript") {
+                        facets
+                            .entry("speech.transcript".into())
+                            .or_insert_with(|| serde_json::Value::String(tr.clone()));
+                    }
+                    if let Some(inten) = short_mem.get("percept.speech.intent") {
+                        facets
+                            .entry("speech.intent".into())
+                            .or_insert_with(|| serde_json::Value::String(inten.clone()));
+                    }
+                    if let Some(sent) = short_mem.get("percept.speech.sentiment") {
+                        facets
+                            .entry("speech.sentiment".into())
+                            .or_insert_with(|| serde_json::Value::String(sent.clone()));
+                    }
+                    if let Some(v) = short_mem.get("percept.affect.valence") {
+                        if let Ok(num) = v.parse::<f64>() {
+                            facets
+                                .entry("affect.valence".into())
+                                .or_insert(serde_json::json!(num));
+                        }
+                    }
+                    if let Some(a) = short_mem.get("percept.affect.arousal") {
+                        if let Ok(num) = a.parse::<f64>() {
+                            facets
+                                .entry("affect.arousal".into())
+                                .or_insert(serde_json::json!(num));
                         }
                     }
                 }
@@ -188,44 +328,61 @@ agent MultiModalAnalyzer {
 
             // Use real Sentience agent to analyze input
             if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
-                let mut input_data = String::new();
-
-                // Handle vision input (CLIP results)
+                // Build a DSL snippet that seeds percept.* keys the agent expects.
+                // Vision (pick top-1 label if present)
+                let mut top_label: Option<String> = None;
                 if let Some(clip_topk) = &req.clip_topk {
-                    let clip_data = clip_topk
-                        .iter()
-                        .map(|item| format!("{}:{}", item.label, item.score))
-                        .collect::<Vec<_>>()
-                        .join(" ");
-                    input_data.push_str(&clip_data);
-                }
-
-                // Handle speech input (transcript)
-                if let Some(transcript) = &req.transcript {
-                    if !input_data.is_empty() {
-                        input_data.push(' ');
+                    if let Some(first) = clip_topk.first() {
+                        top_label = Some(first.label.clone());
                     }
-                    // Send only the transcript words, not the "speech:" prefix
-                    input_data.push_str(transcript);
                 }
 
-                // Send to Sentience agent via DSL script (set context + msg, then `.input`)
-                let ctx_esc = escape_dsl(&input_data);
-                let msg_esc = escape_dsl(req.transcript.as_deref().unwrap_or(""));
-                let dsl = if !msg_esc.is_empty() {
-                    format!(
-                        "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"{}\"\n.input {}",
-                        ctx_esc,
-                        msg_esc,
-                        msg_esc
-                    )
-                } else {
-                    // If there is no transcript, still set context and use a neutral input trigger
-                    format!(
-                        "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"\"\n.input context",
-                        ctx_esc
-                    )
+                // Heuristic color from label (demo only)
+                let color = match top_label.as_deref() {
+                    Some("banana") => "yellow",
+                    Some("apple")  => "red",
+                    _ => "unknown",
                 };
+
+                let t = req.transcript.as_deref().unwrap_or("");
+                let t_esc = escape_dsl(t);
+                let emb_esc = escape_dsl(&req.embedding_id);
+
+                // Tiny default intent/sentiment; upstream can get smarter later.
+                let lower = t.to_lowercase();
+                let mut intent = "statement";
+                let sentiment = "neutral";
+                if !t.is_empty() {
+                    if lower.contains('?') || lower.starts_with("what ") || lower.starts_with("who ")
+                        || lower.starts_with("why ") || lower.starts_with("how ")
+                        || lower.starts_with("when ") || lower.starts_with("where ") {
+                        intent = "question";
+                    } else if lower.starts_with("hello") || lower.starts_with("hi") {
+                        intent = "greeting";
+                    }
+                }
+
+                let dsl = format!(
+                    ".use \"MultiModalWriter\"\n\
+                     {vision_obj}{vision_color}mem.short[\"percept.vision.embedding_id\"] = \"{emb}\"\n\
+                     mem.short[\"percept.speech.transcript\"] = \"{t}\"\n\
+                     mem.short[\"percept.speech.intent\"] = \"{intent}\"\n\
+                     mem.short[\"percept.speech.sentiment\"] = \"{sentiment}\"\n\
+                     mem.short[\"percept.affect.valence\"] = 0.5\n\
+                     mem.short[\"percept.affect.arousal\"] = 0.3\n\
+                     .input \"tick\"",
+                    emb = emb_esc,
+                    t = t_esc,
+                    intent = intent,
+                    sentiment = sentiment,
+                    vision_obj = if let Some(lbl) = &top_label {
+                        format!("mem.short[\"percept.vision.object\"] = \"{}\"\n", escape_dsl(lbl))
+                    } else { String::new() },
+                    vision_color = if top_label.is_some() {
+                        format!("mem.short[\"percept.vision.color\"] = \"{}\"\n", color)
+                    } else { String::new() },
+                );
+
                 println!("Sending to Sentience via DSL script:\n{}", dsl);
                 let _ = agent.run_sentience(&dsl);
 
@@ -234,51 +391,80 @@ agent MultiModalAnalyzer {
                 println!("Short memory: {:?}", short_mem);
 
                 // Extract facets from agent's short-term memory
-                for (key, value) in short_mem {
+                for (key, value) in short_mem.clone() {
                     if key.starts_with("vision")
                         || key.starts_with("speech")
                         || key.starts_with("affect")
                         || key.starts_with("color")
                     {
-                        // Try to parse as number, otherwise keep as string
                         if let Ok(num) = value.parse::<f64>() {
                             facets.insert(
                                 key,
-                                serde_json::Value::Number(
-                                    serde_json::Number::from_f64(num).unwrap(),
-                                ),
+                                serde_json::Value::Number(serde_json::Number::from_f64(num).unwrap()),
                             );
                         } else {
                             facets.insert(key, serde_json::Value::String(value));
                         }
                     }
                 }
+
+                // Merge explicit facets.* keys written by the agent
+                for (k, v) in short_mem.iter() {
+                    if let Some(stripped) = k.strip_prefix("facets.") {
+                        if let Ok(num) = v.parse::<f64>() {
+                            facets.insert(stripped.to_string(), serde_json::json!(num));
+                        } else {
+                            facets.insert(stripped.to_string(), serde_json::Value::String(v.clone()));
+                        }
+                    }
+                }
+
+                // Fallback/augment: map any remaining percept.* keys the agent left in memory
+                {
+                    if let Some(obj) = short_mem.get("percept.vision.object") {
+                        facets.entry("vision.object".into()).or_insert_with(|| serde_json::Value::String(obj.clone()));
+                    }
+                    if let Some(col) = short_mem.get("percept.vision.color") {
+                        facets.entry("color.dominant".into()).or_insert_with(|| serde_json::Value::String(col.clone()));
+                    }
+                    if let Some(tr) = short_mem.get("percept.speech.transcript") {
+                        facets.entry("speech.transcript".into()).or_insert_with(|| serde_json::Value::String(tr.clone()));
+                    }
+                    if let Some(inten) = short_mem.get("percept.speech.intent") {
+                        facets.entry("speech.intent".into()).or_insert_with(|| serde_json::Value::String(inten.clone()));
+                    }
+                    if let Some(sent) = short_mem.get("percept.speech.sentiment") {
+                        facets.entry("speech.sentiment".into()).or_insert_with(|| serde_json::Value::String(sent.clone()));
+                    }
+                    if let Some(v) = short_mem.get("percept.affect.valence") {
+                        if let Ok(num) = v.parse::<f64>() {
+                            facets.entry("affect.valence".into()).or_insert(serde_json::json!(num));
+                        }
+                    }
+                    if let Some(a) = short_mem.get("percept.affect.arousal") {
+                        if let Ok(num) = a.parse::<f64>() {
+                            facets.entry("affect.arousal".into()).or_insert(serde_json::json!(num));
+                        }
+                    }
+                }
             }
 
-            // Fallback to mock logic if Sentience fails
-            if facets.is_empty() {
-                // Vision fallback
+            // Ensure we always have something meaningful for the UI (augment, don't overwrite)
+            {
+                // Vision
                 if let Some(top_item) = req.clip_topk.as_ref().and_then(|v| v.first()) {
-                    facets.insert(
-                        "vision.object".to_string(),
-                        serde_json::Value::String(top_item.label.clone()),
-                    );
+                    facets.entry("vision.object".to_string())
+                        .or_insert_with(|| serde_json::Value::String(top_item.label.clone()));
                     let valence = top_item.score * 2.0 - 1.0;
-                    facets.insert(
-                        "affect.valence".to_string(),
-                        serde_json::Value::Number(serde_json::Number::from_f64(valence).unwrap()),
-                    );
+                    facets.entry("affect.valence".to_string())
+                        .or_insert_with(|| serde_json::Value::Number(serde_json::Number::from_f64(valence).unwrap()));
                 }
-                // Speech fallback
+                // Speech (if provided in this endpoint)
                 if let Some(transcript) = &req.transcript {
-                    facets.insert(
-                        "speech.transcript".to_string(),
-                        serde_json::Value::String(transcript.clone()),
-                    );
-                    facets.insert(
-                        "speech.intent".to_string(),
-                        serde_json::Value::String("unknown".to_string()),
-                    );
+                    facets.entry("speech.transcript".to_string())
+                        .or_insert_with(|| serde_json::Value::String(transcript.clone()));
+                    facets.entry("speech.intent".to_string())
+                        .or_insert_with(|| serde_json::Value::String("unknown".to_string()));
                 }
             }
 

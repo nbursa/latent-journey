@@ -36,51 +36,38 @@ export default function App() {
 
   // Check services status
   const checkServices = async () => {
-    console.log("Checking services status...");
-
     try {
       // Check Gateway
-      console.log("Checking Gateway...");
       const gatewayResponse = await fetch("/ping");
-      console.log("Gateway response:", gatewayResponse.status);
       setServicesStatus((prev) => ({
         ...prev,
         gateway: gatewayResponse.ok ? "online" : "offline",
       }));
     } catch (error) {
-      console.log("Gateway error:", error);
       setServicesStatus((prev) => ({ ...prev, gateway: "offline" }));
     }
 
     try {
       // Check ML Service
-      console.log("Checking ML Service...");
       const mlResponse = await fetch("/ml/ping");
-      console.log("ML response:", mlResponse.status);
       setServicesStatus((prev) => ({
         ...prev,
         ml: mlResponse.ok ? "online" : "offline",
       }));
     } catch (error) {
-      console.log("ML error:", error);
       setServicesStatus((prev) => ({ ...prev, ml: "offline" }));
     }
 
     try {
       // Check Sentience Service
-      console.log("Checking Sentience Service...");
       const sentienceResponse = await fetch("/sentience/ping");
-      console.log("Sentience response:", sentienceResponse.status);
       setServicesStatus((prev) => ({
         ...prev,
         sentience: sentienceResponse.ok ? "online" : "offline",
       }));
     } catch (error) {
-      console.log("Sentience error:", error);
       setServicesStatus((prev) => ({ ...prev, sentience: "offline" }));
     }
-
-    console.log("Services status check complete");
   };
 
   useEffect(() => {
@@ -140,7 +127,6 @@ export default function App() {
   }, []);
 
   const snapAndSend = async () => {
-    console.log("Button clicked!");
     setIsProcessing(true);
 
     // Check services status when user interacts
@@ -150,35 +136,25 @@ export default function App() {
     const c = canvasRef.current;
 
     if (!v) {
-      console.error("Video element not found");
       setIsProcessing(false);
       return;
     }
 
     if (!c) {
-      console.error("Canvas element not found");
       setIsProcessing(false);
       return;
     }
 
     if (v.videoWidth === 0 || v.videoHeight === 0) {
-      console.error(
-        "Video not ready - dimensions:",
-        v.videoWidth,
-        v.videoHeight
-      );
       setIsProcessing(false);
       return;
     }
-
-    console.log("Video dimensions:", v.videoWidth, v.videoHeight);
 
     c.width = v.videoWidth;
     c.height = v.videoHeight;
     const ctx = c.getContext("2d");
 
     if (!ctx) {
-      console.error("Could not get canvas context");
       setIsProcessing(false);
       return;
     }
@@ -186,8 +162,6 @@ export default function App() {
     ctx.drawImage(v, 0, 0, c.width, c.height);
     const b64 = c.toDataURL("image/jpeg");
     setCaptures((prev) => [b64, ...prev].slice(0, 10)); // Keep last 10 captures
-
-    console.log("Image captured, sending to API...");
 
     try {
       const response = await fetch("/api/vision/frame", {
@@ -200,8 +174,7 @@ export default function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
-      console.log("API response:", result);
+      await response.json();
     } catch (error) {
       console.error("Error sending image:", error);
     } finally {
@@ -282,12 +255,10 @@ export default function App() {
         const audioBlob = new Blob(audioChunksRef.current, {
           type: "audio/webm;codecs=opus",
         });
-        console.log("Audio blob created:", audioBlob.size, "bytes");
 
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = reader.result as string;
-          console.log("Audio base64 length:", base64.length);
           await sendAudioToAPI(base64);
         };
         reader.readAsDataURL(audioBlob);
@@ -295,7 +266,6 @@ export default function App() {
 
       mediaRecorder.start();
       setIsRecording(true);
-      console.log("Recording started");
     } catch (error) {
       console.error("Error starting recording:", error);
     }
@@ -306,13 +276,11 @@ export default function App() {
       mediaRecorderRef.current.stop();
       setIsRecording(false);
       stopAudioVisualization();
-      console.log("Recording stopped");
     }
   };
 
   const sendAudioToAPI = async (audioBase64: string) => {
     setIsProcessing(true);
-    console.log("Sending audio to API...");
 
     try {
       const response = await fetch("/api/speech/transcript", {
@@ -325,8 +293,7 @@ export default function App() {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
 
-      const result = await response.json();
-      console.log("API response:", result);
+      await response.json();
     } catch (error) {
       console.error("Error sending audio:", error);
     } finally {
@@ -569,7 +536,7 @@ export default function App() {
         {/* Panel B: Latent Insight */}
         <div className="flex-1 flex flex-col min-h-0">
           <h2 className="text-lg font-semibold mb-2">Latent Insight</h2>
-          <div className="glass flat p-3 flex-1 overflow-auto min-h-0">
+          <div className="glass flat p-3 flex-shrink-0 overflow-auto min-h-0">
             {lastSentienceToken ? (
               <div className="space-y-3">
                 <div className="text-sm font-semibold text-purple-300 mb-2">
