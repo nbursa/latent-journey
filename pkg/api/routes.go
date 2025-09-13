@@ -28,6 +28,10 @@ type frameIn struct {
 }
 
 func postVisionFrame(w http.ResponseWriter, r *http.Request) {
+	// Limit request body size to 8MB
+	const maxSize = 8 << 20 // 8MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
 	var in frameIn
 	if err := json.NewDecoder(r.Body).Decode(&in); err != nil || in.ImageBase64 == "" {
 		http.Error(w, "bad request", http.StatusBadRequest)

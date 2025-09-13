@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 
 	"latent-journey/pkg/api"
 )
@@ -21,6 +22,13 @@ func main() {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
 		fmt.Fprintf(w, `{"message": "I am Gateway", "service": "gateway", "status": "running"}`)
+	})
+
+	// Health check endpoint
+	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintf(w, `{"status": "healthy", "service": "gateway", "timestamp": "%s"}`, time.Now().Format(time.RFC3339))
 	})
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {

@@ -79,7 +79,11 @@ export default function App() {
     const es = new EventSource("/events");
     es.onmessage = (e) => {
       try {
-        setEvents((prev) => [JSON.parse(e.data), ...prev].slice(0, 50));
+        const event = JSON.parse(e.data);
+        // Filter out connection and ping events
+        if (event.type !== "connection" && event.type !== "ping") {
+          setEvents((prev) => [event, ...prev].slice(0, 50));
+        }
       } catch {
         /* ignore */
       }
@@ -166,49 +170,51 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen w-screen flex flex-col text-white bg-gradient-to-br from-indigo-500 to-purple-600">
+    <div className="h-screen w-screen flex flex-col text-white animated-bg">
       {/* Header */}
       <div className="flex-shrink-0 p-4">
-        <h1 className="text-2xl sm:text-3xl font-bold mb-4">Latent Journey</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gradient text-glow">
+          Latent Journey
+        </h1>
 
         {/* Services Status and Last Capture */}
         <div className="flex flex-col lg:flex-row gap-4">
           {/* Services Status */}
-          <div className="w-fit glass rounded-lg p-3 flex-shrink-0">
+          <div className="w-fit glass flat p-3 flex-shrink-0">
             <h3 className="text-sm font-semibold mb-2">Services Status</h3>
             <div className="flex flex-wrap gap-4">
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-2 h-2 rounded-full ${
+                  className={`status-dot ${
                     servicesStatus.gateway === "online"
-                      ? "bg-green-400"
+                      ? "online"
                       : servicesStatus.gateway === "offline"
-                      ? "bg-red-400"
-                      : "bg-yellow-400"
+                      ? "offline"
+                      : "unknown"
                   }`}
                 />
                 <span className="text-xs">Gateway</span>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-2 h-2 rounded-full ${
+                  className={`status-dot ${
                     servicesStatus.ml === "online"
-                      ? "bg-green-400"
+                      ? "online"
                       : servicesStatus.ml === "offline"
-                      ? "bg-red-400"
-                      : "bg-yellow-400"
+                      ? "offline"
+                      : "unknown"
                   }`}
                 />
                 <span className="text-xs">ML Service</span>
               </div>
               <div className="flex items-center gap-2">
                 <div
-                  className={`w-2 h-2 rounded-full ${
+                  className={`status-dot ${
                     servicesStatus.sentience === "online"
-                      ? "bg-green-400"
+                      ? "online"
                       : servicesStatus.sentience === "offline"
-                      ? "bg-red-400"
-                      : "bg-yellow-400"
+                      ? "offline"
+                      : "unknown"
                   }`}
                 />
                 <span className="text-xs">Sentience</span>
@@ -219,7 +225,7 @@ export default function App() {
           {/* Captures - Only on wider screens */}
           {captures.length > 0 && (
             <div className="hidden lg:block flex-1 min-w-0">
-              <div className="glass rounded-lg p-3 h-full">
+              <div className="glass flat p-3 h-full">
                 <h3 className="text-sm font-semibold mb-2">
                   Captures ({captures.length})
                 </h3>
@@ -230,7 +236,7 @@ export default function App() {
                         key={index}
                         src={capture}
                         alt={`Capture ${index + 1}`}
-                        className="h-16 w-auto rounded border border-white/20 object-cover flex-shrink-0"
+                        className="h-16 w-auto flat glass-border object-cover flex-shrink-0 hover-scale"
                       />
                     ))}
                   </div>
@@ -251,12 +257,12 @@ export default function App() {
               ref={videoRef}
               autoPlay
               playsInline
-              className="w-full rounded-lg object-cover flex-1 min-h-0"
+              className="w-full flat glass-border object-cover flex-1 min-h-0"
             />
             <button
               onClick={snapAndSend}
               disabled={isProcessing}
-              className={`btn btn-primary w-full mt-2 text-sm py-2 px-4 lg:py-3 lg:px-6 ${
+              className={`btn btn-primary w-full mt-2 text-sm flat hover-glow hover-scale ${
                 isProcessing ? "opacity-50 cursor-not-allowed" : ""
               }`}
             >
@@ -272,14 +278,64 @@ export default function App() {
             <h2 className="text-lg font-semibold">Events</h2>
             {isProcessing && (
               <div className="flex items-center gap-2 text-green-400">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                <div className="status-dot online" />
                 <span className="text-xs">Processing...</span>
               </div>
             )}
           </div>
-          <pre className="glass rounded-lg p-3 flex-1 overflow-auto whitespace-pre-wrap text-xs min-h-0">
-            {JSON.stringify(events, null, 2)}
-          </pre>
+          <div className="glass flat p-3 flex-1 overflow-auto min-h-0">
+            {events.length === 0 ? (
+              <div className="text-gray-400 text-sm">No events yet...</div>
+            ) : (
+              <div className="space-y-3">
+                {events.map((event, index) => (
+                  <div
+                    key={index}
+                    className="border-b border-white/10 pb-3 last:border-b-0"
+                  >
+                    <div className="text-sm font-semibold text-blue-300 mb-2">
+                      {event.type}
+                    </div>
+                    {event.clip_topk && (
+                      <div className="space-y-2">
+                        <div className="text-xs text-gray-300 mb-2">
+                          CLIP Results:
+                        </div>
+                        {event.clip_topk.map((item, i) => (
+                          <div key={i} className="flex items-center gap-2">
+                            <span className="text-xs text-white min-w-0 flex-1 truncate">
+                              {item.label}
+                            </span>
+                            <div className="flex-1 progress-bar">
+                              <div
+                                className={`progress-fill ${
+                                  isProcessing ? "animating" : ""
+                                }`}
+                                style={{ width: `${item.score * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-gray-400 min-w-0">
+                              {(item.score * 100).toFixed(1)}%
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {event.message && (
+                      <div className="text-xs text-gray-300 mt-2">
+                        {event.message}
+                      </div>
+                    )}
+                    {event.embedding_id && (
+                      <div className="text-xs text-gray-400 mt-1">
+                        Embedding: {event.embedding_id}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

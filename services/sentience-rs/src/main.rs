@@ -20,10 +20,26 @@ async fn main() {
             }))
         });
 
+    let healthz = warp::path("healthz")
+        .and(warp::get())
+        .map(|| {
+            use std::time::{SystemTime, UNIX_EPOCH};
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+            warp::reply::json(&serde_json::json!({
+                "status": "healthy",
+                "service": "sentience-rs",
+                "timestamp": timestamp
+            }))
+        });
+
     let root = warp::path::end()
         .map(|| "I am Sentience service");
 
     let routes = ping
+        .or(healthz)
         .or(root)
         .with(cors);
 

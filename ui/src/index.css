@@ -1,5 +1,25 @@
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
 @import "tailwindcss";
 
+/* CSS Variables for Theme */
+:root {
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #111111;
+  --bg-tertiary: #1a1a1a;
+  --accent-primary: #00d4ff;
+  --accent-secondary: #ff006e;
+  --accent-tertiary: #8338ec;
+  --text-primary: #ffffff;
+  --text-secondary: #a0a0a0;
+  --text-muted: #666666;
+  --border-color: #333333;
+  --glass-bg: rgba(255, 255, 255, 0.05);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --shadow-glow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  --shadow-glow-hover: 0 6px 16px rgba(0, 0, 0, 0.4);
+}
+
+/* Base Styles */
 html,
 body,
 #root {
@@ -7,44 +27,204 @@ body,
   margin: 0;
   padding: 0;
   overflow: hidden;
+  font-family: "JetBrains Mono", monospace;
+  background: var(--bg-primary);
+  color: var(--text-primary);
 }
 
 * {
   box-sizing: border-box;
 }
 
+/* Typography */
 .text-responsive {
   @apply text-sm sm:text-base md:text-lg;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .text-responsive-lg {
   @apply text-base sm:text-lg md:text-xl;
+  font-family: "JetBrains Mono", monospace;
 }
 
 .text-responsive-xl {
   @apply text-lg sm:text-xl md:text-2xl;
+  font-family: "JetBrains Mono", monospace;
 }
 
+/* Glass Effect */
 .glass {
-  @apply bg-white/10 backdrop-blur-md border border-white/20;
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  border: 1px solid var(--glass-border);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
 }
 
+.glass-intense {
+  background: rgba(0, 212, 255, 0.1);
+  backdrop-filter: blur(25px);
+  border: 1px solid rgba(0, 212, 255, 0.2);
+  box-shadow: var(--shadow-glow);
+}
+
+/* Buttons */
 .btn {
-  @apply px-4 py-2 rounded-lg font-medium transition-all duration-200;
+  @apply px-6 py-3 font-medium transition-all duration-300;
+  font-family: "JetBrains Mono", monospace;
+  border: none;
+  position: relative;
+  overflow: hidden;
+  will-change: transform;
+  transform-origin: center;
 }
 
 .btn-primary {
-  @apply bg-blue-500 hover:bg-blue-600 text-white shadow-lg hover:shadow-xl;
+  background: linear-gradient(
+    135deg,
+    var(--bg-secondary),
+    var(--bg-tertiary),
+    var(--bg-primary),
+    var(--bg-secondary)
+  );
+  background-size: 300% 300%;
+  color: var(--text-primary);
+  transition: all 0.3s ease;
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow-glow);
+}
+
+.btn-primary:hover {
+  cursor: pointer;
+  animation: gradientInvert 1.2s ease-in-out infinite;
+  box-shadow: var(--shadow-glow-hover);
+  transform: translateY(-2px);
+}
+
+.btn-primary:active {
+  transform: translateY(0);
 }
 
 .btn-primary:disabled {
-  @apply bg-gray-400 cursor-not-allowed;
+  background: var(--text-muted);
+  color: var(--bg-secondary);
+  box-shadow: none;
+  cursor: not-allowed;
+  transform: none;
 }
 
-/* Custom scrollbar styling */
+/* Animated Background */
+.animated-bg {
+  background: linear-gradient(-45deg, #0a0a0a, #111111, #1a1a1a, #0a0a0a);
+  background-size: 400% 400%;
+  animation: gradientShift 15s ease infinite;
+}
+
+@keyframes gradientShift {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes gradientInvert {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+/* Progress Bars */
+.progress-bar {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  height: 8px;
+  position: relative;
+  overflow: hidden;
+}
+
+.progress-fill {
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
+  height: 100%;
+  transition: width 0.3s ease;
+  position: relative;
+}
+
+.progress-fill.animating::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.3),
+    transparent
+  );
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Status Indicators */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border: 1px solid var(--border-color);
+  position: relative;
+}
+
+.status-dot.online {
+  background: var(--accent-primary);
+  box-shadow: 0 0 10px var(--accent-primary);
+  animation: pulse 2s infinite;
+}
+
+.status-dot.offline {
+  background: var(--accent-secondary);
+  box-shadow: 0 0 10px var(--accent-secondary);
+}
+
+.status-dot.unknown {
+  background: var(--text-muted);
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
 }
 
 ::-webkit-scrollbar-track {
@@ -52,16 +232,103 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 3px;
+  background: var(--accent-primary);
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--accent-secondary);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+  scrollbar-color: var(--accent-primary) transparent;
+}
+
+/* Animations */
+.fade-in {
+  animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+
+/* Hover Effects - Only for interactive elements */
+button.hover-glow:hover,
+.hover-glow:hover {
+  box-shadow: var(--shadow-glow);
+  transform: translateY(-1px);
+}
+
+button.hover-scale:hover,
+.hover-scale:hover {
+  transform: translateY(-1px);
+}
+
+/* Disabled hover effects */
+button:disabled:hover,
+.btn:disabled:hover {
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+/* Text Effects */
+.text-glow {
+  text-shadow: 0 0 10px currentColor;
+}
+
+.text-gradient {
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Borders */
+.border-glow {
+  border: 1px solid var(--accent-primary);
+  box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+
+/* Utility Classes */
+.no-corners {
+  border-radius: 0 !important;
+}
+
+.flat {
+  border-radius: 0;
+}
+
+.modern-shadow {
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.glass-border {
+  border: 1px solid var(--glass-border);
 }

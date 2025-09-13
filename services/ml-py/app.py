@@ -16,6 +16,19 @@ def ping():
     )
 
 
+@app.route("/healthz", methods=["GET"])
+def healthz():
+    from datetime import datetime
+
+    return jsonify(
+        {
+            "status": "healthy",
+            "service": "ml-py",
+            "timestamp": datetime.now().isoformat(),
+        }
+    )
+
+
 @app.route("/", methods=["GET"])
 def root():
     return "I am ML service"
