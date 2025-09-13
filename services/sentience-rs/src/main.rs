@@ -1,6 +1,7 @@
 use sentience::SentienceAgent;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::fs;
 use std::time::{SystemTime, UNIX_EPOCH};
 use warp::Filter;
 
@@ -34,13 +35,25 @@ lazy_static::lazy_static! {
     static ref SENTIENCE_AGENT: Arc<Mutex<SentienceAgent>> = Arc::new(Mutex::new(SentienceAgent::new()));
 }
 
+fn escape_dsl(s: &str) -> String {
+    s.replace('\\', "\\\\").replace('"', "\\\"")
+}
+
 #[tokio::main]
 async fn main() {
     println!("Sentience service starting on :8082");
     println!("I am Sentience service");
 
-    // Initialize the Sentience agent with multi-modal analysis
-    let agent_code = r#"
+    // Load the Sentience agent from file
+    let agent_code = match fs::read_to_string("agent.sentience") {
+        Ok(code) => {
+            println!("Loaded agent from agent.sentience");
+            code
+        }
+        Err(e) => {
+            eprintln!("Failed to read agent.sentience: {}", e);
+            eprintln!("Using fallback agent code");
+            r#"
 agent MultiModalAnalyzer {
     mem short
     goal: "Analyze visual and speech input to extract meaningful insights"
@@ -48,62 +61,25 @@ agent MultiModalAnalyzer {
     on input(msg) {
         embed msg -> mem.short
         
-        // Vision analysis
-        if context includes ["banana"] {
-            vision_object = "banana"
-            affect_valence = "0.6"
-            affect_arousal = "0.3"
-        }
-        if context includes ["fruit"] {
-            vision_object = "fruit"
-            affect_valence = "0.7"
-            affect_arousal = "0.4"
-        }
-        if context includes ["yellow"] {
-            color_dominant = "yellow"
-            affect_valence = "0.8"
-        }
-        if context includes ["object"] {
-            vision_object = "object"
-            affect_valence = "0.5"
-        }
-        
-        // Speech analysis
+        // Basic fallback analysis
         if context includes ["hello"] {
             speech_intent = "greeting"
             affect_valence = "0.8"
-            affect_arousal = "0.2"
         }
-        if context includes ["help"] {
-            speech_intent = "request"
-            affect_valence = "0.3"
-            affect_arousal = "0.7"
-        }
-        if context includes ["thank"] {
-            speech_intent = "gratitude"
-            affect_valence = "0.9"
-            affect_arousal = "0.1"
-        }
-        if context includes ["what"] {
-            speech_intent = "question"
-            affect_valence = "0.4"
-            affect_arousal = "0.5"
-        }
-        if context includes ["good"] {
-            speech_sentiment = "positive"
-            affect_valence = "0.7"
-        }
-        if context includes ["bad"] {
-            speech_sentiment = "negative"
-            affect_valence = "0.2"
+        if context includes ["you"] {
+            speech_intent = "statement"
+            affect_valence = "0.5"
         }
     }
 }
-"#;
+"#
+            .to_string()
+        }
+    };
 
     // Register the agent
     if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
-        let _ = agent.run_sentience(agent_code);
+        let _ = agent.run_sentience(&agent_code);
         println!("MultiModalAnalyzer agent registered");
     }
 
@@ -132,6 +108,72 @@ agent MultiModalAnalyzer {
             "timestamp": timestamp
         }))
     });
+
+    let run = warp::path("run")
+        .and(warp::post())
+        .and(warp::body::json())
+        .map(|req: serde_json::Value| {
+            let timestamp = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_secs();
+
+            let mut facets = HashMap::new();
+
+            // Use real Sentience agent to analyze input
+            if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
+                let context = req["context"].as_str().unwrap_or("");
+                let msg = req["msg"].as_str().unwrap_or("");
+                let _embedding_id = req["embedding_id"].as_str().unwrap_or("unknown");
+
+                // Send to Sentience agent by executing a DSL snippet that sets memory and invokes `.input`
+                let ctx_esc = escape_dsl(context);
+                let msg_esc = escape_dsl(msg);
+                let dsl = format!(
+                    "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"{}\"\n.input {}",
+                    ctx_esc, msg_esc, msg_esc
+                );
+                println!("Sending to Sentience via DSL script:\n{}", dsl);
+                let _ = agent.run_sentience(&dsl);
+
+                // Debug: print all memory
+                let short_mem = agent.all_short();
+                println!("Short memory: {:?}", short_mem);
+
+                // Extract facets from agent's short-term memory
+                for (key, value) in short_mem {
+                    if key.starts_with("vision")
+                        || key.starts_with("speech")
+                        || key.starts_with("affect")
+                        || key.starts_with("color")
+                    {
+                        // Try to parse as number, otherwise keep as string
+                        if let Ok(num) = value.parse::<f64>() {
+                            facets.insert(
+                                key,
+                                serde_json::Value::Number(
+                                    serde_json::Number::from_f64(num).unwrap(),
+                                ),
+                            );
+                        } else {
+                            facets.insert(key, serde_json::Value::String(value));
+                        }
+                    }
+                }
+            }
+
+            let token = SentienceToken {
+                event_type: "sentience.token".to_string(),
+                ts: timestamp,
+                embedding_id: req["embedding_id"]
+                    .as_str()
+                    .unwrap_or("unknown")
+                    .to_string(),
+                facets,
+            };
+
+            warp::reply::json(&token)
+        });
 
     let tokenize = warp::path("tokenize")
         .and(warp::post())
@@ -163,16 +205,29 @@ agent MultiModalAnalyzer {
                     if !input_data.is_empty() {
                         input_data.push(' ');
                     }
+                    // Send only the transcript words, not the "speech:" prefix
                     input_data.push_str(transcript);
                 }
 
-                // Send to Sentience agent
-                println!("Sending to Sentience: {}", input_data);
-                if let Some(output) = agent.handle_input(&input_data) {
-                    println!("Sentience output: {}", output);
+                // Send to Sentience agent via DSL script (set context + msg, then `.input`)
+                let ctx_esc = escape_dsl(&input_data);
+                let msg_esc = escape_dsl(req.transcript.as_deref().unwrap_or(""));
+                let dsl = if !msg_esc.is_empty() {
+                    format!(
+                        "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"{}\"\n.input {}",
+                        ctx_esc,
+                        msg_esc,
+                        msg_esc
+                    )
                 } else {
-                    println!("No output from Sentience agent");
-                }
+                    // If there is no transcript, still set context and use a neutral input trigger
+                    format!(
+                        "mem.short[\"context\"] = \"{}\"\nmem.short[\"msg\"] = \"\"\n.input context",
+                        ctx_esc
+                    )
+                };
+                println!("Sending to Sentience via DSL script:\n{}", dsl);
+                let _ = agent.run_sentience(&dsl);
 
                 // Debug: print all memory
                 let short_mem = agent.all_short();
@@ -180,10 +235,10 @@ agent MultiModalAnalyzer {
 
                 // Extract facets from agent's short-term memory
                 for (key, value) in short_mem {
-                    if key.starts_with("vision.")
-                        || key.starts_with("speech.")
-                        || key.starts_with("affect.")
-                        || key.starts_with("color.")
+                    if key.starts_with("vision")
+                        || key.starts_with("speech")
+                        || key.starts_with("affect")
+                        || key.starts_with("color")
                     {
                         // Try to parse as number, otherwise keep as string
                         if let Ok(num) = value.parse::<f64>() {
@@ -239,7 +294,7 @@ agent MultiModalAnalyzer {
 
     let root = warp::path::end().map(|| "I am Sentience service");
 
-    let routes = ping.or(healthz).or(tokenize).or(root).with(cors);
+    let routes = ping.or(healthz).or(run).or(tokenize).or(root).with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 8082)).await;
 }

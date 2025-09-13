@@ -189,18 +189,24 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 	evBytes, _ := json.Marshal(ev)
 	hub.Broadcast(string(evBytes))
 
-	// Also call sentience tokenize for speech
-	tokenizeReq := map[string]interface{}{
+	// Also call sentience run for speech
+	runReq := map[string]interface{}{
 		"embedding_id": "speech-1",
-		"transcript":   out.Transcript,
+		"context":      "",
+		"msg":          out.Transcript,
 	}
-	tokenizeBody, _ := json.Marshal(tokenizeReq)
-	tokenizeClient := &http.Client{Timeout: 5 * time.Second}
-	tokenizeResp, err := tokenizeClient.Post("http://localhost:8082/tokenize", "application/json", bytes.NewReader(tokenizeBody))
-	if err == nil && tokenizeResp.StatusCode < 400 {
-		tokenizeData, _ := io.ReadAll(tokenizeResp.Body)
-		tokenizeResp.Body.Close()
-		hub.Broadcast(string(tokenizeData))
+	runBody, _ := json.Marshal(runReq)
+	runClient := &http.Client{Timeout: 5 * time.Second}
+	runResp, err := runClient.Post("http://localhost:8082/run", "application/json", bytes.NewReader(runBody))
+	if err == nil && runResp.StatusCode < 400 {
+		runData, _ := io.ReadAll(runResp.Body)
+		runResp.Body.Close()
+
+		// Parse the response and broadcast as sentience.token event
+		var sentienceResp map[string]interface{}
+		if err := json.Unmarshal(runData, &sentienceResp); err == nil {
+			hub.Broadcast(string(runData))
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")
