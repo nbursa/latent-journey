@@ -209,9 +209,10 @@ make help     # Show all available commands
 
 ## **Documentation**
 
-Full documentation and technical rationale lives in the /docs folder:
+Comprehensive documentation lives in the `/docs` folder. Start with:
 
-- **`1_GOAL_INTERPRETATION.md`** - Project vision and motivation
-- **`4_SYSTEM_ARCHITECTURE.md`** - Technical architecture
-- **`6_TECHNICAL_ACHIEVEMENTS.md`** - Detailed technical accomplishments
-- **`PROGRESS_CHECKLIST.md`** - Comprehensive development tracking
+- **`docs/README.md`** - Complete documentation index
+- **`docs/7_SYNTHAMIND_HYPOTHESIS.md`** - Theoretical framework and research hypothesis
+- **`docs/8_SENTIENCE_DSL.md`** - Sentience DSL language documentation
+- **`docs/4_SYSTEM_ARCHITECTURE.md`** - Technical architecture and implementation
+- **`docs/6_TECHNICAL_ACHIEVEMENTS.md`** - Detailed technical accomplishments

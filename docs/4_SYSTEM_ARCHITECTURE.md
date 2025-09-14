@@ -23,6 +23,12 @@ graph TD
     E --> I[LTM: ego-rs/data/memory.jsonl]
   end
 
+  subgraph SynthaCortex
+    H --> I
+    I --> E
+    E --> H
+  end
+
   subgraph User Interface
     G --> UI1[Thought Stream Panel]
     C --> UI2[Latent Insight Panel]
@@ -113,5 +119,11 @@ type Thought = {
   ts: number;
   text: string;
   evidence?: string[]; // ids of events that informed the thought
+  metrics?: {
+    self_awareness: number;
+    memory_consolidation_need: number;
+    emotional_stability: number;
+    creative_insight: number;
+  };
 };
 ```
