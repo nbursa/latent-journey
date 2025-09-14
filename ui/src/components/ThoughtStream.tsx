@@ -208,7 +208,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
 
         {/* Ollama Status */}
         {!ollamaAvailable && ollamaStatus && (
-          <div className="mb-3 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded text-yellow-300 text-sm">
+          <div className="mb-3 p-3 bg-yellow-500/20 text-yellow-300 text-sm">
             <div className="font-semibold mb-2 flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
               Ollama Not Available
@@ -298,8 +298,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                     <div className="text-sm">
                       {!isEgoAvailable
                         ? "Ego service not available"
-                        : !ollamaAvailable
-                        ? "Ollama not available - install and run Ollama to enable AI thoughts"
                         : isAutoGenerate
                         ? "Auto-generation enabled - thoughts will appear here"
                         : "Click Auto to enable auto-generation or Manual for manual generation"}
