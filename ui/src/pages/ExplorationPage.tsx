@@ -3,12 +3,13 @@ import { useAudioVisualization } from "../hooks/useAudioVisualization";
 import { useMediaRecording } from "../hooks/useMediaRecording";
 import { useEventStream } from "../hooks/useEventStream";
 import { useAppStore } from "../stores/appStore";
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import CameraSection from "../components/CameraSection";
 import EventsList from "../components/EventsList";
 import LatentInsight from "../components/LatentInsight";
 import MemoryTimeline from "../components/MemoryTimeline";
 import ThoughtStream from "../components/ThoughtStream";
+import { Memory } from "../types/memory";
 
 export default function ExplorationPage() {
   // Get data from Zustand store
@@ -40,6 +41,26 @@ export default function ExplorationPage() {
     stopRecording,
   } = useMediaRecording(loadMemoryEvents);
   const { handleEventMessage } = useEventStream();
+
+  // Convert memory events to Memory format for ego service
+  const memories = useMemo(() => {
+    return memoryEvents.map(
+      (event): Memory => ({
+        id: event.embedding_id,
+        ts: event.ts,
+        modality:
+          event.source === "vision"
+            ? "vision"
+            : event.source === "speech"
+            ? "speech"
+            : "text",
+        embedding: [],
+        facets: event.facets,
+        content: "",
+        tags: [],
+      })
+    );
+  }, [memoryEvents]);
 
   // Event handlers
   const handleSnapAndSend = () => {
@@ -137,7 +158,7 @@ export default function ExplorationPage() {
 
       {/* Right Column: Thought Stream Only */}
       <div className="flex-1 flex flex-col min-h-0 max-h-full">
-        <ThoughtStream />
+        <ThoughtStream memories={memories} />
       </div>
     </div>
   );

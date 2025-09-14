@@ -1,5 +1,15 @@
 import React, { useState, useEffect } from "react";
-import { Brain, Heart, Eye, Zap, Clock } from "lucide-react";
+import {
+  Brain,
+  RefreshCw,
+  Trash2,
+  Layers,
+  AlertCircle,
+  Play,
+  Pause,
+} from "lucide-react";
+import { useEgo } from "../hooks/useEgo";
+import { Memory } from "../types/memory";
 
 interface Thought {
   content: string;
@@ -24,262 +34,333 @@ interface ConsciousnessMetrics {
 
 interface ThoughtStreamProps {
   className?: string;
+  memories?: Memory[];
 }
 
-const ThoughtStream: React.FC<ThoughtStreamProps> = ({ className = "" }) => {
+const ThoughtStream: React.FC<ThoughtStreamProps> = ({
+  className = "",
+  memories = [],
+}) => {
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [metrics, setMetrics] = useState<ConsciousnessMetrics | null>(null);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isAutoGenerate, setIsAutoGenerate] = useState(false);
 
-  // Fetch thought history
-  const fetchThoughtHistory = async () => {
-    try {
-      const response = await fetch("/api/llm/thought-history?limit=20");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          setThoughts(data.thoughts || []);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch thought history:", err);
-    }
-  };
+  // Use the simplified ego service
+  const {
+    currentThought,
+    isGenerating,
+    isEgoAvailable,
+    ollamaAvailable,
+    ollamaStatus,
+    error,
+    generateThought,
+    consolidateMemories,
+    clearHistory,
+    totalMemories,
+  } = useEgo({
+    memories,
+    autoGenerate: isAutoGenerate,
+    intervalMs: 30000, // 30 seconds
+  });
 
-  // Fetch consciousness metrics
-  const fetchConsciousnessMetrics = async () => {
-    try {
-      const response = await fetch("/api/llm/consciousness-metrics?limit=1");
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success && data.metrics.length > 0) {
-          setMetrics(data.metrics[0]);
-        }
-      }
-    } catch (err) {
-      console.error("Failed to fetch consciousness metrics:", err);
-    }
-  };
-
-  // Generate a new thought
-  const generateThought = async () => {
-    setIsGenerating(true);
-    setError(null);
-
-    try {
-      // Get recent memory events for context
-      const memoryResponse = await fetch("/api/memory?limit=10");
-      const memoryData = await memoryResponse.json();
-
-      const requestData = {
-        recent_events: memoryData.events || [],
-        emotional_state: {
-          valence: 0.5, // Default neutral
-          arousal: 0.5,
-        },
-        attention_focus: ["current_experience", "memory_patterns"],
-        memory_patterns: [],
-      };
-
-      const response = await fetch("/api/llm/generate-thought", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestData),
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.success) {
-          // Refresh thoughts and metrics
-          await fetchThoughtHistory();
-          await fetchConsciousnessMetrics();
-        } else {
-          setError(data.error || "Failed to generate thought");
-        }
-      } else {
-        setError("Failed to generate thought");
-      }
-    } catch (err) {
-      setError("Network error while generating thought");
-      console.error("Thought generation error:", err);
-    } finally {
-      setIsGenerating(false);
-    }
-  };
-
-  // Load initial data
+  // Convert ego thought to legacy format for compatibility
   useEffect(() => {
-    fetchThoughtHistory();
-    fetchConsciousnessMetrics();
-  }, []);
+    if (currentThought) {
+      const legacyThought: Thought = {
+        content: currentThought.thought,
+        confidence: 0.8, // Default confidence
+        evidence: [], // Could be populated from memory references
+        emotional_tone:
+          currentThought.metrics.emotional_stability > 0.7
+            ? "positive"
+            : currentThought.metrics.emotional_stability < 0.3
+            ? "negative"
+            : "neutral",
+        self_reference: currentThought.metrics.self_awareness > 0.5,
+        creative_insight: currentThought.metrics.creative_insight > 0.5,
+        timestamp: currentThought.generated_at,
+        context_hash: currentThought.context_hash,
+      };
+      setThoughts([legacyThought]);
+    }
+  }, [currentThought]);
 
-  // Format timestamp
+  // Convert ego metrics to legacy format
+  useEffect(() => {
+    if (currentThought) {
+      const legacyMetrics: ConsciousnessMetrics = {
+        self_awareness: currentThought.metrics.self_awareness,
+        memory_consolidation: currentThought.metrics.memory_consolidation_need,
+        emotional_stability: currentThought.metrics.emotional_stability,
+        creative_insights: currentThought.metrics.creative_insight,
+        unexpected_behaviors: 0, // Not tracked in new system
+        attention_coherence: 0.5, // Default value
+        timestamp: currentThought.generated_at,
+      };
+      setMetrics(legacyMetrics);
+    }
+  }, [currentThought]);
+
+  // Handle memory consolidation
+  const handleConsolidate = async () => {
+    if (currentThought && currentThought.consolidate.length > 0) {
+      await consolidateMemories(currentThought.consolidate);
+    }
+  };
+
+  // Toggle auto-generation
+  const toggleAutoGenerate = () => {
+    setIsAutoGenerate(!isAutoGenerate);
+  };
+
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleTimeString();
   };
 
-  // Get emotional tone color
-  const getEmotionalToneColor = (tone: string) => {
-    switch (tone) {
-      case "positive":
-        return "text-green-400";
-      case "negative":
-        return "text-red-400";
-      default:
-        return "text-blue-400";
-    }
-  };
-
-  // Get consciousness level color
-  const getConsciousnessColor = (value: number) => {
-    if (value >= 0.8) return "text-green-400";
-    if (value >= 0.6) return "text-yellow-400";
-    if (value >= 0.4) return "text-orange-400";
+  const getMetricColor = (value: number) => {
+    if (value >= 0.7) return "text-green-400";
+    if (value >= 0.4) return "text-yellow-400";
     return "text-red-400";
   };
 
-  return (
-    <div className="flex-1 flex flex-col min-h-0 max-h-full overflow-hidden">
-      <div className="flex items-center gap-2 mb-2">
-        <Brain className="w-5 h-5" />
-        <h3 className="text-lg font-semibold">Thoughts</h3>
-      </div>
+  const getMetricLabel = (value: number) => {
+    if (value >= 0.7) return "High";
+    if (value >= 0.4) return "Medium";
+    return "Low";
+  };
 
-      <div
-        className={`flex-1 glass flat p-3 flex flex-col overflow-hidden ${className}`}
-      >
-        <div className="flex items-center justify-between mb-2">
+  return (
+    <div className={`flex flex-col h-full ${className}`}>
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-ui-text flex items-center gap-2">
+          <Brain className="w-5 h-5" />
+          Thoughts
+        </h2>
+        <div className="flex items-center gap-2">
+          {!isEgoAvailable && (
+            <div title="Ego service not available">
+              <AlertCircle className="w-4 h-4 text-red-400" />
+            </div>
+          )}
+
+          {/* Auto-generate toggle */}
           <button
-            onClick={generateThought}
-            disabled={isGenerating}
-            className="btn-primary text-sm px-3 py-1 disabled:opacity-50"
+            onClick={toggleAutoGenerate}
+            disabled={!isEgoAvailable}
+            className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+              isAutoGenerate ? "btn-primary" : "btn-secondary"
+            }`}
+            title={
+              isAutoGenerate ? "Stop auto-generation" : "Start auto-generation"
+            }
           >
-            {isGenerating ? "Thinking..." : "Generate Thought"}
+            {isAutoGenerate ? (
+              <Pause className="w-3 h-3" />
+            ) : (
+              <Play className="w-3 h-3" />
+            )}
+            {isAutoGenerate ? "Pause" : "Auto"}
+          </button>
+
+          {/* Manual refresh */}
+          <button
+            onClick={() => generateThought()}
+            disabled={isGenerating || !isEgoAvailable}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
+            title="Generate new thought manually"
+          >
+            <RefreshCw
+              className={`w-3 h-3 ${isGenerating ? "animate-spin" : ""}`}
+            />
+            Manual
+          </button>
+
+          <button
+            onClick={clearHistory}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
+            title="Clear history"
+          >
+            <Trash2 className="w-3 h-3" />
+            Clear
           </button>
         </div>
+      </div>
 
-        {/* Consciousness Metrics */}
-        {metrics && (
-          <div className="mb-3 p-2 pb-3 bg-ui-surface/50 border-b border-white/10">
-            <div className="flex items-center gap-2 mb-2">
-              <span className="text-xs font-semibold">
-                Consciousness Metrics
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
-              <div className="flex justify-between">
-                <span>Self-Awareness:</span>
-                <span className={getConsciousnessColor(metrics.self_awareness)}>
-                  {(metrics.self_awareness * 100).toFixed(0)}%
-                </span>
-              </div>
-
-              <div className="flex justify-between">
-                <span>Memory Consolidation:</span>
-                <span
-                  className={getConsciousnessColor(
-                    metrics.memory_consolidation
-                  )}
-                >
-                  {(metrics.memory_consolidation * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Emotional Stability:</span>
-                <span
-                  className={getConsciousnessColor(metrics.emotional_stability)}
-                >
-                  {(metrics.emotional_stability * 100).toFixed(0)}%
-                </span>
-              </div>
-              <div className="flex justify-between">
-                <span>Creative Insights:</span>
-                <span
-                  className={getConsciousnessColor(metrics.creative_insights)}
-                >
-                  {(metrics.creative_insights * 100).toFixed(0)}%
-                </span>
-              </div>
-            </div>
+      {/* Auto-generation status */}
+      {isAutoGenerate && (
+        <div className="mb-2 p-2 bg-green-500/10 text-xs text-green-300">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>Auto-generating thoughts every 30 seconds</span>
           </div>
-        )}
+        </div>
+      )}
 
-        {/* Error Message */}
+      {/* Main content */}
+      <div className="flex-1 glass flat p-3 flex flex-col overflow-hidden">
+        {/* Error message */}
         {error && (
-          <div className="mb-1 p-2 bg-red-900/20 border border-red-500/30 rounded text-red-400 text-xs">
+          <div className="mb-3 p-2 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
             {error}
           </div>
         )}
 
-        {/* Thoughts List (scrollable) */}
+        {/* Ollama Status */}
+        {!ollamaAvailable && ollamaStatus && (
+          <div className="mb-3 p-3 bg-yellow-500/20 border border-yellow-500/30 rounded text-yellow-300 text-sm">
+            <div className="font-semibold mb-2 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Ollama Not Available
+            </div>
+            <div className="space-y-2 text-xs">
+              <p>
+                To enable AI thought generation, you need to install and run
+                Ollama:
+              </p>
+              <div className="bg-black/20 p-2 rounded font-mono text-xs">
+                <div>
+                  <strong>Install:</strong>
+                </div>
+                <div>
+                  • macOS: <code>brew install ollama</code>
+                </div>
+                <div>
+                  • Linux:{" "}
+                  <code>curl -fsSL https://ollama.ai/install.sh | sh</code>
+                </div>
+                <div>• Windows: Download from https://ollama.ai/download</div>
+                <div className="mt-2">
+                  <strong>Run:</strong>
+                </div>
+                <div>
+                  • <code>ollama serve</code>
+                </div>
+                <div className="mt-2">
+                  <strong>Pull Model:</strong>
+                </div>
+                <div>
+                  •{" "}
+                  <code>
+                    ollama pull{" "}
+                    {ollamaStatus.ollama?.model || "llama3.1:8b-instruct"}
+                  </code>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Consciousness Metrics */}
+        {metrics && (
+          <div className="mb-3 p-2 pb-3 bg-ui-surface/50 border-b border-white/10">
+            <div className="grid grid-cols-2 gap-2 text-xs">
+              <div className="flex justify-between">
+                <span className="text-ui-muted">Self-Awareness:</span>
+                <span className={getMetricColor(metrics.self_awareness)}>
+                  {getMetricLabel(metrics.self_awareness)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ui-muted">Memory Consolidation:</span>
+                <span className={getMetricColor(metrics.memory_consolidation)}>
+                  {getMetricLabel(metrics.memory_consolidation)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ui-muted">Emotional Stability:</span>
+                <span className={getMetricColor(metrics.emotional_stability)}>
+                  {getMetricLabel(metrics.emotional_stability)}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-ui-muted">Creative Insights:</span>
+                <span className={getMetricColor(metrics.creative_insights)}>
+                  {getMetricLabel(metrics.creative_insights)}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Thoughts List */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto scrollbar-thin">
             <div className="space-y-2 p-1">
               {thoughts.length === 0 ? (
                 <div className="text-center text-ui-muted py-8">
-                  <Brain className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                  <p>No thoughts generated yet</p>
-                  <p className="text-sm">Click "Generate Thought" to start</p>
+                  {isGenerating ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Generating thought...</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      {!isEgoAvailable
+                        ? "Ego service not available"
+                        : !ollamaAvailable
+                        ? "Ollama not available - install and run Ollama to enable AI thoughts"
+                        : isAutoGenerate
+                        ? "Auto-generation enabled - thoughts will appear here"
+                        : "Click Auto to enable auto-generation or Manual for manual generation"}
+                    </div>
+                  )}
                 </div>
               ) : (
                 thoughts.map((thought, index) => (
                   <div
-                    key={`${thought.timestamp}-${index}`}
+                    key={index}
                     className="p-2 bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
                   >
                     {/* Thought Header */}
-                    <div className="flex items-start justify-between mb-2  pb-2">
-                      <div className="w-full flex flex-col gap-2">
-                        <span className="flex items-center gap-1 text-xs text-ui-muted">
-                          <Clock className="w-3 h-3 text-ui-muted" />
-                          {formatTimestamp(thought.timestamp)}
-                        </span>
-                        <div className="flex items-center gap-3">
+                    <div className="flex flex-col gap-2 mb-2">
+                      <div className="flex items-center justify-between text-xs text-ui-muted">
+                        <span>{formatTimestamp(thought.timestamp)}</span>
+                        <div className="flex items-center gap-2">
                           {thought.self_reference && (
-                            <span className="w-fit text-xs bg-purple-900/30 text-purple-300 px-2 py-0.5 rounded">
+                            <span className="px-1 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">
                               Self-Ref
                             </span>
                           )}
                           {thought.creative_insight && (
-                            <span className="w-fit text-xs bg-yellow-900/30 text-yellow-300 px-2 py-0.5 rounded">
+                            <span className="px-1 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">
                               Creative
                             </span>
                           )}
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span
-                            className={`text-xs ${getEmotionalToneColor(
-                              thought.emotional_tone
-                            )}`}
-                          >
-                            {thought.emotional_tone}
-                          </span>
-                          <span className="text-xs text-ui-muted">
-                            {(thought.confidence * 100).toFixed(0)}%
+                          <span className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-xs">
+                            Grounded
                           </span>
                         </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-ui-muted">
+                          Tone: {thought.emotional_tone}
+                        </span>
+                        <span className="text-ui-muted">
+                          Confidence: {Math.round(thought.confidence * 100)}%
+                        </span>
                       </div>
                     </div>
 
                     {/* Thought Content */}
-                    <div className="mb-2">
-                      <p className="text-xs leading-relaxed">
-                        {thought.content}
-                      </p>
+                    <div className="text-sm text-ui-text leading-relaxed">
+                      {thought.content}
                     </div>
 
-                    {/* Evidence */}
-                    {thought.evidence.length > 0 && (
-                      <div className="flex items-center gap-1 text-xs text-ui-muted">
-                        <Zap className="w-3 h-3" />
-                        <span>Evidence:</span>
-                        <span>{thought.evidence.join(", ")}</span>
-                      </div>
-                    )}
+                    {/* Consolidation Actions */}
+                    {currentThought &&
+                      currentThought.consolidate.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/10">
+                          <button
+                            onClick={handleConsolidate}
+                            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                          >
+                            <Layers className="w-3 h-3" />
+                            Consolidate {currentThought.consolidate.length}{" "}
+                            memories
+                          </button>
+                        </div>
+                      )}
                   </div>
                 ))
               )}
@@ -288,9 +369,25 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({ className = "" }) => {
         </div>
 
         {/* Footer */}
-        <div className="mt-2 pt-2 border-t border-white/10">
-          <div className="flex items-center justify-end text-xs text-ui-muted">
-            <span>{thoughts.length} thoughts</span>
+        <div className="flex items-center justify-between text-xs text-ui-muted mt-2 pt-2 border-t border-white/10">
+          <div className="flex items-center gap-2">
+            <span>Mode: {isAutoGenerate ? "Auto" : "Manual"}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span>Memories: {totalMemories}</span>
+            <span>Service: Ego</span>
+            <span
+              className={`flex items-center gap-1 ${
+                ollamaAvailable ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  ollamaAvailable ? "bg-green-400" : "bg-red-400"
+                }`}
+              ></div>
+              Ollama
+            </span>
           </div>
         </div>
       </div>

@@ -12,6 +12,11 @@
   --ui-text: #d9e1ee;
   --ui-dim: #9fb2c7;
 
+  /* Status colors */
+  --status-online: #10b981; /* green */
+  --status-offline: #ef4444; /* red */
+  --status-unknown: #f59e0b; /* yellow */
+
   /* Legacy compatibility */
   --bg-primary: var(--ui-bg);
   --bg-secondary: var(--ui-surface);

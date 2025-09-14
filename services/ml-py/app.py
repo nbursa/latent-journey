@@ -305,4 +305,4 @@ def infer_whisper():
 if __name__ == "__main__":
     print("ML service starting on :8081")
     print("I am ML service")
-    app.run(host="0.0.0.0", port=8081, debug=True)
+    app.run(host="0.0.0.0", port=8081, debug=False)

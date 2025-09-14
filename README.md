@@ -61,7 +61,33 @@ Make sure you have Go, Python, Rust, and Node.js installed.
 make install
 ```
 
-### 2. Start All Services
+### 2. External Dependencies
+
+The system requires external LLM services for the Thought Stream feature:
+
+#### Option A: Ollama (Recommended for local development)
+
+```bash
+# Install Ollama (if not already installed)
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Start Ollama service
+ollama serve
+
+# Download the model (in a separate terminal)
+ollama pull llama3.2:3b
+```
+
+#### Option B: Other LLM Providers
+
+Configure different providers in `services/llm-py/app.py`:
+
+- Set `LLM_PROVIDER=openai` and `OPENAI_API_KEY=your_key`
+- Set `LLM_PROVIDER=anthropic` and `ANTHROPIC_API_KEY=your_key`
+
+**Note:** The system will start without external LLM services, but the Thought Stream feature will not work until a valid LLM provider is configured and running.
+
+### 3. Start All Services
 
 ```bash
 make dev
