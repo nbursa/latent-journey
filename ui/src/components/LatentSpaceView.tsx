@@ -355,7 +355,7 @@ export default function LatentSpaceView({
   };
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col min-h-0 p-2">
       <div className="flex items-center justify-between mb-4 flex-shrink-0">
         <h2 className="text-lg font-semibold flex items-center gap-2">
           <Map className="w-5 h-5" />
@@ -373,7 +373,7 @@ export default function LatentSpaceView({
         </div>
       </div>
 
-      <div className="flex-1 glass flat p-4 min-h-0 overflow-hidden">
+      <div className="flex-1 p-4 min-h-0 overflow-hidden">
         {isComputing ? (
           <div className="h-full flex items-center justify-center">
             <div className="text-center text-gray-400">

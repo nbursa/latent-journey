@@ -1,5 +1,6 @@
 import { useAppStore } from "../stores/appStore";
 import LatentSpaceView from "../components/LatentSpaceView";
+import LatentSpace3D from "../components/LatentSpace3D";
 import LatentScatter from "../components/LatentScatter";
 import WaypointComparison from "../components/WaypointComparison";
 import ProgressiveDisclosure, {
@@ -9,7 +10,7 @@ import ProgressiveDisclosure, {
 } from "../components/ProgressiveDisclosure";
 import { useMemoryEventsRealtime } from "../hooks/useMemoryEventsRealtime";
 import { useState } from "react";
-import { Map, Eye, Brain, Settings, Camera } from "lucide-react";
+import { Map, Eye, Brain, Settings, Camera, Layers } from "lucide-react";
 
 export default function LatentSpacePage() {
   const memoryEvents = useAppStore((state) => state.memoryEvents);
@@ -18,7 +19,7 @@ export default function LatentSpacePage() {
     (state) => state.setSelectedMemoryEvent
   );
 
-  const [viewMode, setViewMode] = useState<"2d" | "3d">("3d");
+  const [viewMode, setViewMode] = useState<"2d" | "3d" | "scatter">("3d");
   const [cameraPreset, setCameraPreset] = useState<
     "top" | "isometric" | "free"
   >("free");
@@ -91,6 +92,7 @@ export default function LatentSpacePage() {
                     ? "bg-ui-accent text-ui-bg"
                     : "bg-ui-surface text-ui-dim hover:text-ui-text"
                 }`}
+                title="2D Map View"
               >
                 <Map className="w-4 h-4" />
                 2D
@@ -102,9 +104,22 @@ export default function LatentSpacePage() {
                     ? "bg-ui-accent text-ui-bg"
                     : "bg-ui-surface text-ui-dim hover:text-ui-text"
                 }`}
+                title="3D Space View"
               >
                 <Eye className="w-4 h-4" />
                 3D
+              </button>
+              <button
+                onClick={() => setViewMode("scatter")}
+                className={`px-3 py-1 text-sm rounded flex items-center gap-2 transition-colors ${
+                  viewMode === "scatter"
+                    ? "bg-ui-accent text-ui-bg"
+                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                }`}
+                title="3D Scatter Plot"
+              >
+                <Layers className="w-4 h-4" />
+                Scatter
               </button>
             </div>
           </div>
@@ -114,6 +129,12 @@ export default function LatentSpacePage() {
         <div className="flex-1 min-h-0 overflow-hidden glass">
           {viewMode === "2d" ? (
             <LatentSpaceView
+              memoryEvents={memoryEvents}
+              selectedEvent={selectedMemoryEvent}
+              onSelectEvent={setSelectedMemoryEvent}
+            />
+          ) : viewMode === "3d" ? (
+            <LatentSpace3D
               memoryEvents={memoryEvents}
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
