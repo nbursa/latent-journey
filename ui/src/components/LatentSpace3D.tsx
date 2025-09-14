@@ -11,6 +11,7 @@ interface LatentSpace3DProps {
   memoryEvents: MemoryEvent[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
+  cameraPreset?: "top" | "isometric" | "free";
 }
 
 interface Point3D {
@@ -408,11 +409,13 @@ function Scene3D({
   selectedEvent,
   onSelectEvent,
   onHover,
+  cameraPreset = "free",
 }: {
   points: Point3D[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
   onHover: (event: MemoryEvent | null) => void;
+  cameraPreset?: "top" | "isometric" | "free";
 }) {
   const { camera, gl } = useThree();
   const waypoints = useWaypoints();
@@ -449,14 +452,35 @@ function Scene3D({
       const sizeZ = bounds.maxZ - bounds.minZ;
       const maxSize = Math.max(sizeX, sizeY, sizeZ);
 
-      // Position camera to encompass all points with some padding
+      // Position camera based on preset
       const distance = Math.max(maxSize * 0.8, 30); // Much closer, minimum 30 units away
-      const cameraX = centerX + distance * 0.65;
-      const cameraY = centerY + distance * 0.65;
-      const cameraZ = centerZ + distance * 0.65;
 
-      camera.position.set(cameraX, cameraY, cameraZ);
-      camera.lookAt(centerX, centerY, centerZ);
+      switch (cameraPreset) {
+        case "top":
+          // Top view - camera directly above
+          camera.position.set(centerX, centerY + distance, centerZ);
+          camera.lookAt(centerX, centerY, centerZ);
+          break;
+        case "isometric":
+          // Isometric view - 45-degree angle
+          const isoDistance = distance * 1.2;
+          camera.position.set(
+            centerX + isoDistance * 0.7,
+            centerY + isoDistance * 0.7,
+            centerZ + isoDistance * 0.7
+          );
+          camera.lookAt(centerX, centerY, centerZ);
+          break;
+        case "free":
+        default:
+          // Free view - current dynamic positioning
+          const cameraX = centerX + distance * 0.65;
+          const cameraY = centerY + distance * 0.65;
+          const cameraZ = centerZ + distance * 0.65;
+          camera.position.set(cameraX, cameraY, cameraZ);
+          camera.lookAt(centerX, centerY, centerZ);
+          break;
+      }
     } else {
       // Default position when no points
       camera.position.set(150, 150, 150);
@@ -488,7 +512,7 @@ function Scene3D({
         handleContextRestored
       );
     };
-  }, [camera, gl, points]);
+  }, [camera, gl, points, cameraPreset]);
 
   return (
     <>
@@ -524,6 +548,7 @@ export default function LatentSpace3D({
   memoryEvents,
   selectedEvent,
   onSelectEvent,
+  cameraPreset = "free",
 }: LatentSpace3DProps) {
   const [points, setPoints] = useState<Point3D[]>([]);
   const [isComputing, setIsComputing] = useState(false);
@@ -623,6 +648,7 @@ export default function LatentSpace3D({
                 selectedEvent={selectedEvent}
                 onSelectEvent={onSelectEvent}
                 onHover={setHoveredEvent}
+                cameraPreset={cameraPreset}
               />
               <OrbitControls
                 enablePan={true}

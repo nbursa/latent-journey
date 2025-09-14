@@ -134,6 +134,7 @@ export default function LatentSpacePage() {
               memoryEvents={memoryEvents}
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
+              cameraPreset={cameraPreset}
             />
           ) : (
             <LatentScatter
@@ -141,6 +142,7 @@ export default function LatentSpacePage() {
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
               onHoverEvent={() => {}}
+              cameraPreset={cameraPreset}
             />
           )}
         </div>

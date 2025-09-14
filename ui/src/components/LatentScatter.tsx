@@ -10,6 +10,7 @@ interface LatentScatterProps {
   onSelectEvent: (event: MemoryEvent) => void;
   onHoverEvent: (event: MemoryEvent | null) => void;
   className?: string;
+  cameraPreset?: "top" | "isometric" | "free";
 }
 
 interface Point3D {
@@ -498,6 +499,7 @@ function Scene3D({
   setCameraPosition,
   focusTarget,
   setFocusTarget,
+  cameraPreset = "free",
 }: {
   points: Point3D[];
   selectedEvent: MemoryEvent | null;
@@ -507,6 +509,7 @@ function Scene3D({
   setCameraPosition: (pos: { x: number; y: number; z: number }) => void;
   focusTarget: { x: number; y: number; z: number } | null;
   setFocusTarget: (target: { x: number; y: number; z: number } | null) => void;
+  cameraPreset?: "top" | "isometric" | "free";
 }) {
   const { camera } = useThree();
 
@@ -543,12 +546,71 @@ function Scene3D({
     }
   }, [focusTarget, camera, setFocusTarget]);
 
-  // Initialize camera position
+  // Initialize camera position based on preset
   useEffect(() => {
-    camera.position.set(300, 300, 300);
-    camera.lookAt(0, 0, 90);
-    setCameraPosition({ x: 300, y: 300, z: 300 });
-  }, [camera, setCameraPosition]);
+    if (points.length > 0) {
+      // Calculate bounds of all points
+      const bounds = points.reduce(
+        (acc, point) => ({
+          minX: Math.min(acc.minX, point.x),
+          maxX: Math.max(acc.maxX, point.x),
+          minY: Math.min(acc.minY, point.y),
+          maxY: Math.max(acc.maxY, point.y),
+          minZ: Math.min(acc.minZ, point.z),
+          maxZ: Math.max(acc.maxZ, point.z),
+        }),
+        {
+          minX: Infinity,
+          maxX: -Infinity,
+          minY: Infinity,
+          maxY: -Infinity,
+          minZ: Infinity,
+          maxZ: -Infinity,
+        }
+      );
+
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const centerY = (bounds.minY + bounds.maxY) / 2;
+      const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+      const maxSize = Math.max(
+        bounds.maxX - bounds.minX,
+        bounds.maxY - bounds.minY,
+        bounds.maxZ - bounds.minZ
+      );
+      const distance = Math.max(maxSize * 0.8, 30);
+
+      switch (cameraPreset) {
+        case "top":
+          camera.position.set(centerX, centerY + distance, centerZ);
+          camera.lookAt(centerX, centerY, centerZ);
+          setCameraPosition({ x: centerX, y: centerY + distance, z: centerZ });
+          break;
+        case "isometric":
+          const isoDistance = distance * 1.2;
+          const isoX = centerX + isoDistance * 0.7;
+          const isoY = centerY + isoDistance * 0.7;
+          const isoZ = centerZ + isoDistance * 0.7;
+          camera.position.set(isoX, isoY, isoZ);
+          camera.lookAt(centerX, centerY, centerZ);
+          setCameraPosition({ x: isoX, y: isoY, z: isoZ });
+          break;
+        case "free":
+        default:
+          const freeX = centerX + distance * 0.65;
+          const freeY = centerY + distance * 0.65;
+          const freeZ = centerZ + distance * 0.65;
+          camera.position.set(freeX, freeY, freeZ);
+          camera.lookAt(centerX, centerY, centerZ);
+          setCameraPosition({ x: freeX, y: freeY, z: freeZ });
+          break;
+      }
+    } else {
+      // Default position when no points
+      camera.position.set(150, 150, 150);
+      camera.lookAt(0, 0, 0);
+      setCameraPosition({ x: 150, y: 150, z: 150 });
+    }
+  }, [camera, setCameraPosition, points, cameraPreset]);
 
   return (
     <>
@@ -579,6 +641,7 @@ export default function LatentScatter({
   onSelectEvent,
   onHoverEvent,
   className = "",
+  cameraPreset = "free",
 }: LatentScatterProps) {
   const [points, setPoints] = useState<Point3D[]>([]);
   const [isComputing, setIsComputing] = useState(false);
@@ -715,6 +778,7 @@ export default function LatentScatter({
               setCameraPosition={setCameraPosition}
               focusTarget={focusTarget}
               setFocusTarget={setFocusTarget}
+              cameraPreset={cameraPreset}
             />
             <OrbitControls
               enablePan={true}
