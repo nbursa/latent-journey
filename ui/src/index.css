@@ -1,21 +1,32 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
 @import "tailwindcss";
 
-/* CSS Variables for Theme */
+/* CSS Variables for Hi-Tech Laboratory Theme */
 :root {
-  --bg-primary: #0a0a0a;
-  --bg-secondary: #111111;
-  --bg-tertiary: #1a1a1a;
-  --accent-primary: #00d4ff;
-  --accent-secondary: #5cb85c;
+  --ui-bg: #0b0e13;
+  --ui-surface: #141922;
+  --ui-card: #0f131a;
+  --ui-border: #1e2531;
+  --ui-accent: #00e0be;
+  --ui-accent-2: #1bb4f2;
+  --ui-warn: #ffb020;
+  --ui-text: #d9e1ee;
+  --ui-dim: #9fb2c7;
+
+  /* Legacy compatibility */
+  --bg-primary: var(--ui-bg);
+  --bg-secondary: var(--ui-surface);
+  --bg-tertiary: var(--ui-card);
+  --accent-primary: var(--ui-accent);
+  --accent-secondary: var(--ui-accent-2);
   --accent-tertiary: #8338ec;
-  --accent-quaternary: #ff6b6b;
-  --text-primary: #ffffff;
-  --text-secondary: #a0a0a0;
+  --accent-quaternary: var(--ui-warn);
+  --text-primary: var(--ui-text);
+  --text-secondary: var(--ui-dim);
   --text-muted: #666666;
-  --border-color: #333333;
-  --glass-bg: rgba(255, 255, 255, 0.05);
-  --glass-border: rgba(255, 255, 255, 0.1);
+  --border-color: var(--ui-border);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-glow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-glow-hover: 0 6px 16px rgba(0, 0, 0, 0.4);
 }
@@ -29,8 +40,53 @@ body,
   padding: 0;
   overflow: hidden;
   font-family: "JetBrains Mono", monospace;
-  background: var(--bg-primary);
-  color: var(--text-primary);
+  background: var(--ui-bg);
+  color: var(--ui-text);
+  position: relative;
+}
+
+/* Micro-textures and scanlines */
+html::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  /* background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.02) 1px,
+    transparent 0
+  );
+  background-size: 20px 20px; */
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* Scanline effect for headers */
+.scanline::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ui-accent),
+    transparent
+  );
+  animation: scanline 2s linear infinite;
+}
+
+@keyframes scanline {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
 }
 
 * {
@@ -53,7 +109,6 @@ body,
   font-family: "JetBrains Mono", monospace;
 }
 
-/* Glass Effect */
 .glass {
   background: var(--glass-bg);
   backdrop-filter: blur(20px);
@@ -62,10 +117,89 @@ body,
 }
 
 .glass-intense {
-  background: rgba(0, 212, 255, 0.1);
+  background: rgba(0, 224, 190, 0.1);
   backdrop-filter: blur(25px);
-  border: 1px solid rgba(0, 212, 255, 0.2);
+  border: 1px solid rgba(0, 224, 190, 0.2);
   box-shadow: var(--shadow-glow);
+}
+
+.card {
+  background: var(--ui-card);
+  border: 1px solid var(--ui-border);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.02);
+  position: relative;
+}
+
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    135deg,
+    transparent,
+    rgba(0, 224, 190, 0.05),
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* HUD Elements */
+.hud-element {
+  background: var(--ui-surface);
+  border: 1px solid var(--ui-border);
+  padding: 8px 12px;
+  font-family: "IBM Plex Mono", monospace;
+  font-size: 11px;
+  color: var(--ui-dim);
+  position: relative;
+}
+
+.hud-element::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ui-accent),
+    transparent
+  );
+  opacity: 0.6;
+}
+
+/* Status indicators with breathing animation */
+.status-indicator {
+  position: relative;
+  display: inline-block;
+}
+
+.status-indicator.online {
+  color: var(--ui-accent);
+  animation: breathing 2s ease-in-out infinite;
+}
+
+.status-indicator.offline {
+  color: var(--ui-warn);
+}
+
+.status-indicator.unknown {
+  color: var(--ui-dim);
+}
+
+@keyframes breathing {
+  0%,
+  100% {
+    opacity: 0.7;
+  }
+  50% {
+    opacity: 1;
+  }
 }
 
 /* Buttons */
@@ -77,6 +211,45 @@ body,
   overflow: hidden;
   will-change: transform;
   transform-origin: center;
+}
+
+.btn-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ui-accent),
+    transparent
+  );
+}
+
+.btn-active:hover::before {
+  opacity: 1;
+}
+
+.nav-active {
+  position: relative;
+}
+
+.nav-active::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--ui-accent),
+    transparent
+  );
+  opacity: 0.6;
 }
 
 .btn-primary {
@@ -280,18 +453,18 @@ body,
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--accent-primary);
+  background: var(--ui-border);
   border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--accent-secondary);
+  background: var(--ui-dim);
 }
 
 /* Firefox scrollbar */
 * {
   scrollbar-width: thin;
-  scrollbar-color: var(--accent-primary) transparent;
+  scrollbar-color: var(--ui-border) transparent;
 }
 
 /* Animations */

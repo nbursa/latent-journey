@@ -2,7 +2,7 @@ import { ReactNode, useEffect } from "react";
 import { useMediaRecording } from "../hooks/useMediaRecording";
 import { useAppStore } from "../stores/appStore";
 import Header from "../components/Header";
-import Navigation from "../components/Navigation";
+import StatusBar from "../components/StatusBar";
 
 interface LayoutProps {
   children: ReactNode;
@@ -65,16 +65,12 @@ export default function Layout({ children }: LayoutProps) {
   }, [updateServicesStatus]);
 
   return (
-    <div className="h-screen w-screen flex flex-col text-white animated-bg">
+    <div className="h-screen w-screen flex flex-col text-white">
       <Header servicesStatus={servicesStatus} captures={captures} />
 
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="flex-shrink-0 p-4">
-          <Navigation />
-        </div>
+      <div className="flex-1 min-h-0">{children}</div>
 
-        <div className="flex-1 min-h-0">{children}</div>
-      </div>
+      <StatusBar />
     </div>
   );
 }

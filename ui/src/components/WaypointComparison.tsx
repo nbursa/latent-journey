@@ -81,8 +81,8 @@ export default function WaypointComparison() {
         <h2 className="text-lg font-semibold">A/B Comparison</h2>
       </div>
 
-      <div className="flex-1 glass flat p-4 min-h-0 overflow-hidden">
-        <div className="flex gap-4 h-full min-h-0">
+      <div className="glass flex-1 flat p-4 min-h-0 max-h-fit overflow-hidden">
+        <div className="flex gap-4 h-full min-h-0 max-h-fit">
           {renderWaypoint(
             waypointA,
             "Waypoint A",

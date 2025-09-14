@@ -100,6 +100,14 @@ export default function ExplorationPage() {
 
       <div className="flex-1 flex flex-col min-h-0 max-h-full">
         <EventsList events={events} isProcessing={isProcessing} />
+
+        {/* <MemoryTimeline
+          memoryEvents={memoryEvents}
+          memoryFilter={memoryFilter}
+          selectedMemoryEvent={selectedMemoryEvent}
+          onSetMemoryFilter={setMemoryFilter}
+          onSelectMemoryEvent={setSelectedMemoryEvent}
+        /> */}
       </div>
 
       <div className="flex-1 flex flex-col min-h-0 max-h-full">

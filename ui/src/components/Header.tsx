@@ -1,5 +1,6 @@
 import ServicesStatus from "./ServicesStatus";
 import CapturesGallery from "./CapturesGallery";
+import Navigation from "./Navigation";
 import { ServicesStatus as ServicesStatusType } from "../types";
 import { useLocation } from "react-router-dom";
 
@@ -14,9 +15,13 @@ export default function Header({ servicesStatus, captures }: HeaderProps) {
 
   return (
     <div className="flex-shrink-0 p-4">
-      <h1 className="text-2xl sm:text-3xl font-bold mb-4 text-gradient text-glow">
-        Latent Journey
-      </h1>
+      {/* Header Title and Navigation */}
+      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4 mb-4">
+        <h1 className="text-2xl sm:text-3xl font-bold text-gradient">
+          Latent Journey
+        </h1>
+        <Navigation />
+      </div>
 
       {/* Services Status and Captures */}
       <div className="flex flex-col sm:flex-row gap-4">

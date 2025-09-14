@@ -34,7 +34,7 @@ export default function ServicesStatus({
   ];
 
   return (
-    <div className="w-fit glass flat p-3 flex-shrink-0">
+    <div className="w-fit h-fit glass flat p-3 flex-shrink-0">
       <h3 className="text-sm font-semibold mb-2">Services Status</h3>
       <div className="flex flex-wrap gap-4">
         {services.map(({ key, label, icon: Icon }) => (
