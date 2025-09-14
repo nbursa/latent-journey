@@ -35,7 +35,8 @@ latent-journey/
 │   ├── 2_PROBLEM_FRAMING.md
 │   ├── 3_DESIGN_DECISIONS.md
 │   ├── 4_SYSTEM_ARCHITECTURE.md
-│   └── 5_INTERFACE_AND_FLOW.md
+│   ├── 5_INTERFACE_AND_FLOW.md
+|   └── ...
 ├── cmd/
 │   └── gateway/                # Go main (HTTP + SSE)
 │       ├── main.go
@@ -206,6 +207,14 @@ make help     # Show all available commands
 - **Speech Processing**: <200ms (target: <500ms) - **2.5x faster**
 - **UI Responsiveness**: <50ms updates
 - **System Reliability**: >99% uptime
+
+## **Core Theory**
+
+This project implements the theoretical framework defined in:
+
+[Structured Synthetic Memory: The SynthaMind Hypothesis and Architecture Overview](./docs/Structured_Synthetic_Memory_The_SynthaMind_Hypothesis_v1.0.pdf)
+
+> A 15-page theoretical paper describing how intelligence, consciousness, and personality may emerge from structured, relational memory - implemented in this repository via Sentience DSL, ego.thought stream, and stratified memory subsystems.
 
 ## **Documentation**
 
