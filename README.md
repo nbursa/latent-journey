@@ -212,7 +212,7 @@ make help     # Show all available commands
 
 This project implements the theoretical framework defined in:
 
-[Structured Synthetic Memory: The SynthaMind Hypothesis and Architecture Overview](./docs/Structured_Synthetic_Memory_The_SynthaMind_Hypothesis_v1.0.pdf)
+[Structured Synthetic Memory: The SynthaMind Hypothesis and Architecture Overview](./docs/Structured_Synthetic_Memory-The_SynthaMind_Hypothesis_and_Architecture_Overview_v1.0.pdf)
 
 > A 15-page theoretical paper describing how intelligence, consciousness, and personality may emerge from structured, relational memory - implemented in this repository via Sentience DSL, ego.thought stream, and stratified memory subsystems.
 
