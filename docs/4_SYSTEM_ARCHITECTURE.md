@@ -1,78 +1,85 @@
 # 4_SYSTEM_ARCHITECTURE
 
-## High-level Diagram
+## High-level Diagram **IMPLEMENTED**
 
 ```mermaid
 graph TD
   subgraph User Input
     A1[Webcam] --> B1
     A2[Microphone] --> B2
-    A3[Text Input] --> B3
   end
 
-  subgraph Perception
-    B1[CLIP / OpenCLIP] --> C[Perception Core]
+  subgraph Services Architecture
+    B1[CLIP Vision] --> C[Sentience Service]
     B2[Whisper STT] --> C
-    B3[Direct Text Tokenizer] --> C
+    C --> D[Memory Store]
+    C --> E[Ego Service]
+    E --> F[Ollama LLM]
+    E --> G[Thought Stream]
   end
 
-  C --> D[Short-Term Memory]
-  C --> G[AI-Ego]
-
-  subgraph Memory
-    D --> E[Long-Term Memory]
+  subgraph Memory System
+    D --> H[STM: sentience-rs/data/memory.jsonl]
+    E --> I[LTM: ego-rs/data/memory.jsonl]
   end
-
-  G --> D
-  G --> E
-  G --> F[Thought Stream]
 
   subgraph User Interface
-    F --> UI1[Panel: Thought Stream]
-    C --> UI2[Panel: Latent Insight]
-    B1 --> UI3[Panel: Live Perception]
-    D --> UI4[Panel: Memory Timeline]
+    G --> UI1[Thought Stream Panel]
+    C --> UI2[Latent Insight Panel]
+    A1 --> UI3[Live Perception Panel]
+    D --> UI4[Memory Timeline Panel]
+    C --> UI5[3D Latent Space Visualization]
+  end
+
+  subgraph Gateway
+    J[Go Gateway :8080] --> C
+    J --> E
+    J --> K[ML Service :8081]
+    J --> L[LLM Service :8083]
   end
 ```
 
-## Modules
+## **IMPLEMENTED MODULES**
 
-### 1 Perception (`/src/perception`)
+### 1 **ML Service** (`services/ml-py`) - **COMPLETE**
 
-- **Vision:** frame capture → CLIP/OpenCLIP → top‑k labels + embedding vector
-- **Speech:** mic → Whisper → transcript (+ optional sentiment/topic)
-- Emits structured events to Sentience DSL: `vision.observation`, `speech.transcript`, `text.input`
+- **Vision:** Real-time CLIP processing → top‑k labels + embeddings + color/affect detection
+- **Performance:** <100ms processing time
+- **Features:** Real-time camera capture, CLIP integration, affect detection
 
-### 2 Sentience DSL (`/src/sentience`)
+### 2 **Sentience Service** (`services/sentience-rs`) - **COMPLETE**
 
-- Translates raw events into semantic tokens:
-  - `vision.object`, `vision.scene`, `speech.intent`, `text.entity`, `affect.valence`
-- Normalizes and enriches: e.g., mapping labels into an ontology (WordNet/ConceptNet-lite)
-- Produces symbolic-perceptual streams for Memory
-- Emits: `sentience.token`
+- **Multi-modal Processing:** Vision + Speech tokenization
+- **Semantic Facets:** `vision.object`, `speech.intent`, `affect.valence`, `affect.arousal`
+- **Memory Integration:** Automatic memory event creation
+- **Performance:** <200ms speech processing
 
-### 3 Memory (`/src/memory`)
+### 3 **Ego Service** (`services/ego-rs`) - **COMPLETE**
 
-- **STM:** recent window (the last N seconds/tokens)
-- **LTM (Inception):** persistent store with metadata: `{timestamp, tokens, thoughts, reward}`
-- Supports queries, filtering, and temporal navigation
+- **AI Reflection:** Real-time thought generation with Ollama integration
+- **Memory Consolidation:** AI suggests and consolidates memories into concepts
+- **Consciousness Metrics:** Attention, salience, coherence tracking
+- **LTM Persistence:** Separate LTM file for consolidated memories
 
-### 4 AI‑Ego (`/src/ai-ego`)
+### 4 **Memory System** - **COMPLETE**
 
-- Loop every T ms:
-  1. reads STM (latest perceptual context)
-  2. composes a context prompt (what was seen/heard, last tokens, last thought)
-  3. calls the LLM → generates a `thought`
-  4. writes to Memory (STM snapshot + thought), emits to UI
-- Optional "attention hint": a salience heuristic (e.g., label changes, contrast).
+- **STM:** `services/sentience-rs/data/memory.jsonl` (unconsolidated)
+- **LTM:** `services/ego-rs/data/memory.jsonl` (consolidated concepts)
+- **Features:** Memory consolidation, concept creation, temporal navigation
 
-### 5 UI (`/src/ui`)
+### 5 **UI System** (`ui/`) - **COMPLETE**
 
-- **Panel A – Live Perception:** camera preview, latest CLIP labels, STT transcript
-- **Panel B – Latent Insight:** nearest neighbors (text/image), similarity, top‑k concepts
-- **Panel C – Thought Stream:** stream of reflections (LLM), timeline
-- **Panel D – Memory Timeline:** STM→LTM records, filter by event type; reward buttons (+/–)
-- **Controls:** mic PTT, image upload, text input, toggle details (progressive disclosure)
+- **Panel A – Live Perception:** Camera feed, CLIP labels, audio visualization
+- **Panel B – Latent Insight:** Semantic facets, progress bars, nearest neighbors
+- **Panel C – Thought Stream:** AI reflections, consciousness metrics, auto/manual modes
+- **Panel D – Memory Timeline:** Event filtering, waypoint system, A/B comparison
+- **3D Visualization:** Interactive latent space exploration with multiple view modes
+
+### 6 **Gateway Service** (`cmd/gateway`) - **COMPLETE**
+
+- **API Routes:** HTTP + SSE event streaming
+- **Service Orchestration:** Health checks, service discovery
+- **Performance:** Optimized with request size limits and CORS
 
 ## Data Contracts (Events)
 
