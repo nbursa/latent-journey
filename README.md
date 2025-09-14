@@ -1,4 +1,4 @@
-# latent-journey
+# Latent Journey
 
 > An interactive tool for exploring the latent spaces of multimodal AI models  
 > through real-time perception, introspective feedback, and symbolic memory.
@@ -8,7 +8,7 @@ Research Engineer Challenge – **Challenge Option 1: Latent Journey**.
 
 ---
 
-## What it does **IMPLEMENTED**
+## What it does
 
 - Captures user input (image, speech) in real-time
 - Uses existing AI models (CLIP, Whisper, Ollama) to generate latent representations
