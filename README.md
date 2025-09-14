@@ -4,7 +4,7 @@
 > through real-time perception, introspective feedback, and symbolic memory.
 
 This project is a submission for the **California Institute for Machine Consciousness (CIMC)**  
-Research Engineer Challenge – **Challenge Option 1: Latent Journey**.
+Research Engineer – **Latent Journey**.
 
 ---
 
