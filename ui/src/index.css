@@ -1,7 +1,6 @@
 @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&display=swap");
 @import "tailwindcss";
 
-/* CSS Variables for Hi-Tech Laboratory Theme */
 :root {
   --ui-bg: #0b0e13;
   --ui-surface: #141922;
@@ -29,6 +28,9 @@
   --glass-border: rgba(255, 255, 255, 0.08);
   --shadow-glow: 0 4px 12px rgba(0, 0, 0, 0.3);
   --shadow-glow-hover: 0 6px 16px rgba(0, 0, 0, 0.4);
+  --status-online: #10b981; /* green */
+  --status-offline: #ef4444; /* red */
+  --status-unknown: #f59e0b; /* yellow */
 }
 
 /* Base Styles */
@@ -411,25 +413,26 @@ html::before {
 
 /* Status Indicators */
 .status-dot {
-  width: 8px;
-  height: 8px;
+  width: 12px;
+  height: 12px;
   border: 1px solid var(--border-color);
+  border-radius: 50%;
   position: relative;
 }
 
 .status-dot.online {
-  background: var(--accent-primary);
-  box-shadow: 0 0 10px var(--accent-primary);
-  animation: pulse 2s infinite;
+  background: var(--status-online);
+  /* box-shadow: 0 0 10px var(--accent-primary); */
+  /* animation: pulse 2s infinite; */
 }
 
 .status-dot.offline {
-  background: var(--accent-secondary);
-  box-shadow: 0 0 10px var(--accent-secondary);
+  background: var(--status-offline);
+  /* box-shadow: 0 0 10px var(--accent-secondary); */
 }
 
 .status-dot.unknown {
-  background: var(--text-muted);
+  background: var(--status-unknown);
 }
 
 @keyframes pulse {
