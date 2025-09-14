@@ -76,7 +76,7 @@ latent-journey/
 │   │   └── main.tsx
 │   ├── package.json
 │   └── vite.config.ts
-├── temp-sentience/             # Temporary Sentience implementation
+├── sentience-dsl/              # Sentience DSL implementation
 ├── Makefile                    # Service orchestration
 ├── Cargo.toml                  # Root Rust workspace
 └── README.md

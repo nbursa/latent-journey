@@ -146,7 +146,7 @@ agent MultiModalWriter {
 
 ```toml
 [dependencies]
-sentience = { path = "../../temp-sentience" }
+sentience = { path = "../../sentience-dsl" }
 ```
 
 ### Rust API Usage

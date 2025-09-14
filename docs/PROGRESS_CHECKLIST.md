@@ -451,7 +451,7 @@ This represents the **cutting edge of AI research** - creating a system that not
 - **Event-Driven**: All communication through structured events for loose coupling
 - **Local Processing**: No cloud dependencies for privacy and reliability
 - **Progressive Enhancement**: Core functionality works without advanced features
-- **Local Sentience Development**: Using local `temp-sentience` repository for parallel development and customization
+- **Local Sentience Development**: Using local `sentience-dsl` repository for parallel development and customization
 
 ### **Technical Debt**
 
@@ -481,7 +481,7 @@ This represents the **cutting edge of AI research** - creating a system that not
 | 2025-09-13 | UI Theme | ✅ Complete | Dark modern theme with JetBrains Mono, glass effects, animations |
 | 2025-09-13 | Production | ✅ Complete | Health endpoints, size limits, event filtering, SSE optimization |
 | 2025-09-13 | Phase 3 | ✅ Complete | Speech pipeline + Sentience integration working for both vision and speech |
-| 2025-09-13 | Sentience | ✅ Complete | Local development with temp-sentience repository, facets display working |
+| 2025-09-13 | Sentience | ✅ Complete | Local development with sentience-dsl repository, facets display working |
 | 2025-09-13 | UI Enhancement | ✅ Complete | Enhanced Latent Insight panel with labels, sorting, progress bars, timestamps |
 | 2025-09-13 | Phase 6 | ✅ Complete | STM MVP with memory timeline, filtering, and click-to-focus |
 | 2025-09-14 | UI Polish | ✅ Complete | Camera placeholders, audio repositioning, overflow fixes, tooltips |
