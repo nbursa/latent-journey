@@ -63,3 +63,4 @@ logs/
 # Sentience agent files
 agent.sentience
 services/sentience-rs/data/
+services/ego-rs/data/
