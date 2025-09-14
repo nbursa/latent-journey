@@ -1,12 +1,13 @@
 use crate::types::{Memory, Modality};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::fs::{File, OpenOptions};
+use std::io::{BufRead, BufReader, Write};
 
 pub struct MemoryStore {
     memories: HashMap<String, Memory>,
     concepts: HashMap<String, Vec<String>>, // concept_id -> child_memory_ids
+    file_path: String,                      // Path to the memory.jsonl file
 }
 
 impl MemoryStore {
@@ -14,6 +15,15 @@ impl MemoryStore {
         Self {
             memories: HashMap::new(),
             concepts: HashMap::new(),
+            file_path: "data/memory.jsonl".to_string(), // LTM file in ego-rs/data
+        }
+    }
+
+    pub fn new_with_path(file_path: String) -> Self {
+        Self {
+            memories: HashMap::new(),
+            concepts: HashMap::new(),
+            file_path,
         }
     }
 
@@ -43,17 +53,35 @@ impl MemoryStore {
             let modality = match source {
                 "vision" => Modality::Vision,
                 "speech" => Modality::Speech,
+                "concept" => Modality::Concept,
                 _ => Modality::Text,
             };
 
+            // Handle both unconsolidated (from sentience-rs) and consolidated (from ego-rs) memories
             let memory = Memory {
                 id: id.clone(),
                 timestamp: DateTime::from_timestamp(ts, 0).unwrap_or_else(|| Utc::now()),
                 modality,
-                embedding: vec![],      // Will be populated by sentience service
-                content: String::new(), // Will be populated by sentience service
+                embedding: memory_event["embedding"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_f64())
+                            .map(|f| f as f32)
+                            .collect()
+                    })
+                    .unwrap_or_default(),
+                content: memory_event["content"].as_str().unwrap_or("").to_string(),
                 facets: facets.into_iter().map(|(k, v)| (k, v)).collect(),
-                tags: vec![],
+                tags: memory_event["tags"]
+                    .as_array()
+                    .map(|arr| {
+                        arr.iter()
+                            .filter_map(|v| v.as_str())
+                            .map(|s| s.to_string())
+                            .collect()
+                    })
+                    .unwrap_or_default(),
             };
 
             self.memories.insert(id, memory);
@@ -62,8 +90,91 @@ impl MemoryStore {
         Ok(())
     }
 
+    pub fn load_ltm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let file_path = self.file_path.clone();
+        self.load_from_jsonl(&file_path)
+    }
+
+    pub fn load_unconsolidated_from_sentience(
+        &mut self,
+        file_path: &str,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.load_from_jsonl(file_path)
+    }
+
+    pub fn save_to_jsonl(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.file_path)?;
+
+        for memory in self.memories.values() {
+            // Convert Memory to the format expected by sentience-rs
+            let memory_event = serde_json::json!({
+                "embedding_id": memory.id,
+                "ts": memory.timestamp.timestamp(),
+                "source": match memory.modality {
+                    Modality::Vision => "vision",
+                    Modality::Speech => "speech",
+                    Modality::Text => "text",
+                    Modality::Concept => "concept",
+                },
+                "facets": memory.facets,
+                "content": memory.content,
+                "tags": memory.tags,
+                "embedding": memory.embedding
+            });
+
+            writeln!(file, "{}", serde_json::to_string(&memory_event)?)?;
+        }
+
+        Ok(())
+    }
+
+    pub fn append_memory_to_jsonl(
+        &self,
+        memory: &Memory,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(&self.file_path)?;
+
+        let memory_event = serde_json::json!({
+            "embedding_id": memory.id,
+            "ts": memory.timestamp.timestamp(),
+            "source": match memory.modality {
+                Modality::Vision => "vision",
+                Modality::Speech => "speech",
+                Modality::Text => "text",
+                Modality::Concept => "concept",
+            },
+            "facets": memory.facets,
+            "content": memory.content,
+            "tags": memory.tags,
+            "embedding": memory.embedding
+        });
+
+        writeln!(file, "{}", serde_json::to_string(&memory_event)?)?;
+        Ok(())
+    }
+
     pub fn add_memory(&mut self, memory: Memory) {
         self.memories.insert(memory.id.clone(), memory);
+    }
+
+    pub fn add_memory_and_save(
+        &mut self,
+        memory: Memory,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.memories.insert(memory.id.clone(), memory.clone());
+        self.append_memory_to_jsonl(&memory)?;
+        Ok(())
+    }
+
+    pub fn save_all_memories(&self) -> Result<(), Box<dyn std::error::Error>> {
+        self.save_to_jsonl()
     }
 
     pub fn get_memory(&self, id: &str) -> Option<&Memory> {

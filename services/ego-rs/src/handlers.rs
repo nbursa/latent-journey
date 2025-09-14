@@ -124,8 +124,10 @@ pub async fn consolidate(
         tags: vec!["concept".to_string(), "consolidated".to_string()],
     };
 
-    // Add concept to store
-    store.add_memory(concept_memory);
+    // Add concept to store and save to file
+    if let Err(e) = store.add_memory_and_save(concept_memory) {
+        eprintln!("Failed to save consolidated memory to file: {}", e);
+    }
     store.create_concept(concept_id.clone(), memory_ids, title.clone());
 
     let response = ConsolidationResponse {

@@ -20,11 +20,32 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting Ego service on port {}", config.port);
 
     // Initialize memory store and load existing data
-    let mut memory_store = MemoryStore::new();
-    if let Err(e) = memory_store.load_from_jsonl("../sentience-rs/data/memory.jsonl") {
-        tracing::warn!("Failed to load existing memory data: {}", e);
+    let mut memory_store = MemoryStore::new_with_path("data/memory.jsonl".to_string());
+    
+    // Load unconsolidated memories from sentience-rs (read-only for context)
+    if let Err(e) = memory_store.load_unconsolidated_from_sentience("../sentience-rs/data/memory.jsonl") {
+        tracing::warn!("Failed to load unconsolidated memory data: {}", e);
+    }
+    
+    // Load consolidated memories from ego-rs LTM file
+    if let Err(e) = memory_store.load_ltm_from_jsonl() {
+        tracing::info!("No existing LTM data found, starting fresh: {}", e);
     }
     let memory_store = Arc::new(RwLock::new(memory_store));
+
+    // Start periodic memory save task
+    let memory_store_save = memory_store.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(tokio::time::Duration::from_secs(30));
+        loop {
+            interval.tick().await;
+            if let Err(e) = memory_store_save.read().await.save_all_memories() {
+                tracing::error!("Failed to save memories periodically: {}", e);
+            } else {
+                tracing::debug!("Periodically saved all memories to file");
+            }
+        }
+    });
 
     // Initialize reflection engine
     let reflection_engine = Arc::new(ReflectionEngine::new(
