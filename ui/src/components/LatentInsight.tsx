@@ -1,6 +1,6 @@
 import { Event, MemoryEvent } from "../types";
 import FacetDisplay from "./FacetDisplay";
-import { Lightbulb, Brain } from "lucide-react";
+import { Brain } from "lucide-react";
 
 interface LatentInsightProps {
   selectedMemoryEvent: MemoryEvent | null;
@@ -12,14 +12,10 @@ export default function LatentInsight({
   lastSentienceToken,
 }: LatentInsightProps) {
   return (
-    <div className="flex flex-col">
-      <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
-        <Lightbulb className="w-5 h-5" />
-        Latent Insight
-      </h2>
-      <div className="glass flat p-3">
+    <div className="flex flex-col min-h-0 max-h-full">
+      <div className="glass flat p-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {selectedMemoryEvent ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="text-sm font-semibold text-purple-300 mb-2">
               Memory Event
             </div>
@@ -38,7 +34,7 @@ export default function LatentInsight({
             )}
           </div>
         ) : lastSentienceToken ? (
-          <div className="space-y-3">
+          <div className="space-y-2">
             <div className="text-sm font-semibold text-purple-300 mb-2">
               {lastSentienceToken.type}
             </div>

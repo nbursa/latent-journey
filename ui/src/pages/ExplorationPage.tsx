@@ -8,6 +8,7 @@ import CameraSection from "../components/CameraSection";
 import EventsList from "../components/EventsList";
 import LatentInsight from "../components/LatentInsight";
 import MemoryTimeline from "../components/MemoryTimeline";
+import ThoughtStream from "../components/ThoughtStream";
 
 export default function ExplorationPage() {
   // Get data from Zustand store
@@ -87,20 +88,32 @@ export default function ExplorationPage() {
 
   return (
     <div className="flex-1 flex flex-col xl:flex-row gap-4 p-4 min-h-0 max-h-full">
-      <CameraSection
-        videoRef={mediaRefs.videoRef}
-        canvasRef={mediaRefs.canvasRef}
-        audioLevels={audioLevels}
-        isRecording={isRecording}
-        isProcessing={isProcessing}
-        onSnapAndSend={handleSnapAndSend}
-        onStartRecording={handleStartRecording}
-        onStopRecording={handleStopRecording}
-      />
+      {/* Left Column: Camera + Latent Insight */}
+      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
+        <div className="flex-shrink-0">
+          <CameraSection
+            videoRef={mediaRefs.videoRef}
+            canvasRef={mediaRefs.canvasRef}
+            audioLevels={audioLevels}
+            isRecording={isRecording}
+            isProcessing={isProcessing}
+            onSnapAndSend={handleSnapAndSend}
+            onStartRecording={handleStartRecording}
+            onStopRecording={handleStopRecording}
+          />
+        </div>
 
-      <div className="flex-1 flex flex-col min-h-0 max-h-full">
+        <div className="flex-1 min-h-0">
+          <LatentInsight
+            selectedMemoryEvent={selectedMemoryEvent}
+            lastSentienceToken={lastSentienceToken}
+          />
+        </div>
+      </div>
+
+      {/* Second Column: Events */}
+      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
         <EventsList events={events} isProcessing={isProcessing} />
-
         {/* <MemoryTimeline
           memoryEvents={memoryEvents}
           memoryFilter={memoryFilter}
@@ -110,7 +123,9 @@ export default function ExplorationPage() {
         /> */}
       </div>
 
-      <div className="flex-1 flex flex-col min-h-0 max-h-full">
+      {/* Third Column: Memory */}
+      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
+        {/* <EventsList events={events} isProcessing={isProcessing} /> */}
         <MemoryTimeline
           memoryEvents={memoryEvents}
           memoryFilter={memoryFilter}
@@ -120,11 +135,9 @@ export default function ExplorationPage() {
         />
       </div>
 
-      <div className="flex-1 flex flex-col">
-        <LatentInsight
-          selectedMemoryEvent={selectedMemoryEvent}
-          lastSentienceToken={lastSentienceToken}
-        />
+      {/* Right Column: Thought Stream Only */}
+      <div className="flex-1 flex flex-col min-h-0 max-h-full">
+        <ThoughtStream />
       </div>
     </div>
   );

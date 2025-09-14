@@ -23,7 +23,7 @@ export default function CameraSection({
   onStopRecording,
 }: CameraSectionProps) {
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col min-h-0">
       <h2 className="text-lg font-semibold mb-2 flex items-center gap-2">
         <Camera className="w-5 h-5" />
         Live Camera

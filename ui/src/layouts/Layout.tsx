@@ -2,7 +2,6 @@ import { ReactNode, useEffect } from "react";
 import { useMediaRecording } from "../hooks/useMediaRecording";
 import { useAppStore } from "../stores/appStore";
 import Header from "../components/Header";
-import StatusBar from "../components/StatusBar";
 
 interface LayoutProps {
   children: ReactNode;
@@ -69,8 +68,6 @@ export default function Layout({ children }: LayoutProps) {
       <Header servicesStatus={servicesStatus} captures={captures} />
 
       <div className="flex-1 min-h-0">{children}</div>
-
-      <StatusBar />
     </div>
   );
 }

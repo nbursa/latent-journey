@@ -86,9 +86,7 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
   // };
 
   return (
-    <div
-      className={`fixed bottom-4 right-4 w-fit z-50 flex items-center gap-3 ${className}`}
-    >
+    <div className={`w-fit flex items-center gap-3 ${className}`}>
       {/* FPS Counter */}
       <div className="glass flat p-2 flex items-center gap-2">
         <Activity className="w-3 h-3" />

@@ -1,5 +1,6 @@
 import { ServicesStatus as ServicesStatusType } from "../types";
 import { Server, Brain, Zap } from "lucide-react";
+import StatusBar from "./StatusBar";
 
 interface ServicesStatusProps {
   servicesStatus: ServicesStatusType;
@@ -36,7 +37,7 @@ export default function ServicesStatus({
   return (
     <div className="w-fit h-fit glass flat p-3 flex-shrink-0">
       <h3 className="text-sm font-semibold mb-2">Services Status</h3>
-      <div className="flex flex-wrap gap-4">
+      <div className="flex flex-wrap gap-4 mb-2">
         {services.map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2">
             <div
@@ -47,6 +48,7 @@ export default function ServicesStatus({
           </div>
         ))}
       </div>
+      <StatusBar />
     </div>
   );
 }
