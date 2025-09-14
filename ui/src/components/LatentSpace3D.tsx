@@ -30,9 +30,9 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
 
   // Use first 3 dimensions for 3D projection
   return embeddings.map((embedding, index) => {
-    const x = (embedding[0] || 0) * 200 + (Math.random() - 0.5) * 40;
-    const y = (embedding[1] || 0) * 200 + (Math.random() - 0.5) * 40;
-    const z = (embedding[2] || 0) * 200 + (Math.random() - 0.5) * 40;
+    const x = (embedding[0] || 0) * 50 + (Math.random() - 0.5) * 10;
+    const y = (embedding[1] || 0) * 50 + (Math.random() - 0.5) * 10;
+    const z = (embedding[2] || 0) * 50 + (Math.random() - 0.5) * 10;
 
     const event = memoryEvents[index];
     const isVision = event.source === "vision";
@@ -418,9 +418,50 @@ function Scene3D({
   const waypoints = useWaypoints();
 
   useEffect(() => {
-    // Set up camera position for a nice overview
-    camera.position.set(100, 100, 100);
-    camera.lookAt(0, 0, 0);
+    // Calculate bounds of all points to position camera appropriately
+    if (points.length > 0) {
+      const bounds = points.reduce(
+        (acc, point) => ({
+          minX: Math.min(acc.minX, point.x),
+          maxX: Math.max(acc.maxX, point.x),
+          minY: Math.min(acc.minY, point.y),
+          maxY: Math.max(acc.maxY, point.y),
+          minZ: Math.min(acc.minZ, point.z),
+          maxZ: Math.max(acc.maxZ, point.z),
+        }),
+        {
+          minX: Infinity,
+          maxX: -Infinity,
+          minY: Infinity,
+          maxY: -Infinity,
+          minZ: Infinity,
+          maxZ: -Infinity,
+        }
+      );
+
+      // Calculate center and size of the point cloud
+      const centerX = (bounds.minX + bounds.maxX) / 2;
+      const centerY = (bounds.minY + bounds.maxY) / 2;
+      const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+      const sizeX = bounds.maxX - bounds.minX;
+      const sizeY = bounds.maxY - bounds.minY;
+      const sizeZ = bounds.maxZ - bounds.minZ;
+      const maxSize = Math.max(sizeX, sizeY, sizeZ);
+
+      // Position camera to encompass all points with some padding
+      const distance = Math.max(maxSize * 0.8, 30); // Much closer, minimum 30 units away
+      const cameraX = centerX + distance * 0.65;
+      const cameraY = centerY + distance * 0.65;
+      const cameraZ = centerZ + distance * 0.65;
+
+      camera.position.set(cameraX, cameraY, cameraZ);
+      camera.lookAt(centerX, centerY, centerZ);
+    } else {
+      // Default position when no points
+      camera.position.set(150, 150, 150);
+      camera.lookAt(0, 0, 0);
+    }
 
     // Handle WebGL context loss
     const handleContextLost = (event: Event) => {
@@ -447,7 +488,7 @@ function Scene3D({
         handleContextRestored
       );
     };
-  }, [camera, gl]);
+  }, [camera, gl, points]);
 
   return (
     <>
@@ -592,7 +633,7 @@ export default function LatentSpace3D({
                 rotateSpeed={0.5}
                 zoomSpeed={0.8}
                 panSpeed={0.8}
-                minDistance={50}
+                minDistance={10}
                 maxDistance={500}
               />
             </Canvas>
