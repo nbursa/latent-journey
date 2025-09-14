@@ -6,6 +6,8 @@
 
 Sentience is an experimental, AI-native programming language designed for building synthetic agents with emergent intelligence. It features a memory-first architecture, agent-based programming model, and contextual conditions that enable rapid prototyping of AI behavior and introspection.
 
+**Source Repository**: [https://github.com/nbursa/sentience](https://github.com/nbursa/sentience)
+
 ## Core Philosophy
 
 - **Memory-First Architecture**: All agent knowledge is stored via simple key-value maps
