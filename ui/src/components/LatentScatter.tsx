@@ -286,7 +286,7 @@ function MiniMap({
   };
 
   return (
-    <div className="absolute top-4 right-4 w-32 h-32 bg-ui-surface/80 backdrop-blur-sm border border-ui-border rounded-lg overflow-hidden">
+    <div className="absolute top-4 right-4 w-32 h-32 bg-ui-surface/80 backdrop-blur-sm overflow-hidden">
       <div className="w-full h-full relative" onClick={handleClick}>
         {points.map((point, index) => (
           <div

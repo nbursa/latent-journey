@@ -37,7 +37,7 @@ export default function LatentSpacePage() {
             <h1 className="text-xl font-bold text-gradient relative">
               Latent Space Laboratory
             </h1>
-            <div className="hud-element text-xs">
+            <div className="btn-secondary px-2 py-1 text-xs">
               {memoryEvents.length} points
             </div>
           </div>
@@ -47,10 +47,10 @@ export default function LatentSpacePage() {
             <div className="flex gap-1">
               <button
                 onClick={() => setCameraPreset("top")}
-                className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
                   cameraPreset === "top"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                    ? "btn-primary nav-active"
+                    : "btn-secondary"
                 }`}
                 title="Top view"
               >
@@ -59,10 +59,10 @@ export default function LatentSpacePage() {
               </button>
               <button
                 onClick={() => setCameraPreset("isometric")}
-                className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
                   cameraPreset === "isometric"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                    ? "btn-primary nav-active"
+                    : "btn-secondary"
                 }`}
                 title="Isometric view"
               >
@@ -71,10 +71,10 @@ export default function LatentSpacePage() {
               </button>
               <button
                 onClick={() => setCameraPreset("free")}
-                className={`px-2 py-1 text-xs rounded flex items-center gap-1 transition-colors ${
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
                   cameraPreset === "free"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                    ? "btn-primary nav-active"
+                    : "btn-secondary"
                 }`}
                 title="Free orbit"
               >
@@ -87,38 +87,34 @@ export default function LatentSpacePage() {
             <div className="flex gap-1">
               <button
                 onClick={() => setViewMode("2d")}
-                className={`px-3 py-1 text-sm rounded flex items-center gap-2 transition-colors ${
-                  viewMode === "2d"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+                  viewMode === "2d" ? "btn-primary nav-active" : "btn-secondary"
                 }`}
                 title="2D Map View"
               >
-                <Map className="w-4 h-4" />
+                <Map className="w-3 h-3" />
                 2D
               </button>
               <button
                 onClick={() => setViewMode("3d")}
-                className={`px-3 py-1 text-sm rounded flex items-center gap-2 transition-colors ${
-                  viewMode === "3d"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+                  viewMode === "3d" ? "btn-primary nav-active" : "btn-secondary"
                 }`}
                 title="3D Space View"
               >
-                <Eye className="w-4 h-4" />
+                <Eye className="w-3 h-3" />
                 3D
               </button>
               <button
                 onClick={() => setViewMode("scatter")}
-                className={`px-3 py-1 text-sm rounded flex items-center gap-2 transition-colors ${
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
                   viewMode === "scatter"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface text-ui-dim hover:text-ui-text"
+                    ? "btn-primary nav-active"
+                    : "btn-secondary"
                 }`}
                 title="3D Scatter Plot"
               >
-                <Layers className="w-4 h-4" />
+                <Layers className="w-3 h-3" />
                 Scatter
               </button>
             </div>

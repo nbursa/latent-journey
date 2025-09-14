@@ -442,6 +442,27 @@ html::before {
   }
 }
 
+/* UI Utility Classes */
+.bg-ui-accent {
+  background-color: var(--ui-accent) !important;
+}
+
+.text-ui-bg {
+  color: var(--ui-bg) !important;
+}
+
+.bg-ui-surface {
+  background-color: var(--ui-surface) !important;
+}
+
+.text-ui-dim {
+  color: var(--ui-dim) !important;
+}
+
+.hover\:text-ui-text:hover {
+  color: var(--ui-text) !important;
+}
+
 /* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 4px;
