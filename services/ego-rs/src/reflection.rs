@@ -13,8 +13,13 @@ pub struct ReflectionEngine {
 
 impl ReflectionEngine {
     pub fn new(ollama_url: String, model: String) -> Self {
+        let client = Client::builder()
+            .timeout(std::time::Duration::from_secs(120)) // 120 seconds timeout
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        
         Self {
-            client: Client::new(),
+            client,
             ollama_url,
             model,
         }
