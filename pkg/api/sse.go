@@ -16,11 +16,22 @@ func NewSSEHub() *SSEHub {
 }
 
 func (h *SSEHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Set CORS headers first
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, Cache-Control")
+	w.Header().Set("Access-Control-Max-Age", "86400")
+
+	// Handle preflight requests
+	if r.Method == "OPTIONS" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Set SSE headers
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.Header().Set("Access-Control-Allow-Origin", "*")
-	w.Header().Set("Access-Control-Allow-Headers", "Cache-Control")
 
 	flusher, ok := w.(http.Flusher)
 	if !ok {

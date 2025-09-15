@@ -23,13 +23,22 @@ export const useServicesStatus = () => {
     };
 
     // Ultra-fast port check with minimal timeout
-    const checkPort = async (port: number): Promise<boolean> => {
+    const checkPort = async (
+      port: number,
+      service: string
+    ): Promise<boolean> => {
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 200); // 200ms timeout
 
-        const response = await fetch(`http://localhost:${port}/ping`, {
-          method: "HEAD", // HEAD request is faster than GET
+        // Use correct endpoints for each service
+        let endpoint = "/ping";
+        if (service === "llm" || service === "ego") {
+          endpoint = "/health";
+        }
+
+        const response = await fetch(`http://localhost:${port}${endpoint}`, {
+          method: "GET", // Use GET instead of HEAD for better CORS support
           signal: controller.signal,
         });
 
@@ -44,7 +53,7 @@ export const useServicesStatus = () => {
     const results = await Promise.allSettled(
       Object.entries(servicePorts).map(async ([service, port]) => ({
         service,
-        online: await checkPort(port),
+        online: await checkPort(port, service),
       }))
     );
 
@@ -64,23 +73,17 @@ export const useServicesStatus = () => {
         newStatus[service as keyof ServicesStatus] = online
           ? "online"
           : "offline";
-        console.log(
-          `HTTP check: ${service} = ${online ? "online" : "offline"}`
-        );
       }
     });
 
-    console.log("HTTP fallback status update:", newStatus);
     setServicesStatus(newStatus);
   }, []);
 
   useEffect(() => {
-    console.log("Setting up SSE connection to http://localhost:8080/events");
     const eventSource = new EventSource(`http://localhost:8080/events`);
     let fallbackTimeout: number;
 
     eventSource.onopen = () => {
-      console.log("✅ Services status SSE connected successfully");
       clearTimeout(fallbackTimeout);
       // Trigger immediate status check after connection
       checkServices();
@@ -89,19 +92,14 @@ export const useServicesStatus = () => {
     eventSource.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data);
-        console.log("SSE received:", data);
 
         // Listen for service status updates
         if (data.type === "service.status") {
-          console.log(
-            `Service status update: ${data.service} = ${data.status}`
-          );
           setServicesStatus((prev) => {
             const newStatus = {
               ...prev,
               [data.service]: data.status,
             };
-            console.log("Updated services status:", newStatus);
             return newStatus;
           });
         }
@@ -111,8 +109,8 @@ export const useServicesStatus = () => {
     };
 
     eventSource.onerror = (error) => {
-      console.error("❌ Services status SSE error:", error);
-      console.log("SSE readyState:", eventSource.readyState);
+      console.error("❌ SSE connection error:", error);
+
       // Mark all services as offline when connection is lost
       setServicesStatus({
         gateway: "offline",
@@ -124,15 +122,13 @@ export const useServicesStatus = () => {
       });
 
       // Fallback: trigger manual health check
-      console.log("SSE disconnected, triggering fallback health check");
       checkServices();
     };
 
-    // Fallback: if SSE doesn't connect within 3 seconds, use HTTP polling
+    // Fallback: if SSE doesn't connect within 2 seconds, use HTTP polling
     fallbackTimeout = setTimeout(() => {
-      console.log("SSE connection timeout, using fallback HTTP polling");
       checkServices();
-    }, 1000); // Reduced to 1 second for faster fallback
+    }, 2000);
 
     return () => {
       clearTimeout(fallbackTimeout);
@@ -142,7 +138,6 @@ export const useServicesStatus = () => {
 
   // Manual trigger for testing
   const triggerStatusCheck = useCallback(() => {
-    console.log("Manual status check triggered");
     checkServices();
   }, [checkServices]);
 
