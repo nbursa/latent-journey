@@ -67,7 +67,7 @@ export function clusterEmbeddings(
     });
 
     // Assign points to nearest centroid
-    embeddings.forEach((embedding, index) => {
+    embeddings.forEach((embedding) => {
       const event = events.find((e) => e.embedding === embedding);
       if (!event) return;
 

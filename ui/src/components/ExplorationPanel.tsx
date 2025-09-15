@@ -121,7 +121,7 @@ export default function ExplorationPanel({
             placeholder="Search memories..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1 text-xs bg-ui-surface border border-ui-border rounded focus:outline-none focus:border-ui-accent"
+            className="w-full pl-8 pr-3 py-1 text-xs bg-ui-surface border border-zinc-700 focus:outline-none focus:border-zinc-500"
           />
         </div>
       </div>
@@ -138,10 +138,8 @@ export default function ExplorationPanel({
                 <button
                   key={source}
                   onClick={() => setSourceFilter(source as any)}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    sourceFilter === source
-                      ? "bg-ui-accent text-ui-bg"
-                      : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                  className={`px-2 py-1 text-xs flat ${
+                    sourceFilter === source ? "btn-primary" : "btn-secondary"
                   }`}
                 >
                   {source}
@@ -156,10 +154,8 @@ export default function ExplorationPanel({
             <div className="flex gap-1">
               <button
                 onClick={() => setSortBy("time")}
-                className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                  sortBy === "time"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+                  sortBy === "time" ? "btn-primary" : "btn-secondary"
                 }`}
               >
                 <Clock className="w-3 h-3" />
@@ -167,10 +163,8 @@ export default function ExplorationPanel({
               </button>
               <button
                 onClick={() => setSortBy("confidence")}
-                className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                  sortBy === "confidence"
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+                  sortBy === "confidence" ? "btn-primary" : "btn-secondary"
                 }`}
               >
                 <TrendingUp className="w-3 h-3" />
@@ -180,7 +174,7 @@ export default function ExplorationPanel({
                 onClick={() =>
                   setSortOrder(sortOrder === "asc" ? "desc" : "asc")
                 }
-                className="px-2 py-1 text-xs rounded transition-colors bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                className="px-2 py-1 text-xs flat btn-secondary"
                 title={`Sort ${
                   sortOrder === "asc" ? "descending" : "ascending"
                 }`}
@@ -230,10 +224,10 @@ export default function ExplorationPanel({
               <button
                 key={cluster.id}
                 onClick={() => handleClusterClick(cluster)}
-                className={`w-full text-left p-2 rounded transition-colors ${
+                className={`w-full text-left p-2 flat ${
                   selectedCluster?.id === cluster.id
-                    ? "bg-ui-accent/20 border border-ui-accent"
-                    : "bg-ui-surface hover:bg-ui-surface-2"
+                    ? "btn-primary"
+                    : "btn-secondary"
                 }`}
               >
                 <div className="flex items-center gap-2">
@@ -279,10 +273,10 @@ export default function ExplorationPanel({
               <button
                 key={group.id}
                 onClick={() => handleGroupClick(group)}
-                className={`w-full text-left p-2 rounded transition-colors ${
+                className={`w-full text-left p-2 flat ${
                   selectedGroup?.id === group.id
-                    ? "bg-ui-accent/20 border border-ui-accent"
-                    : "bg-ui-surface hover:bg-ui-surface-2"
+                    ? "btn-primary"
+                    : "btn-secondary"
                 }`}
               >
                 <div className="flex items-center gap-2">

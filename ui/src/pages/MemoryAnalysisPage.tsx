@@ -42,7 +42,7 @@ export default function MemoryAnalysisPage() {
   return (
     <div className="h-full flex flex-col xl:flex-row gap-4 p-4 overflow-hidden">
       {/* Primary Panel - Memory Timeline & Analysis */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div className="flex items-center gap-3">

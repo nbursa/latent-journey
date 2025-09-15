@@ -184,7 +184,7 @@ export default function JourneyTimeline({
       <div className="flex items-center gap-2">
         <button
           onClick={handlePlayPause}
-          className="p-1 rounded hover:bg-ui-surface-2 transition-colors"
+          className="p-1 flat btn-secondary"
           title={isPlaying ? "Pause" : "Play"}
         >
           {isPlaying ? (
@@ -196,7 +196,7 @@ export default function JourneyTimeline({
 
         <button
           onClick={handleReset}
-          className="p-1 rounded hover:bg-ui-surface-2 transition-colors"
+          className="p-1 flat btn-secondary"
           title="Reset"
         >
           <RotateCcw className="w-4 h-4" />
@@ -210,7 +210,7 @@ export default function JourneyTimeline({
           <select
             value={playbackSpeed}
             onChange={(e) => setPlaybackSpeed(Number(e.target.value))}
-            className="text-xs bg-ui-surface border border-ui-border rounded px-1 py-0.5"
+            className="text-xs btn-primary px-1 py-0.5"
           >
             <option value={0.5}>0.5x</option>
             <option value={1}>1x</option>
@@ -233,10 +233,8 @@ export default function JourneyTimeline({
                 handleSeek(position);
                 onSelectEvent(event);
               }}
-              className={`w-full text-left p-2 rounded transition-colors ${
-                isSelected
-                  ? "bg-ui-accent/20 border border-ui-accent"
-                  : "bg-ui-surface hover:bg-ui-surface-2"
+              className={`w-full text-left p-2 flat ${
+                isSelected ? "btn-primary" : "btn-secondary"
               }`}
             >
               <div className="flex items-center gap-2">

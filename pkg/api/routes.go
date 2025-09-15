@@ -64,8 +64,6 @@ type whisperResp struct {
 	Language   string  `json:"language"`
 }
 
-// LLM Service handlers
-
 type thoughtRequest struct {
 	RecentEvents   []map[string]interface{} `json:"recent_events"`
 	EmotionalState map[string]float64       `json:"emotional_state"`
@@ -74,7 +72,6 @@ type thoughtRequest struct {
 }
 
 func postVisionFrame(w http.ResponseWriter, r *http.Request) {
-	// Limit request body size to 8MB
 	const maxSize = 8 << 20 // 8MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
@@ -84,7 +81,6 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// call ML service
 	body, _ := json.Marshal(map[string]string{"image_base64": in.ImageBase64})
 	resp, err := http.Post("http://localhost:8081/infer/clip", "application/json", bytes.NewReader(body))
 	if err != nil {
@@ -148,7 +144,6 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 }
 
 func postSentienceTokenize(w http.ResponseWriter, r *http.Request) {
-	// Limit request body size to 1MB
 	const maxSize = 1 << 20 // 1MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
@@ -190,7 +185,6 @@ func postSentienceTokenize(w http.ResponseWriter, r *http.Request) {
 }
 
 func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
-	// Limit request body size to 10MB for audio
 	const maxSize = 10 << 20 // 10MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
@@ -252,7 +246,6 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 }
 
 func postGenerateThought(w http.ResponseWriter, r *http.Request) {
-	// Limit request body size to 1MB
 	const maxSize = 1 << 20 // 1MB
 	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
 
@@ -302,7 +295,6 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 }
 
 func getConsciousnessMetrics(w http.ResponseWriter, r *http.Request) {
-	// call LLM service
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://localhost:8083/consciousness-metrics")
 	if err != nil {
@@ -322,7 +314,6 @@ func getConsciousnessMetrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func getThoughtHistory(w http.ResponseWriter, r *http.Request) {
-	// call LLM service
 	client := &http.Client{Timeout: 5 * time.Second}
 	resp, err := client.Get("http://localhost:8083/thought-history")
 	if err != nil {
@@ -341,14 +332,11 @@ func getThoughtHistory(w http.ResponseWriter, r *http.Request) {
 	w.Write(b)
 }
 
-// getMemory handles GET /api/memory requests
 func getMemory(w http.ResponseWriter, r *http.Request) {
-	// Proxy request to Sentience service
 	client := &http.Client{
 		Timeout: 30 * time.Second,
 	}
 
-	// Forward query parameters
 	url := "http://localhost:8082/memory"
 	if r.URL.RawQuery != "" {
 		url = "http://localhost:8082/memory?" + r.URL.RawQuery
@@ -361,14 +349,12 @@ func getMemory(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	// Copy response headers
 	for key, values := range resp.Header {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
 	}
 
-	// Copy response body
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
 }
@@ -484,8 +470,6 @@ func getEgoStatus(w http.ResponseWriter, r *http.Request) {
 	io.Copy(w, resp.Body)
 }
 
-// Embeddings service handlers
-
 func postAddEmbedding(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Post("http://localhost:8085/add", "application/json", r.Body)
@@ -529,7 +513,6 @@ func getEmbeddings(w http.ResponseWriter, r *http.Request) {
 }
 
 func getEmbeddingsBySource(w http.ResponseWriter, r *http.Request) {
-	// Extract source from URL path
 	path := r.URL.Path
 	source := path[len("/api/embeddings/source/"):]
 

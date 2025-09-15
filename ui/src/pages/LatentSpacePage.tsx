@@ -128,7 +128,7 @@ export default function LatentSpacePage() {
   return (
     <div className="h-full flex flex-col xl:flex-row gap-4 p-4 overflow-hidden">
       {/* Primary Panel - Latent Space Visualization */}
-      <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+      <div className="flex-1 flex flex-col min-h-0">
         {/* Header with Controls */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
@@ -164,7 +164,7 @@ export default function LatentSpacePage() {
                 placeholder="Search memories..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 pr-3 py-1 text-xs bg-ui-surface border border-ui-border rounded focus:outline-none focus:border-ui-accent w-40"
+                className="pl-8 pr-3 py-1 text-xs bg-ui-surface border border-zinc-700 focus:outline-none focus:border-zinc-500 w-40"
               />
             </div>
 
