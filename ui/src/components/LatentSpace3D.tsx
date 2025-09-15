@@ -71,8 +71,11 @@ export default function RealLatentSpace3D({
 
     const embeddings = [];
     for (const event of memoryEvents) {
-      // Check if we have a CLIP embedding at top level
-      if (event.embedding && Array.isArray(event.embedding)) {
+      if (
+        event.embedding &&
+        Array.isArray(event.embedding) &&
+        event.embedding.length > 0
+      ) {
         embeddings.push({
           id: event.embedding_id,
           embedding: event.embedding as number[],
@@ -81,6 +84,12 @@ export default function RealLatentSpace3D({
           confidence: Number(event.facets.confidence) || 0.5,
         });
       }
+    }
+
+    // Filter embeddings to ensure they all have the same length
+    if (embeddings.length > 0) {
+      const targetLength = embeddings[0].embedding.length;
+      return embeddings.filter((e) => e.embedding.length === targetLength);
     }
 
     return embeddings;
@@ -98,7 +107,7 @@ export default function RealLatentSpace3D({
         },
         body: JSON.stringify({
           embeddings: embeddings.map((e) => e.embedding),
-          method: "umap", // Use UMAP for better visualization
+          method: "pca", // Use PCA for stability
           n_components: 3,
         }),
       });
@@ -108,15 +117,17 @@ export default function RealLatentSpace3D({
       }
 
       const result = await response.json();
+      // console.log("ML Service response:", result);
+
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
       return result.reduced_embeddings;
     } catch (err) {
-      setError("Failed to reduce dimensions. Using fallback projection.");
-      // Fallback to simple PCA-like projection
-      return embeddings.map((e) => [
-        e.embedding[0] || 0,
-        e.embedding[1] || 0,
-        e.embedding[2] || 0,
-      ]);
+      console.error("Dimension reduction failed:", err);
+      setError("Failed to reduce dimensions. Please check the ML service.");
+      return [];
     }
   }, []);
 
@@ -133,6 +144,8 @@ export default function RealLatentSpace3D({
 
       try {
         const embeddings = await extractEmbeddings();
+        // console.log("Extracted embeddings:", embeddings.length, embeddings);
+        // console.log("Embedding lengths:", embeddings.map((e) => e.embedding.length));
 
         if (embeddings.length === 0) {
           setError("No embeddings found in memory events");
@@ -141,6 +154,8 @@ export default function RealLatentSpace3D({
         }
 
         const reducedEmbeddings = await reduceDimensions(embeddings);
+        // console.log("Reduced embeddings:", reducedEmbeddings);
+        // console.log("Points to create:", reducedEmbeddings.length);
 
         const newPoints: Point3D[] = reducedEmbeddings.map(
           (coords: number[], index: number) => {
@@ -192,6 +207,7 @@ export default function RealLatentSpace3D({
           }
         );
 
+        // console.log("Created points:", newPoints.length, newPoints);
         setPoints(newPoints);
       } catch (err) {
         console.error("Visualization update failed:", err);
@@ -399,15 +415,20 @@ export default function RealLatentSpace3D({
       }
     });
 
+    // console.log("Rendering 3D points:", points.length, points);
+
     if (points.length === 0) {
+      // console.log("No points to render");
       return;
     }
 
     // Create spheres for each data point with modern flat design
-    const sphereGeometry = new THREE.SphereGeometry(3, 16, 16); // Smaller, more precise spheres
+    const sphereGeometry = new THREE.SphereGeometry(2, 16, 16); // Appropriately sized spheres
 
     // Create individual spheres for each point
+    // console.log("Creating spheres for points...");
     points.forEach((point, index) => {
+      // console.log(`Creating sphere ${index}:`, point);
       const sphere = new THREE.Mesh(
         sphereGeometry,
         new THREE.MeshStandardMaterial({
@@ -421,7 +442,15 @@ export default function RealLatentSpace3D({
       sphere.position.set(point.x, point.y, point.z);
       sphere.userData = { event: point.event, index };
       scene.add(sphere);
+      // console.log(
+      //   `Added sphere ${index} to scene at position:`,
+      //   point.x,
+      //   point.y,
+      //   point.z
+      // );
     });
+
+    // console.log("Total objects in scene:", scene.children.length);
 
     // Add journey lines connecting the points
     if (points.length > 1) {
@@ -486,15 +515,37 @@ export default function RealLatentSpace3D({
         bounds.maxZ - bounds.minZ
       );
 
-      // Set camera distance to encompass all points with less padding
-      const distance = Math.max(maxSize * 0.8, 30);
+      // Set camera distance to encompass all points with appropriate padding
+      const distance = Math.max(maxSize * 2, 10);
 
-      // Position camera at an angle to show all points
-      camera.position.set(
-        centerX + distance * 0.6,
-        centerY + distance * 0.6,
-        centerZ + distance * 0.6
+      // Position camera at a good viewing angle
+      const cameraX = centerX + distance * 0.5;
+      const cameraY = centerY + distance * 0.5;
+      const cameraZ = centerZ + distance * 0.5;
+
+      console.log("Camera positioning:", {
+        bounds: {
+          minX: bounds.minX,
+          maxX: bounds.maxX,
+          minY: bounds.minY,
+          maxY: bounds.maxY,
+          minZ: bounds.minZ,
+          maxZ: bounds.maxZ,
+        },
+        center: { centerX, centerY, centerZ },
+        maxSize,
+        distance,
+        cameraPosition: { cameraX, cameraY, cameraZ },
+        lookAt: { centerX, centerY, centerZ },
+      });
+
+      console.log("Final camera position:", camera.position);
+      console.log(
+        "Camera target:",
+        camera.getWorldDirection(new THREE.Vector3())
       );
+
+      camera.position.set(cameraX, cameraY, cameraZ);
       camera.lookAt(centerX, centerY, centerZ);
     } else {
       // Default camera position when no points

@@ -9,7 +9,7 @@ import tempfile
 import os
 import requests
 import torch
-from transformers import CLIPProcessor, CLIPModel
+from transformers import CLIPProcessor, CLIPModel, AutoTokenizer, AutoModel
 import numpy as np
 from sklearn.decomposition import PCA
 from sklearn.manifold import TSNE
@@ -35,6 +35,20 @@ except Exception as e:
     # Fallback to a simpler approach
     clip_model = None
     clip_processor = None
+
+print("Loading text embedding model...")
+try:
+    # Use a lightweight sentence transformer for text embeddings
+    text_tokenizer = AutoTokenizer.from_pretrained(
+        "sentence-transformers/all-MiniLM-L6-v2"
+    )
+    text_model = AutoModel.from_pretrained("sentence-transformers/all-MiniLM-L6-v2")
+    text_model.to(device)
+    print(f"Text embedding model loaded successfully on {device}")
+except Exception as e:
+    print(f"Error loading text embedding model: {e}")
+    text_tokenizer = None
+    text_model = None
 
 SENTIENCE_URL = os.environ.get("SENTIENCE_URL", "http://localhost:8082")
 
@@ -62,6 +76,44 @@ def healthz():
 @app.route("/", methods=["GET"])
 def root():
     return "I am ML service"
+
+
+@app.route("/infer/text", methods=["POST"])
+def infer_text_embedding():
+    """Generate text embeddings for speech transcripts using sentence transformer"""
+    data = request.get_json(force=True)
+    text = data.get("text", "")
+
+    if not text:
+        return jsonify({"error": "missing text"}), 400
+
+    if not text_model or not text_tokenizer:
+        return jsonify({"error": "Text embedding model not available"}), 500
+
+    try:
+        # Process text with sentence transformer
+        inputs = text_tokenizer(
+            text, return_tensors="pt", padding=True, truncation=True, max_length=512
+        )
+        inputs = {k: v.to(device) for k, v in inputs.items()}
+
+        with torch.no_grad():
+            outputs = text_model(**inputs)
+            # Use mean pooling of the last hidden state
+            embeddings = outputs.last_hidden_state.mean(dim=1)
+            # Normalize embeddings
+            embeddings = embeddings / embeddings.norm(dim=-1, keepdim=True)
+
+        # Return embedding (first 128 dimensions for consistency with CLIP)
+        embedding = embeddings[0].cpu().numpy().tolist()[:128]
+
+        return jsonify(
+            {"embedding": embedding, "text": text, "model": "all-MiniLM-L6-v2"}
+        )
+
+    except Exception as e:
+        print(f"Text embedding processing error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @app.route("/infer/clip", methods=["POST"])
@@ -358,8 +410,32 @@ def reduce_dimensions():
         return jsonify({"error": "missing embeddings"}), 400
 
     try:
-        embeddings_array = np.array(embeddings)
-        n_samples = len(embeddings)
+        # First, validate and normalize all embeddings to the same length
+        print(f"Received {len(embeddings)} embeddings")
+
+        # Find the most common embedding length
+        lengths = [len(emb) for emb in embeddings if isinstance(emb, list)]
+        if not lengths:
+            return jsonify({"error": "no valid embeddings"}), 400
+
+        # Use the most common length, or the first one if all are different
+        target_length = max(set(lengths), key=lengths.count) if lengths else lengths[0]
+        print(f"Target embedding length: {target_length}")
+
+        # Filter embeddings to only include those with the target length
+        valid_embeddings = []
+        for emb in embeddings:
+            if isinstance(emb, list) and len(emb) == target_length:
+                valid_embeddings.append(emb)
+
+        if not valid_embeddings:
+            return jsonify({"error": "no embeddings with consistent length"}), 400
+
+        print(f"Using {len(valid_embeddings)} valid embeddings")
+
+        # Convert to numpy array
+        embeddings_array = np.array(valid_embeddings)
+        n_samples = len(valid_embeddings)
 
         # Handle small datasets with simple projection
         if n_samples < 3:
@@ -391,7 +467,15 @@ def reduce_dimensions():
                     reducer = PCA(n_components=n_components)
                     reduced_embeddings = reducer.fit_transform(embeddings_array)
                 else:
-                    reducer = umap.UMAP(n_components=n_components, random_state=42)
+                    # Configure UMAP for small datasets
+                    n_neighbors = min(15, n_samples - 1) if n_samples > 1 else 1
+                    reducer = umap.UMAP(
+                        n_components=n_components,
+                        n_neighbors=n_neighbors,
+                        random_state=42,
+                        min_dist=0.1,  # Reduce min_dist for better small dataset handling
+                        spread=1.0,  # Reduce spread for better small dataset handling
+                    )
                     reduced_embeddings = reducer.fit_transform(embeddings_array)
             else:
                 return (

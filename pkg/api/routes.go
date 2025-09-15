@@ -210,6 +210,27 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Generate text embedding for the transcript
+	var textEmbedding []float64
+	textBody, _ := json.Marshal(map[string]string{"text": out.Transcript})
+	textResp, err := http.Post("http://localhost:8081/infer/text", "application/json", bytes.NewReader(textBody))
+	if err == nil && textResp.StatusCode < 400 {
+		textData, _ := io.ReadAll(textResp.Body)
+		textResp.Body.Close()
+
+		var textResult map[string]interface{}
+		if err := json.Unmarshal(textData, &textResult); err == nil {
+			if embedding, ok := textResult["embedding"].([]interface{}); ok {
+				textEmbedding = make([]float64, len(embedding))
+				for i, v := range embedding {
+					if f, ok := v.(float64); ok {
+						textEmbedding[i] = f
+					}
+				}
+			}
+		}
+	}
+
 	// broadcast SSE event
 	ev := map[string]any{
 		"type":         "speech.transcript",
@@ -226,6 +247,7 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 		"embedding_id": "speech-1",
 		"context":      "",
 		"transcript":   out.Transcript,
+		"embedding":    textEmbedding, // Pass the text embedding
 	}
 	runBody, _ := json.Marshal(runReq)
 	runClient := &http.Client{Timeout: 5 * time.Second}
@@ -538,7 +560,7 @@ func getEmbeddingsBySource(w http.ResponseWriter, r *http.Request) {
 
 func postReduceDimensions(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 30 * time.Second} // Longer timeout for ML processing
-	resp, err := client.Post("http://localhost:8085/reduce-dimensions", "application/json", r.Body)
+	resp, err := client.Post("http://localhost:8081/reduce-dimensions", "application/json", r.Body)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
