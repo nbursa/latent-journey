@@ -1,13 +1,28 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/appStore";
-import { Camera, Map, Brain, Trash2, Command } from "lucide-react";
+import { Camera, Map, Brain, Trash2 } from "lucide-react";
 import { useState, useEffect } from "react";
 import CommandPalette from "./CommandPalette";
+import { ConfirmationModal } from "./Modal";
+import { useConfirmationModal } from "../hooks/useModal";
 
 export default function Navigation() {
   const location = useLocation();
   const clearAllData = useAppStore((state) => state.clearAllData);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+
+  // Clear data confirmation modal
+  const clearDataConfirmation = useConfirmationModal({
+    onConfirm: () => {
+      clearAllData();
+    },
+    title: "Clear All Data",
+    message:
+      "Are you sure you want to clear all data? This action cannot be undone and will remove all memories, thoughts, and waypoints.",
+    confirmText: "Clear All Data",
+    cancelText: "Cancel",
+    type: "danger",
+  });
 
   const pages = [
     { id: "exploration", label: "Live Exploration", icon: Camera, path: "/" },
@@ -28,13 +43,7 @@ export default function Navigation() {
   };
 
   const handleClearAllData = () => {
-    if (
-      window.confirm(
-        "Are you sure you want to clear all data? This action cannot be undone."
-      )
-    ) {
-      clearAllData();
-    }
+    clearDataConfirmation.confirm();
   };
 
   // Handle keyboard shortcuts
@@ -72,22 +81,22 @@ export default function Navigation() {
         </div>
 
         <div className="flex gap-2">
-          <button
+          {/* <button
             onClick={() => setIsCommandPaletteOpen(true)}
             className="flex px-3 py-2 text-sm btn-secondary flat hover-glow hover-scale transition-all"
             title="Open command palette (⌘K)"
           >
             <Command className="w-4 h-4 mr-2" />
             <kbd className="text-xs">⌘K</kbd>
-          </button>
+          </button> */}
 
           <button
             onClick={handleClearAllData}
-            className="flex px-4 py-2 text-sm btn-danger flat hover-glow hover-scale transition-all"
+            className="flex px-4 py-2 text-sm flat btn-danger hover-glow hover-scale transition-all"
             title="Clear all data and start fresh"
           >
             <Trash2 className="w-4 h-4 mr-2" />
-            Clear All Data
+            Clear Data
           </button>
         </div>
       </div>
@@ -95,6 +104,13 @@ export default function Navigation() {
       <CommandPalette
         isOpen={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
+      />
+
+      {/* Clear Data Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={clearDataConfirmation.isOpen}
+        onClose={clearDataConfirmation.close}
+        {...clearDataConfirmation.confirmationProps}
       />
     </>
   );

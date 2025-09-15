@@ -316,18 +316,18 @@ html::before {
 }
 
 .btn-danger {
-  background: linear-gradient(135deg, #ff006e, #ff4081, #ff006e, #ff4081);
+  background: linear-gradient(135deg, #6b1a1a, #7f1d1d, #6b1a1a, #7f1d1d);
   background-size: 300% 300%;
   color: var(--text-primary);
   transition: all 0.3s ease;
-  border: 1px solid #ff006e;
-  box-shadow: 0 4px 12px rgba(255, 0, 110, 0.3);
+  border: 1px solid #6b1a1a;
+  box-shadow: 0 4px 12px rgba(107, 26, 26, 0.08);
 }
 
 .btn-danger:hover {
   cursor: pointer;
   animation: gradientInvert 1.2s ease-in-out infinite;
-  box-shadow: 0 6px 16px rgba(255, 0, 110, 0.4);
+  box-shadow: 0 6px 16px rgba(107, 26, 26, 0.12);
   transform: translateY(-2px);
 }
 
