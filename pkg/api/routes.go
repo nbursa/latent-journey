@@ -33,6 +33,15 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/embeddings", getEmbeddings)
 	mux.HandleFunc("/api/embeddings/source/", getEmbeddingsBySource)
 	mux.HandleFunc("/api/embeddings/reduce-dimensions", postReduceDimensions)
+
+	// Health check proxy routes
+	mux.HandleFunc("/llm/health", getLLMHealth)
+	mux.HandleFunc("/ego/health", getEgoHealth)
+	mux.HandleFunc("/embeddings/ping", getEmbeddingsPing)
+
+	// Start service status monitor
+	go startServiceStatusMonitor()
+	fmt.Println("Service status monitor started")
 }
 
 type frameIn struct {
@@ -577,4 +586,146 @@ func postReduceDimensions(w http.ResponseWriter, r *http.Request) {
 	// Copy response body
 	w.WriteHeader(resp.StatusCode)
 	io.Copy(w, resp.Body)
+}
+
+// Health check proxy functions
+func getLLMHealth(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://localhost:8083/health")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getEgoHealth(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://localhost:8084/health")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getEmbeddingsPing(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 5 * time.Second}
+	resp, err := client.Get("http://localhost:8085/ping")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// Service status monitor
+func startServiceStatusMonitor() {
+	servicePorts := map[string]int{
+		"gateway":    8080,
+		"ml":         8081,
+		"sentience":  8082,
+		"llm":        8083,
+		"ego":        8084,
+		"embeddings": 8085,
+	}
+
+	client := &http.Client{Timeout: 500 * time.Millisecond} // Ultra-fast timeout
+
+	for {
+		for service, port := range servicePorts {
+			go func(serviceName string, servicePort int) {
+				// Check service health
+				online := checkServiceHealth(client, servicePort, serviceName)
+
+				// Broadcast status update
+				statusEvent := map[string]interface{}{
+					"type":      "service.status",
+					"service":   serviceName,
+					"status":    map[bool]string{true: "online", false: "offline"}[online],
+					"timestamp": time.Now().Unix(),
+				}
+
+				statusBytes, _ := json.Marshal(statusEvent)
+				fmt.Printf("Broadcasting status: %s = %s\n", serviceName, statusEvent["status"])
+				hub.Broadcast(string(statusBytes))
+			}(service, port)
+		}
+
+		// Check every 5 seconds (much less frequent than before)
+		time.Sleep(5 * time.Second)
+	}
+}
+
+func checkServiceHealth(client *http.Client, port int, serviceName string) bool {
+	var endpoint string
+	switch serviceName {
+	case "llm", "ego":
+		endpoint = "/health"
+	default:
+		endpoint = "/ping"
+	}
+
+	resp, err := client.Get(fmt.Sprintf("http://localhost:%d%s", port, endpoint))
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return false
+	}
+
+	// For health endpoints, also check the response body
+	if endpoint == "/health" {
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return false
+		}
+
+		var healthResp map[string]interface{}
+		if err := json.Unmarshal(body, &healthResp); err != nil {
+			return false
+		}
+
+		// Check if status is "healthy" or "running"
+		if status, ok := healthResp["status"].(string); ok {
+			return status == "healthy" || status == "running"
+		}
+	}
+
+	return true
 }

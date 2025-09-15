@@ -1,13 +1,15 @@
 import { ServicesStatus as ServicesStatusType } from "../types";
-import { Server, Brain, Zap } from "lucide-react";
+import { Server, Brain, Zap, MessageSquare, Cpu, Database } from "lucide-react";
 import StatusBar from "./StatusBar";
 
 interface ServicesStatusProps {
   servicesStatus: ServicesStatusType;
+  onRefresh?: () => void;
 }
 
 export default function ServicesStatus({
   servicesStatus,
+  onRefresh,
 }: ServicesStatusProps) {
   const getStatusClass = (status: string) => {
     switch (status) {
@@ -32,11 +34,36 @@ export default function ServicesStatus({
       label: "Sentience",
       icon: Brain,
     },
+    {
+      key: "llm" as keyof ServicesStatusType,
+      label: "LLM Service",
+      icon: MessageSquare,
+    },
+    {
+      key: "ego" as keyof ServicesStatusType,
+      label: "Ego Service",
+      icon: Cpu,
+    },
+    {
+      key: "embeddings" as keyof ServicesStatusType,
+      label: "Embeddings",
+      icon: Database,
+    },
   ];
 
   return (
     <div className="w-fit h-fit glass flat p-3 flex-shrink-0">
-      <h3 className="text-sm font-semibold mb-2">Services Status</h3>
+      <div className="flex items-center justify-between mb-2">
+        <h3 className="text-sm font-semibold">Services Status</h3>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            className="text-xs px-2 py-1 bg-accent/20 hover:bg-accent/30 rounded"
+          >
+            Refresh
+          </button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-4 mb-3">
         {services.map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2">

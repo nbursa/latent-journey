@@ -7,9 +7,14 @@ import { useLocation } from "react-router-dom";
 interface HeaderProps {
   servicesStatus: ServicesStatusType;
   captures: string[];
+  onRefresh?: () => void;
 }
 
-export default function Header({ servicesStatus, captures }: HeaderProps) {
+export default function Header({
+  servicesStatus,
+  captures,
+  onRefresh,
+}: HeaderProps) {
   const location = useLocation();
   const isExplorationPage = location.pathname === "/";
 
@@ -25,7 +30,7 @@ export default function Header({ servicesStatus, captures }: HeaderProps) {
 
       {/* Services Status and Captures */}
       <div className="flex flex-col sm:flex-row gap-4">
-        <ServicesStatus servicesStatus={servicesStatus} />
+        <ServicesStatus servicesStatus={servicesStatus} onRefresh={onRefresh} />
         {isExplorationPage && <CapturesGallery captures={captures} />}
       </div>
     </div>

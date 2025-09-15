@@ -11,8 +11,12 @@ export const useEventStream = () => {
     (e: MessageEvent) => {
       try {
         const event = JSON.parse(e.data);
-        // Filter out connection and ping events
-        if (event.type !== "connection" && event.type !== "ping") {
+        // Filter out system events
+        if (
+          event.type !== "connection" &&
+          event.type !== "ping" &&
+          event.type !== "service.status"
+        ) {
           addEvent(event);
 
           // Track last sentience token for Panel B

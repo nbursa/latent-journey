@@ -22,6 +22,9 @@ export interface ServicesStatus {
   gateway: string;
   ml: string;
   sentience: string;
+  llm: string;
+  ego: string;
+  embeddings: string;
 }
 
 export type MemoryFilter = "all" | "speech" | "vision";
