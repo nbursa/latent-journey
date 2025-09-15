@@ -3,14 +3,20 @@ import LatentSpaceView from "../components/LatentSpaceView";
 import LatentSpace3D from "../components/LatentSpace3D";
 import LatentScatter from "../components/LatentScatter";
 import WaypointComparison from "../components/WaypointComparison";
+import VisualizationControls from "../components/VisualizationControls";
+import UnifiedMiniMap from "../components/UnifiedMiniMap";
+import ExplorationPanel from "../components/ExplorationPanel";
+import JourneyTimeline from "../components/JourneyTimeline";
 import ProgressiveDisclosure, {
   FacetDisplay,
   CLIPLogits,
   RawTranscript,
 } from "../components/ProgressiveDisclosure";
+import { Cluster, SemanticGroup } from "../utils/clustering";
+import { MemoryEvent } from "../types";
 import { useMemoryEventsRealtime } from "../hooks/useMemoryEventsRealtime";
-import { useState } from "react";
-import { Map, Eye, Brain, Settings, Camera, Layers } from "lucide-react";
+import { useState, useMemo } from "react";
+import { Map, Eye, Brain, Layers, Search } from "lucide-react";
 
 export default function LatentSpacePage() {
   const memoryEvents = useAppStore((state) => state.memoryEvents);
@@ -23,9 +29,101 @@ export default function LatentSpacePage() {
   const [cameraPreset, setCameraPreset] = useState<
     "top" | "isometric" | "free"
   >("free");
+  const [filter, setFilter] = useState<"all" | "vision" | "speech">("all");
+  const [showTrajectory, setShowTrajectory] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
+  const [selectedGroup, setSelectedGroup] = useState<SemanticGroup | null>(
+    null
+  );
 
   // Load memory events on mount
   useMemoryEventsRealtime();
+
+  // Filter memory events based on current filter and search
+  const filteredMemoryEvents = useMemo(() => {
+    let filtered = memoryEvents;
+
+    // Apply source filter
+    if (filter !== "all") {
+      filtered = filtered.filter((event) => event.source === filter);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      filtered = filtered.filter((event) => {
+        const searchLower = searchQuery.toLowerCase();
+        return (
+          event.source.toLowerCase().includes(searchLower) ||
+          Object.values(event.facets).some((value) =>
+            String(value).toLowerCase().includes(searchLower)
+          )
+        );
+      });
+    }
+
+    // Apply cluster/group selection
+    if (selectedCluster) {
+      filtered = filtered.filter((event) =>
+        selectedCluster.points.some((point) => point.ts === event.ts)
+      );
+    } else if (selectedGroup) {
+      filtered = filtered.filter((event) =>
+        selectedGroup.events.some((groupEvent) => groupEvent.ts === event.ts)
+      );
+    }
+
+    return filtered;
+  }, [memoryEvents, filter, searchQuery, selectedCluster, selectedGroup]);
+
+  // Convert memory events to 2D points for mini-map
+  const miniMapPoints = useMemo(() => {
+    return filteredMemoryEvents.map((event, index) => {
+      // Simple 2D projection for mini-map
+      const x = (index % 10) * 20 - 100; // Spread horizontally
+      const y = Math.floor(index / 10) * 20 - 100; // Spread vertically
+
+      return {
+        x,
+        y,
+        event,
+        isSelected: selectedMemoryEvent?.ts === event.ts,
+        isWaypoint: false, // Could add waypoint logic here
+        color: event.source === "vision" ? "#00E0BE" : "#1BB4F2",
+        source: event.source,
+      };
+    });
+  }, [filteredMemoryEvents, selectedMemoryEvent]);
+
+  const handleFocus = (x: number, y: number) => {
+    // This would be implemented by each visualization component
+    console.log("Focus on:", x, y);
+  };
+
+  const handleResetView = () => {
+    // Reset camera/view to default position
+    console.log("Reset view");
+  };
+
+  const handleFitAll = () => {
+    // Fit all points in view
+    console.log("Fit all points");
+  };
+
+  const handleExplorationFilterChange = (events: MemoryEvent[]) => {
+    // This could be used to update the visualization with filtered events
+    console.log("Exploration filter changed:", events.length, "events");
+  };
+
+  const handleClusterSelect = (cluster: Cluster | null) => {
+    setSelectedCluster(cluster);
+    setSelectedGroup(null); // Clear group selection
+  };
+
+  const handleGroupSelect = (group: SemanticGroup | null) => {
+    setSelectedGroup(group);
+    setSelectedCluster(null); // Clear cluster selection
+  };
 
   return (
     <div className="h-full flex flex-col xl:flex-row gap-4 p-4 overflow-hidden">
@@ -38,49 +136,36 @@ export default function LatentSpacePage() {
               Latent Space Laboratory
             </h1>
             <div className="btn-secondary px-2 py-1 text-xs">
-              {memoryEvents.length} points
+              {filteredMemoryEvents.length} / {memoryEvents.length} points
             </div>
+            {searchQuery && (
+              <div className="btn-accent px-2 py-1 text-xs">
+                Filtered: "{searchQuery}"
+              </div>
+            )}
+            {selectedCluster && (
+              <div className="btn-primary px-2 py-1 text-xs">
+                Cluster: {selectedCluster.label}
+              </div>
+            )}
+            {selectedGroup && (
+              <div className="btn-primary px-2 py-1 text-xs">
+                Group: {selectedGroup.name}
+              </div>
+            )}
           </div>
 
           <div className="flex gap-2">
-            {/* Camera Presets */}
-            <div className="flex gap-1">
-              <button
-                onClick={() => setCameraPreset("top")}
-                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
-                  cameraPreset === "top"
-                    ? "btn-primary nav-active"
-                    : "btn-secondary"
-                }`}
-                title="Top view"
-              >
-                <Camera className="w-3 h-3" />
-                Top
-              </button>
-              <button
-                onClick={() => setCameraPreset("isometric")}
-                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
-                  cameraPreset === "isometric"
-                    ? "btn-primary nav-active"
-                    : "btn-secondary"
-                }`}
-                title="Isometric view"
-              >
-                <Settings className="w-3 h-3" />
-                Iso
-              </button>
-              <button
-                onClick={() => setCameraPreset("free")}
-                className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
-                  cameraPreset === "free"
-                    ? "btn-primary nav-active"
-                    : "btn-secondary"
-                }`}
-                title="Free orbit"
-              >
-                <Eye className="w-3 h-3" />
-                Free
-              </button>
+            {/* Search Bar */}
+            <div className="relative">
+              <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 w-3 h-3 text-ui-dim" />
+              <input
+                type="text"
+                placeholder="Search memories..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 pr-3 py-1 text-xs bg-ui-surface border border-ui-border rounded focus:outline-none focus:border-ui-accent w-40"
+              />
             </div>
 
             {/* View Mode Toggle */}
@@ -122,23 +207,50 @@ export default function LatentSpacePage() {
         </div>
 
         {/* Visualization Area */}
-        <div className="flex-1 min-h-0 overflow-hidden glass">
+        <div className="flex-1 min-h-0 overflow-hidden glass relative">
+          {/* Unified Controls */}
+          <VisualizationControls
+            onFilterChange={setFilter}
+            onCameraPresetChange={setCameraPreset}
+            onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
+            onResetView={handleResetView}
+            onFitAll={handleFitAll}
+            showTrajectory={showTrajectory}
+            currentFilter={filter}
+            currentPreset={cameraPreset}
+            pointCount={filteredMemoryEvents.length}
+          />
+
+          {/* Unified Mini Map */}
+          <UnifiedMiniMap
+            points={miniMapPoints}
+            onFocus={handleFocus}
+            onSelectEvent={setSelectedMemoryEvent}
+            selectedEvent={selectedMemoryEvent}
+            showTrajectory={showTrajectory}
+            onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
+          />
+
+          {/* Visualization Components */}
           {viewMode === "2d" ? (
             <LatentSpaceView
-              memoryEvents={memoryEvents}
+              memoryEvents={filteredMemoryEvents}
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
             />
           ) : viewMode === "3d" ? (
             <LatentSpace3D
-              memoryEvents={memoryEvents}
+              key="latent-space-3d"
+              memoryEvents={filteredMemoryEvents}
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
               cameraPreset={cameraPreset}
+              selectedCluster={selectedCluster}
+              selectedGroup={selectedGroup}
             />
           ) : (
             <LatentScatter
-              memoryEvents={memoryEvents}
+              memoryEvents={filteredMemoryEvents}
               selectedEvent={selectedMemoryEvent}
               onSelectEvent={setSelectedMemoryEvent}
               onHoverEvent={() => {}}
@@ -148,8 +260,18 @@ export default function LatentSpacePage() {
         </div>
       </div>
 
-      {/* Side Dock - Inspector & Waypoints */}
-      <div className="w-96 flex flex-col min-h-0 max-h-fit overflow-hidden gap-4">
+      {/* Side Dock - Exploration, Inspector & Waypoints */}
+      <div className="w-96 flex flex-col min-h-0 max-h-fit overflow-y-auto gap-4">
+        {/* Exploration Panel */}
+        <ExplorationPanel
+          memoryEvents={memoryEvents}
+          onFilterChange={handleExplorationFilterChange}
+          onClusterSelect={handleClusterSelect}
+          onGroupSelect={handleGroupSelect}
+          selectedCluster={selectedCluster}
+          selectedGroup={selectedGroup}
+        />
+
         {/* Inspector Panel */}
         <div className="flex flex-col min-h-0 max-h-fit overflow-hidden">
           <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
@@ -230,6 +352,13 @@ export default function LatentSpacePage() {
             )}
           </div>
         </div>
+
+        {/* Journey Timeline */}
+        <JourneyTimeline
+          memoryEvents={memoryEvents}
+          selectedEvent={selectedMemoryEvent}
+          onSelectEvent={setSelectedMemoryEvent}
+        />
 
         {/* Waypoints Panel */}
         <div className="flex-shrink-0">

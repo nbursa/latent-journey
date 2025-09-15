@@ -20,13 +20,19 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/llm/consciousness-metrics", getConsciousnessMetrics)
 	mux.HandleFunc("/api/llm/thought-history", getThoughtHistory)
 	mux.HandleFunc("/api/memory", getMemory)
+	mux.HandleFunc("/sentience/memory", getMemory)
 
 	// Ego service routes
 	mux.HandleFunc("/api/ego/reflect", postEgoReflect)
 	mux.HandleFunc("/api/ego/consolidate", postEgoConsolidate)
 	mux.HandleFunc("/api/ego/memories", getEgoMemories)
 	mux.HandleFunc("/api/ego/status", getEgoStatus)
-	// add others...
+
+	// Embeddings service routes
+	mux.HandleFunc("/api/embeddings/add", postAddEmbedding)
+	mux.HandleFunc("/api/embeddings", getEmbeddings)
+	mux.HandleFunc("/api/embeddings/source/", getEmbeddingsBySource)
+	mux.HandleFunc("/api/embeddings/reduce-dimensions", postReduceDimensions)
 }
 
 type frameIn struct {
@@ -120,8 +126,10 @@ func postVisionFrame(w http.ResponseWriter, r *http.Request) {
 		"vision_color":   out.DominantColor,
 		"affect_valence": out.AffectValence,
 		"affect_arousal": out.AffectArousal,
+		"embedding":      out.Embedding,
 	}
 	runBody, _ := json.Marshal(runReq)
+	fmt.Printf("Calling sentience /run with: %s\n", string(runBody))
 	runClient := &http.Client{Timeout: 5 * time.Second}
 	runResp, err := runClient.Post("http://localhost:8082/run", "application/json", bytes.NewReader(runBody))
 	if err == nil && runResp.StatusCode < 400 {
@@ -460,6 +468,96 @@ func getEgoStatus(w http.ResponseWriter, r *http.Request) {
 	resp, err := client.Get(url)
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// Embeddings service handlers
+
+func postAddEmbedding(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post("http://localhost:8085/add", "application/json", r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getEmbeddings(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8085/embeddings")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getEmbeddingsBySource(w http.ResponseWriter, r *http.Request) {
+	// Extract source from URL path
+	path := r.URL.Path
+	source := path[len("/api/embeddings/source/"):]
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8085/embeddings/source/" + source)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func postReduceDimensions(w http.ResponseWriter, r *http.Request) {
+	client := &http.Client{Timeout: 30 * time.Second} // Longer timeout for ML processing
+	resp, err := client.Post("http://localhost:8085/reduce-dimensions", "application/json", r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()

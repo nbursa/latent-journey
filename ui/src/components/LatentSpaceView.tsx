@@ -209,20 +209,72 @@ export default function LatentSpaceView({
         .selectAll("text")
         .style("fill", "#9CA3AF");
 
-      // Draw trajectory lines
-      g.append("path")
-        .datum(points)
-        .attr("fill", "none")
-        .attr("stroke", "#3B82F6")
-        .attr("stroke-width", 2)
-        .attr("stroke-opacity", 0.6)
-        .attr(
-          "d",
-          d3
-            .line<Point2D>()
-            .x((d) => xScale(d.x))
-            .y((d) => yScale(d.y))
+      // Draw trajectory lines with temporal progression
+      if (points.length > 1) {
+        // Sort points by timestamp for proper temporal ordering
+        const sortedPoints = [...points].sort(
+          (a, b) => a.event.ts - b.event.ts
         );
+
+        // Create gradient for temporal progression
+        const gradient = svg
+          .append("defs")
+          .append("linearGradient")
+          .attr("id", "trajectory-gradient")
+          .attr("gradientUnits", "userSpaceOnUse")
+          .attr("x1", 0)
+          .attr("y1", 0)
+          .attr("x2", innerWidth)
+          .attr("y2", innerHeight);
+
+        gradient
+          .append("stop")
+          .attr("offset", "0%")
+          .attr("stop-color", "#00E0BE")
+          .attr("stop-opacity", 0.3);
+
+        gradient
+          .append("stop")
+          .attr("offset", "100%")
+          .attr("stop-color", "#1BB4F2")
+          .attr("stop-opacity", 0.8);
+
+        // Draw trajectory line
+        g.append("path")
+          .datum(sortedPoints)
+          .attr("fill", "none")
+          .attr("stroke", "url(#trajectory-gradient)")
+          .attr("stroke-width", 3)
+          .attr("stroke-opacity", 0.8)
+          .attr("stroke-linecap", "round")
+          .attr("stroke-linejoin", "round")
+          .attr(
+            "d",
+            d3
+              .line<Point2D>()
+              .x((d) => xScale(d.x))
+              .y((d) => yScale(d.y))
+          );
+
+        // Add temporal markers along the trajectory
+        sortedPoints.forEach((point, index) => {
+          if (index > 0) {
+            // const progress = index / (sortedPoints.length - 1);
+            const x = xScale(point.x);
+            const y = yScale(point.y);
+
+            // Add small temporal marker
+            g.append("circle")
+              .attr("cx", x)
+              .attr("cy", y)
+              .attr("r", 2)
+              .attr("fill", "#00E0BE")
+              .attr("opacity", 0.6)
+              .attr("stroke", "white")
+              .attr("stroke-width", 1);
+          }
+        });
+      }
 
       // Draw points
       g.selectAll("circle")
@@ -233,9 +285,9 @@ export default function LatentSpaceView({
         .attr("cy", (d) => yScale(d.y))
         .attr("r", (d) => (d.isSelected ? 8 : d.isWaypoint ? 6 : 4))
         .attr("fill", (d) => {
-          if (d.isSelected) return "#EF4444";
-          if (d.isWaypoint) return "#F59E0B";
-          return d.event.source === "vision" ? "#3B82F6" : "#10B981";
+          if (d.isSelected) return "#00E0BE";
+          if (d.isWaypoint) return "#FFB020";
+          return d.event.source === "vision" ? "#00E0BE" : "#1BB4F2";
         })
         .attr("stroke", (d) => (d.isSelected ? "#FFFFFF" : "none"))
         .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
@@ -250,29 +302,38 @@ export default function LatentSpaceView({
         .on("mouseover", function (event, d) {
           d3.select(this).attr("r", 8);
 
-          // Show tooltip
+          // Show enhanced tooltip
           const tooltip = d3
             .select("body")
             .append("div")
             .attr("class", "tooltip")
             .style("position", "absolute")
-            .style("background", "rgba(0,0,0,0.8)")
+            .style("background", "rgba(0,0,0,0.9)")
             .style("color", "white")
-            .style("padding", "8px")
-            .style("border-radius", "4px")
+            .style("padding", "12px")
+            .style("border-radius", "8px")
             .style("font-size", "12px")
             .style("pointer-events", "none")
-            .style("z-index", "1000");
+            .style("z-index", "1000")
+            .style("border", "1px solid #00E0BE")
+            .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)")
+            .style("max-width", "300px");
 
           const facets = Object.entries(d.event.facets)
-            .map(([key, value]) => `${key}: ${value}`)
-            .join("<br/>");
+            .slice(0, 3)
+            .map(
+              ([key, value]) =>
+                `<div><span style="color: #00E0BE">${key}:</span> ${value}</div>`
+            )
+            .join("");
 
           tooltip.html(`
-          <div><strong>${d.event.source}</strong></div>
-          <div>${new Date(d.event.ts * 1000).toLocaleTimeString()}</div>
-          <div>${facets}</div>
-        `);
+            <div style="font-weight: bold; color: #00E0BE; margin-bottom: 4px;">${d.event.source.toUpperCase()}</div>
+            <div style="color: #9CA3AF; margin-bottom: 8px;">${new Date(
+              d.event.ts * 1000
+            ).toLocaleTimeString()}</div>
+            <div>${facets}</div>
+          `);
 
           tooltip
             .style("left", event.pageX + 10 + "px")
@@ -295,7 +356,7 @@ export default function LatentSpaceView({
         .attr("cx", 0)
         .attr("cy", 0)
         .attr("r", 4)
-        .attr("fill", "#3B82F6");
+        .attr("fill", "#00E0BE");
       legend
         .append("text")
         .attr("x", 12)
@@ -309,7 +370,7 @@ export default function LatentSpaceView({
         .attr("cx", 0)
         .attr("cy", 20)
         .attr("r", 4)
-        .attr("fill", "#10B981");
+        .attr("fill", "#1BB4F2");
       legend
         .append("text")
         .attr("x", 12)
@@ -323,7 +384,7 @@ export default function LatentSpaceView({
         .attr("cx", 0)
         .attr("cy", 40)
         .attr("r", 6)
-        .attr("fill", "#F59E0B");
+        .attr("fill", "#FFB020");
       legend
         .append("text")
         .attr("x", 12)

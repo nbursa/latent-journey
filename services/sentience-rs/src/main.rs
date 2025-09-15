@@ -80,6 +80,7 @@ struct ClipItem {
 struct MemoryEvent {
     ts: u64,
     embedding_id: String,
+    embedding: Vec<f64>,
     facets: HashMap<String, serde_json::Value>,
     source: String, // "vision" or "speech"
 }
@@ -475,9 +476,15 @@ agent MultiModalAnalyzer {
             };
 
             // Add to memory
+            let embedding = req.get("embedding")
+                .and_then(|v| v.as_array())
+                .map(|arr| arr.iter().filter_map(|v| v.as_f64()).collect())
+                .unwrap_or_default();
+            
             let memory_event = MemoryEvent {
                 ts: timestamp,
                 embedding_id: token.embedding_id.clone(),
+                embedding: embedding,
                 facets: facets,
                 source: source.to_string(),
             };

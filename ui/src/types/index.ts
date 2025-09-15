@@ -13,6 +13,7 @@ export interface Event {
 export interface MemoryEvent {
   ts: number;
   embedding_id: string;
+  embedding: number[];
   facets: Record<string, string | number>;
   source: string; // "vision" or "speech"
 }

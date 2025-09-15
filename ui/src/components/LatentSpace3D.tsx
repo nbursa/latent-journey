@@ -1,18 +1,7 @@
-import { MemoryEvent } from "../types";
-import { useRef, useState, useMemo, useEffect } from "react";
-import { createPortal } from "react-dom";
-import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { OrbitControls } from "@react-three/drei";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as THREE from "three";
-import { useWaypoints, useWaypointActions } from "../stores/appStore";
-import { Map, RotateCcw, Eye } from "lucide-react";
-
-interface LatentSpace3DProps {
-  memoryEvents: MemoryEvent[];
-  selectedEvent: MemoryEvent | null;
-  onSelectEvent: (event: MemoryEvent) => void;
-  cameraPreset?: "top" | "isometric" | "free";
-}
+import { OrbitControls } from "three-stdlib";
+import { MemoryEvent } from "../types";
 
 interface Point3D {
   x: number;
@@ -23,406 +12,450 @@ interface Point3D {
   isWaypoint: boolean;
   color: string;
   size: number;
+  confidence: number;
+  source: string;
 }
 
-// 3D Projection function - more sophisticated than 2D
-const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
-  if (embeddings.length === 0) return [];
-
-  // Use first 3 dimensions for 3D projection
-  return embeddings.map((embedding, index) => {
-    const x = (embedding[0] || 0) * 50 + (Math.random() - 0.5) * 10;
-    const y = (embedding[1] || 0) * 50 + (Math.random() - 0.5) * 10;
-    const z = (embedding[2] || 0) * 50 + (Math.random() - 0.5) * 10;
-
-    const event = memoryEvents[index];
-    const isVision = event.source === "vision";
-    const isSpeech = event.source === "speech";
-
-    // Color based on source and affect
-    let color = "#3B82F6"; // Default blue
-    if (isVision) {
-      const valence = Number(event.facets["affect.valence"]) || 0.5;
-      const arousal = Number(event.facets["affect.arousal"]) || 0.5;
-      // Color based on valence (red-green) and brightness based on arousal
-      const r = Math.floor(valence * 255);
-      const g = Math.floor((1 - valence) * 255);
-      const b = Math.floor(arousal * 255);
-      color = `rgb(${r}, ${g}, ${b})`;
-    } else if (isSpeech) {
-      color = "#10B981"; // Green for speech
-    }
-
-    // Size based on recency and importance - much larger for better interaction
-    const age = Date.now() / 1000 - event.ts;
-    const size = Math.max(1.5, 4 - age / 3600); // Larger base size, smaller as it gets older
-
-    return {
-      x,
-      y,
-      z,
-      event,
-      isSelected: false,
-      isWaypoint: false,
-      color,
-      size,
-    };
-  });
-};
-
-// Extract embeddings from memory events (same as 2D version)
-const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
-  return memoryEvents.map((event) => {
-    const facets = event.facets;
-    const embedding = new Array(128).fill(0);
-
-    // Vision object features (dimensions 0-19)
-    if (facets["vision.object"]) {
-      const object = String(facets["vision.object"]).toLowerCase();
-      const objectHash = object.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 0; i < 20; i++) {
-        embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Vision color features (dimensions 20-29)
-    if (facets["vision.color"]) {
-      const color = String(facets["vision.color"]).toLowerCase();
-      const colorHash = color.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 20; i < 30; i++) {
-        embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Speech intent features (dimensions 30-49)
-    if (facets["speech.intent"]) {
-      const intent = String(facets["speech.intent"]).toLowerCase();
-      const intentHash = intent.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 30; i < 50; i++) {
-        embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Affect features (dimensions 50-69)
-    if (facets["affect.valence"]) {
-      const valence = Number(facets["affect.valence"]);
-      for (let i = 50; i < 60; i++) {
-        embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
-      }
-    }
-
-    if (facets["affect.arousal"]) {
-      const arousal = Number(facets["affect.arousal"]);
-      for (let i = 60; i < 70; i++) {
-        embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
-      }
-    }
-
-    // Source type features (dimensions 70-79)
-    const sourceHash = event.source.split("").reduce((a, b) => {
-      a = (a << 5) - a + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    for (let i = 70; i < 80; i++) {
-      embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
-    }
-
-    // Temporal features (dimensions 80-89)
-    const timeHash = event.ts
-      .toString()
-      .split("")
-      .reduce((a, b) => {
-        a = (a << 5) - a + parseInt(b);
-        return a & a;
-      }, 0);
-    for (let i = 80; i < 90; i++) {
-      embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
-    }
-
-    // Add some noise to make the embedding more realistic
-    for (let i = 90; i < 128; i++) {
-      embedding[i] = Math.random() * 0.1 - 0.05;
-    }
-
-    return embedding;
-  });
-};
-
-// Tooltip component that renders outside Canvas
-function Tooltip({
-  event,
-  visible,
-  container,
-}: {
-  event: MemoryEvent | null;
-  visible: boolean;
-  container: HTMLElement | null;
-}) {
-  if (!visible || !event || !container) return null;
-
-  return createPortal(
-    <div className="absolute top-5 right-5 z-50 pointer-events-none select-none p-4 min-w-64 max-w-80 bg-[var(--bg-primary)] border border-[var(--border-color)] font-thin">
-      <div className="text-lg text-blue-400 mb-1">
-        {event.source.toUpperCase()}
-      </div>
-      <div className="text-xs text-gray-400 mb-3">
-        {new Date(event.ts * 1000).toLocaleTimeString()}
-      </div>
-
-      {/* Vision facets */}
-      {event.facets["vision.object"] && (
-        <div className="flex items-center justify-between mb-2 text-sm">
-          <span className="text-blue-300">Object:</span>{" "}
-          {String(event.facets["vision.object"])
-            .split(" ")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ")}
-        </div>
-      )}
-      {event.facets["vision.color"] && (
-        <div className="flex items-center justify-between mb-2 text-sm">
-          <span className="text-blue-300">Color:</span>{" "}
-          {String(event.facets["vision.color"])
-            .split(" ")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ")}
-        </div>
-      )}
-
-      {/* Speech facets */}
-      {event.facets["speech.intent"] && (
-        <div className="flex items-center justify-between mb-2 text-sm">
-          <span className="text-green-300">Intent:</span>{" "}
-          {String(event.facets["speech.intent"])
-            .split(" ")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ")}
-        </div>
-      )}
-      {event.facets["speech.transcript"] && (
-        <div className="flex items-center justify-between mb-2 text-sm text-right">
-          <span className="text-green-300">Transcript:</span>{" "}
-          {String(event.facets["speech.transcript"])
-            .split(" ")
-            .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-            .join(" ")}
-        </div>
-      )}
-
-      {/* Affect facets */}
-      {event.facets["affect.valence"] && (
-        <div className="flex items-center justify-between mb-2 text-sm">
-          <span className="text-yellow-300">Valence:</span>{" "}
-          {Number(event.facets["affect.valence"]).toFixed(2)}
-        </div>
-      )}
-      {event.facets["affect.arousal"] && (
-        <div className="flex items-center justify-between mb-2 text-sm">
-          <span className="text-yellow-300">Arousal:</span>{" "}
-          {Number(event.facets["affect.arousal"]).toFixed(2)}
-        </div>
-      )}
-
-      {/* Additional facets */}
-      {Object.entries(event.facets).map(([key, value]) => {
-        if (
-          key.startsWith("vision.") ||
-          key.startsWith("speech.") ||
-          key.startsWith("affect.")
-        ) {
-          return null; // Already handled above
-        }
-        return (
-          <div
-            key={key}
-            className="flex items-center justify-between mb-2 text-sm"
-          >
-            <span className="text-gray-300">
-              {key
-                .split(".")
-                .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-                .join(" ")}
-              :
-            </span>{" "}
-            {String(value)
-              .split(" ")
-              .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-              .join(" ")}
-          </div>
-        );
-      })}
-    </div>,
-    container
-  );
+interface RealLatentSpace3DProps {
+  memoryEvents: MemoryEvent[];
+  selectedEvent: MemoryEvent | null;
+  onSelectEvent: (event: MemoryEvent) => void;
+  onHover?: (event: MemoryEvent | null) => void;
+  cameraPreset?: "top" | "isometric" | "free";
+  selectedCluster?: any;
+  selectedGroup?: any;
 }
 
-// Animated particle component
-function Particle({
-  point,
-  isSelected,
-  isWaypoint,
-  onSelect,
-  onHover,
-}: {
-  point: Point3D;
-  isSelected: boolean;
-  isWaypoint: boolean;
-  onSelect: (event: MemoryEvent) => void;
-  onHover: (event: MemoryEvent | null) => void;
-}) {
-  const meshRef = useRef<THREE.Mesh>(null);
-  const [hovered, setHovered] = useState(false);
-
-  useFrame(() => {
-    if (meshRef.current) {
-      // Completely static particles - no movement, no pulsing, no rotation
-      meshRef.current.position.y = point.y;
-      meshRef.current.rotation.y = 0;
-      meshRef.current.scale.setScalar(1);
-    }
-  });
-
-  const handleClick = () => {
-    onSelect(point.event);
-  };
-
-  return (
-    <group>
-      <mesh
-        ref={meshRef}
-        position={[point.x, point.y, point.z]}
-        onClick={handleClick}
-        onPointerOver={() => {
-          console.log("Hovering over visible particle:", point.event.ts);
-          setHovered(true);
-          onHover(point.event);
-        }}
-        onPointerOut={() => {
-          console.log(
-            "Stopped hovering over visible particle:",
-            point.event.ts
-          );
-          setHovered(false);
-          onHover(null);
-        }}
-      >
-        <sphereGeometry args={[point.size, 32, 32]} />
-        <meshStandardMaterial
-          color={point.color}
-          emissive={
-            isSelected
-              ? "#ff0000"
-              : isWaypoint
-              ? "#ffaa00"
-              : hovered
-              ? "#ffffff"
-              : "#000000"
-          }
-          emissiveIntensity={
-            isSelected ? 0.8 : isWaypoint ? 0.5 : hovered ? 0.3 : 0
-          }
-          transparent
-          opacity={hovered ? 1.0 : 0.8}
-          roughness={0.2}
-          metalness={0.8}
-        />
-      </mesh>
-
-      {/* Larger invisible sphere for easier clicking */}
-      <mesh
-        position={[point.x, point.y, point.z]}
-        onClick={handleClick}
-        onPointerOver={() => {
-          console.log("Hovering over particle:", point.event.ts);
-          setHovered(true);
-          onHover(point.event);
-        }}
-        onPointerOut={() => {
-          console.log("Stopped hovering over particle:", point.event.ts);
-          setHovered(false);
-          onHover(null);
-        }}
-      >
-        <sphereGeometry args={[point.size * 1.5, 16, 16]} />
-        <meshBasicMaterial transparent opacity={0} />
-      </mesh>
-      {/* Glow effect for selected particles */}
-      {isSelected && (
-        <mesh position={[point.x, point.y, point.z]}>
-          <sphereGeometry args={[point.size * 2, 16, 16]} />
-          <meshBasicMaterial
-            color="#ff0000"
-            transparent
-            opacity={0.1}
-            side={THREE.BackSide}
-          />
-        </mesh>
-      )}
-    </group>
-  );
-}
-
-// Trajectory line component
-function TrajectoryLine({ points }: { points: Point3D[] }) {
-  const lineGeometry = useMemo(() => {
-    const geometry = new THREE.BufferGeometry();
-    const positions = new Float32Array(points.length * 3);
-
-    points.forEach((point, index) => {
-      positions[index * 3] = point.x;
-      positions[index * 3 + 1] = point.y;
-      positions[index * 3 + 2] = point.z;
-    });
-
-    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    return geometry;
-  }, [points]);
-
-  return (
-    <primitive
-      object={
-        new THREE.Line(
-          lineGeometry,
-          new THREE.LineBasicMaterial({
-            color: "#3B82F6",
-            transparent: true,
-            opacity: 0.5,
-          })
-        )
-      }
-    />
-  );
-}
-
-// Main 3D scene component
-function Scene3D({
-  points,
+export default function RealLatentSpace3D({
+  memoryEvents,
   selectedEvent,
   onSelectEvent,
   onHover,
   cameraPreset = "free",
-}: {
-  points: Point3D[];
-  selectedEvent: MemoryEvent | null;
-  onSelectEvent: (event: MemoryEvent) => void;
-  onHover: (event: MemoryEvent | null) => void;
-  cameraPreset?: "top" | "isometric" | "free";
-}) {
-  const { camera, gl } = useThree();
-  const waypoints = useWaypoints();
+}: RealLatentSpace3DProps) {
+  const mountRef = useRef<HTMLDivElement>(null);
+  const sceneRef = useRef<THREE.Scene | null>(null);
+  const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
+  const controlsRef = useRef<OrbitControls | null>(null);
+  const [points, setPoints] = useState<Point3D[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+  const [focusTarget, setFocusTarget] = useState<{
+    x: number;
+    y: number;
+    z: number;
+  } | null>(null);
 
+  // Handle hover events
+  const handleHover = useCallback(
+    (event: MemoryEvent | null) => {
+      setHoveredEvent(event);
+      if (onHover) {
+        onHover(event);
+      }
+    },
+    [onHover]
+  );
+
+  // Handle focus camera on specific coordinates
+  const handleFocus = useCallback((worldX: number, worldY: number) => {
+    setFocusTarget({ x: worldX, y: worldY, z: 200 });
+  }, []);
+
+  // Extract embeddings from memory events
+  const extractEmbeddings = useCallback(async () => {
+    if (memoryEvents.length === 0) return [];
+
+    const embeddings = [];
+    for (const event of memoryEvents) {
+      // Check if we have a CLIP embedding at top level
+      if (event.embedding && Array.isArray(event.embedding)) {
+        embeddings.push({
+          id: event.embedding_id,
+          embedding: event.embedding as number[],
+          source: event.source,
+          facets: event.facets,
+          confidence: Number(event.facets.confidence) || 0.5,
+        });
+      }
+    }
+
+    return embeddings;
+  }, [memoryEvents]);
+
+  // Reduce dimensions using ML service
+  const reduceDimensions = useCallback(async (embeddings: any[]) => {
+    if (embeddings.length === 0) return [];
+
+    try {
+      const response = await fetch("/api/embeddings/reduce-dimensions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          embeddings: embeddings.map((e) => e.embedding),
+          method: "umap", // Use UMAP for better visualization
+          n_components: 3,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const result = await response.json();
+      return result.reduced_embeddings;
+    } catch (err) {
+      setError("Failed to reduce dimensions. Using fallback projection.");
+      // Fallback to simple PCA-like projection
+      return embeddings.map((e) => [
+        e.embedding[0] || 0,
+        e.embedding[1] || 0,
+        e.embedding[2] || 0,
+      ]);
+    }
+  }, []);
+
+  // Update visualization when memory events change
   useEffect(() => {
-    // Calculate bounds of all points to position camera appropriately
+    const updateVisualization = async () => {
+      if (memoryEvents.length === 0) {
+        setPoints([]);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        const embeddings = await extractEmbeddings();
+
+        if (embeddings.length === 0) {
+          setError("No embeddings found in memory events");
+          setIsLoading(false);
+          return;
+        }
+
+        const reducedEmbeddings = await reduceDimensions(embeddings);
+
+        const newPoints: Point3D[] = reducedEmbeddings.map(
+          (coords: number[], index: number) => {
+            const embedding = embeddings[index];
+            const event = memoryEvents.find(
+              (e) => e.embedding_id === embedding.id
+            )!;
+
+            // Scale coordinates for better visualization
+            const scale = 100;
+            const x = coords[0] * scale;
+            const y = coords[1] * scale;
+            const z = coords[2] * scale;
+
+            // Color based on source and confidence
+            let color = "#3B82F6"; // Default blue
+            if (event.source === "vision") {
+              // Use confidence for brightness, affect for hue
+              const confidence = embedding.confidence;
+              const valence = Number(event.facets["affect.valence"]) || 0.5;
+              const arousal = Number(event.facets["affect.arousal"]) || 0.5;
+
+              // HSV color based on valence, brightness based on confidence
+              const hue = valence * 120; // 0-120 (red to green)
+              const saturation = arousal * 100;
+              const value = confidence * 100;
+
+              color = `hsl(${hue}, ${saturation}%, ${value}%)`;
+            } else if (event.source === "speech") {
+              color = "#10B981"; // Green for speech
+            }
+
+            // Size based on confidence and recency
+            const age = Date.now() / 1000 - event.ts;
+            const size = Math.max(1, 3 + embedding.confidence * 4 - age / 3600);
+
+            return {
+              x,
+              y,
+              z,
+              event,
+              isSelected: selectedEvent?.ts === event.ts,
+              isWaypoint: false,
+              color,
+              size,
+              confidence: embedding.confidence,
+              source: event.source,
+            };
+          }
+        );
+
+        setPoints(newPoints);
+      } catch (err) {
+        console.error("Visualization update failed:", err);
+        setError("Failed to update visualization");
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    updateVisualization();
+  }, [memoryEvents, selectedEvent, extractEmbeddings, reduceDimensions]);
+
+  // Initialize Three.js scene
+  useEffect(() => {
+    if (!mountRef.current) return;
+
+    // Clean up any existing renderer and all canvas elements
+    if (rendererRef.current) {
+      if (mountRef.current.contains(rendererRef.current.domElement)) {
+        mountRef.current.removeChild(rendererRef.current.domElement);
+      }
+      rendererRef.current.dispose();
+      rendererRef.current = null;
+    }
+
+    // Remove any existing canvas elements
+    const existingCanvases = mountRef.current.querySelectorAll("canvas");
+
+    existingCanvases.forEach((canvas) => {
+      if (mountRef.current && mountRef.current.contains(canvas)) {
+        mountRef.current.removeChild(canvas);
+      }
+    });
+
+    const scene = new THREE.Scene();
+    scene.background = null; // Transparent background like LatentScatter
+    sceneRef.current = scene;
+
+    const camera = new THREE.PerspectiveCamera(
+      75,
+      mountRef.current.clientWidth / mountRef.current.clientHeight,
+      0.1,
+      1000
+    );
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(
+      mountRef.current.clientWidth,
+      mountRef.current.clientHeight
+    );
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+    // Set renderer clear color to transparent like LatentScatter
+    renderer.setClearColor(0x000000, 0.0); // Transparent
+    renderer.autoClear = true; // Enable auto-clear like LatentScatter
+    renderer.autoClearColor = true;
+
+    // Ensure canvas is positioned absolutely to fill the container
+    renderer.domElement.style.position = "absolute";
+    renderer.domElement.style.top = "0";
+    renderer.domElement.style.left = "0";
+    renderer.domElement.style.width = "100%";
+    renderer.domElement.style.height = "100%";
+
+    mountRef.current.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controlsRef.current = controls;
+
+    // Add modern flat lighting setup
+    const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
+    scene.add(ambientLight);
+
+    // Main directional light for clean shadows
+    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
+    directionalLight.position.set(100, 100, 100);
+    directionalLight.castShadow = true;
+    directionalLight.shadow.mapSize.width = 2048;
+    directionalLight.shadow.mapSize.height = 2048;
+    scene.add(directionalLight);
+
+    // Fill light for even illumination
+    const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
+    fillLight.position.set(-50, -50, 50);
+    scene.add(fillLight);
+
+    // Add subtle grid for spatial reference
+    const gridHelper = new THREE.GridHelper(200, 40, 0x333333, 0x222222);
+    gridHelper.position.y = -50; // Place below the data points
+    scene.add(gridHelper);
+
+    // Add subtle axes
+    const axesHelper = new THREE.AxesHelper(50);
+    axesHelper.position.y = -50;
+    scene.add(axesHelper);
+
+    const animate = () => {
+      requestAnimationFrame(animate);
+      controls.update();
+
+      // Let Three.js handle clearing automatically
+
+      renderer.render(scene, camera);
+    };
+    animate();
+
+    // Test if the canvas is actually visible and has content
+    console.log("Canvas after setup:", {
+      canvas: renderer.domElement,
+      parentElement: renderer.domElement.parentElement,
+      style: renderer.domElement.style.cssText,
+      width: renderer.domElement.width,
+      height: renderer.domElement.height,
+      offsetWidth: renderer.domElement.offsetWidth,
+      offsetHeight: renderer.domElement.offsetHeight,
+    });
+
+    // Try a simple test - draw a colored rectangle directly to canvas
+    const ctx = renderer.domElement.getContext("2d");
+    if (ctx) {
+      ctx.fillStyle = "red";
+      ctx.fillRect(0, 0, 100, 100);
+      console.log("Drew red rectangle to canvas");
+    } else {
+      console.log("No 2D context available");
+    }
+
+    const handleResize = () => {
+      if (!mountRef.current) return;
+      const width = mountRef.current.clientWidth;
+      const height = mountRef.current.clientHeight;
+      camera.aspect = width / height;
+      camera.updateProjectionMatrix();
+      renderer.setSize(width, height);
+    };
+
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      if (
+        mountRef.current &&
+        renderer.domElement &&
+        mountRef.current.contains(renderer.domElement)
+      ) {
+        mountRef.current.removeChild(renderer.domElement);
+      }
+      renderer.dispose();
+      sceneRef.current = null;
+      rendererRef.current = null;
+      cameraRef.current = null;
+      controlsRef.current = null;
+    };
+  }, []);
+
+  // Cleanup effect for component unmount
+  useEffect(() => {
+    return () => {
+      if (rendererRef.current) {
+        if (
+          mountRef.current &&
+          mountRef.current.contains(rendererRef.current.domElement)
+        ) {
+          mountRef.current.removeChild(rendererRef.current.domElement);
+        }
+        rendererRef.current.dispose();
+        rendererRef.current = null;
+      }
+      if (sceneRef.current) {
+        sceneRef.current = null;
+      }
+      if (cameraRef.current) {
+        cameraRef.current = null;
+      }
+      if (controlsRef.current) {
+        controlsRef.current = null;
+      }
+    };
+  }, []);
+
+  // Update 3D points
+  useEffect(() => {
+    if (!sceneRef.current || !rendererRef.current || !cameraRef.current) return;
+
+    const scene = sceneRef.current;
+    const renderer = rendererRef.current;
+    const camera = cameraRef.current;
+
+    // Remove ALL existing meshes (spheres, cubes, etc.)
+    const existingMeshes = scene.children.filter(
+      (child) => child instanceof THREE.Mesh
+    );
+    existingMeshes.forEach((mesh) => {
+      scene.remove(mesh);
+      if (mesh instanceof THREE.Mesh) {
+        mesh.geometry.dispose();
+        if (mesh.material instanceof THREE.Material) {
+          mesh.material.dispose();
+        }
+      }
+    });
+
+    if (points.length === 0) {
+      return;
+    }
+
+    // Create spheres for each data point with modern flat design
+    const sphereGeometry = new THREE.SphereGeometry(3, 16, 16); // Smaller, more precise spheres
+
+    // Create individual spheres for each point
+    points.forEach((point, index) => {
+      const sphere = new THREE.Mesh(
+        sphereGeometry,
+        new THREE.MeshStandardMaterial({
+          color: "#00E0BE", // Match LatentScatter color
+          transparent: true,
+          opacity: 0.8,
+          roughness: 0.2,
+          metalness: 0.8,
+        })
+      );
+      sphere.position.set(point.x, point.y, point.z);
+      sphere.userData = { event: point.event, index };
+      scene.add(sphere);
+    });
+
+    // Add journey lines connecting the points
+    if (points.length > 1) {
+      const lineGeometry = new THREE.BufferGeometry();
+      const positions = new Float32Array(points.length * 3);
+
+      points.forEach((point, index) => {
+        positions[index * 3] = point.x;
+        positions[index * 3 + 1] = point.y;
+        positions[index * 3 + 2] = point.z;
+      });
+
+      lineGeometry.setAttribute(
+        "position",
+        new THREE.BufferAttribute(positions, 3)
+      );
+
+      const line = new THREE.Line(
+        lineGeometry,
+        new THREE.LineBasicMaterial({
+          color: "#00E0BE",
+          transparent: true,
+          opacity: 0.6,
+        })
+      );
+      scene.add(line);
+    }
+
+    // Keep background transparent like LatentScatter
+    scene.background = null;
+
+    // Position camera to view all data points properly
     if (points.length > 0) {
+      // Calculate bounds of all points
       const bounds = points.reduce(
         (acc, point) => ({
           minX: Math.min(acc.minX, point.x),
@@ -442,249 +475,270 @@ function Scene3D({
         }
       );
 
-      // Calculate center and size of the point cloud
       const centerX = (bounds.minX + bounds.maxX) / 2;
       const centerY = (bounds.minY + bounds.maxY) / 2;
       const centerZ = (bounds.minZ + bounds.maxZ) / 2;
 
-      const sizeX = bounds.maxX - bounds.minX;
-      const sizeY = bounds.maxY - bounds.minY;
-      const sizeZ = bounds.maxZ - bounds.minZ;
-      const maxSize = Math.max(sizeX, sizeY, sizeZ);
+      // Calculate the maximum dimension to ensure all points are visible
+      const maxSize = Math.max(
+        bounds.maxX - bounds.minX,
+        bounds.maxY - bounds.minY,
+        bounds.maxZ - bounds.minZ
+      );
 
-      // Position camera based on preset
-      const distance = Math.max(maxSize * 0.8, 30); // Much closer, minimum 30 units away
+      // Set camera distance to encompass all points with less padding
+      const distance = Math.max(maxSize * 0.8, 30);
 
-      switch (cameraPreset) {
-        case "top":
-          // Top view - camera directly above
-          camera.position.set(centerX, centerY + distance, centerZ);
-          camera.lookAt(centerX, centerY, centerZ);
-          break;
-        case "isometric":
-          // Isometric view - 45-degree angle
-          const isoDistance = distance * 1.2;
-          camera.position.set(
-            centerX + isoDistance * 0.7,
-            centerY + isoDistance * 0.7,
-            centerZ + isoDistance * 0.7
-          );
-          camera.lookAt(centerX, centerY, centerZ);
-          break;
-        case "free":
-        default:
-          // Free view - current dynamic positioning
-          const cameraX = centerX + distance * 0.65;
-          const cameraY = centerY + distance * 0.65;
-          const cameraZ = centerZ + distance * 0.65;
-          camera.position.set(cameraX, cameraY, cameraZ);
-          camera.lookAt(centerX, centerY, centerZ);
-          break;
-      }
+      // Position camera at an angle to show all points
+      camera.position.set(
+        centerX + distance * 0.6,
+        centerY + distance * 0.6,
+        centerZ + distance * 0.6
+      );
+      camera.lookAt(centerX, centerY, centerZ);
     } else {
-      // Default position when no points
-      camera.position.set(150, 150, 150);
+      // Default camera position when no points
+      camera.position.set(50, 50, 50);
       camera.lookAt(0, 0, 0);
     }
 
-    // Handle WebGL context loss
-    const handleContextLost = (event: Event) => {
-      event.preventDefault();
-      console.warn("WebGL context lost, attempting to restore...");
-    };
-
-    const handleContextRestored = () => {
-      console.log("WebGL context restored");
-      // Force re-render
-      gl.resetState();
-    };
-
-    gl.domElement.addEventListener("webglcontextlost", handleContextLost);
-    gl.domElement.addEventListener(
-      "webglcontextrestored",
-      handleContextRestored
-    );
-
-    return () => {
-      gl.domElement.removeEventListener("webglcontextlost", handleContextLost);
-      gl.domElement.removeEventListener(
-        "webglcontextrestored",
-        handleContextRestored
+    // Handle focus target
+    if (focusTarget && controlsRef.current) {
+      camera.position.set(focusTarget.x, focusTarget.y, focusTarget.z);
+      camera.lookAt(focusTarget.x, focusTarget.y, 0);
+      controlsRef.current.target.set(focusTarget.x, focusTarget.y, 0);
+      controlsRef.current.update();
+      setFocusTarget(null);
+    } else if (controlsRef.current && points.length > 0) {
+      // Update controls target to center of points
+      const center = points.reduce(
+        (acc, point) => ({
+          x: acc.x + point.x,
+          y: acc.y + point.y,
+          z: acc.z + point.z,
+        }),
+        { x: 0, y: 0, z: 0 }
       );
-    };
-  }, [camera, gl, points, cameraPreset]);
+      const centerX = center.x / points.length;
+      const centerY = center.y / points.length;
+      const centerZ = center.z / points.length;
 
-  return (
-    <>
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} color="#3B82F6" />
-
-      {/* Grid */}
-      <gridHelper args={[200, 20, "#444444", "#222222"]} />
-
-      {/* Axes */}
-      <axesHelper args={[50]} />
-
-      {/* Trajectory line */}
-      {points.length > 1 && <TrajectoryLine points={points} />}
-
-      {/* Particles */}
-      {points.map((point, index) => (
-        <Particle
-          key={`${point.event.ts}-${point.event.source}-${index}`}
-          point={point}
-          isSelected={selectedEvent?.ts === point.event.ts}
-          isWaypoint={waypoints.has(point.event.ts)}
-          onSelect={onSelectEvent}
-          onHover={onHover}
-        />
-      ))}
-    </>
-  );
-}
-
-export default function LatentSpace3D({
-  memoryEvents,
-  selectedEvent,
-  onSelectEvent,
-  cameraPreset = "free",
-}: LatentSpace3DProps) {
-  const [points, setPoints] = useState<Point3D[]>([]);
-  const [isComputing, setIsComputing] = useState(false);
-  const [webglError, setWebglError] = useState(false);
-  const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
-  const canvasContainerRef = useRef<HTMLDivElement>(null);
-  const waypoints = useWaypoints();
-  const { clearWaypoints } = useWaypointActions();
-
-  // Update visualization when memory events change
-  useEffect(() => {
-    if (memoryEvents.length === 0) {
-      setPoints([]);
-      return;
+      controlsRef.current.target.set(centerX, centerY, centerZ);
+      controlsRef.current.update();
     }
 
-    setIsComputing(true);
+    // Add click handling
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
 
-    // Simulate computation delay
-    setTimeout(() => {
-      const embeddings = extractEmbeddings(memoryEvents);
-      const projectedPoints = projectTo3D(embeddings, memoryEvents);
+    const handleClick = (event: MouseEvent) => {
+      if (!mountRef.current) return;
 
-      // Update selected state
-      const updatedPoints = projectedPoints.map((point) => ({
-        ...point,
-        isSelected: selectedEvent?.ts === point.event.ts,
-      }));
+      const rect = mountRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-      setPoints(updatedPoints);
-      setIsComputing(false);
-    }, 500);
-  }, [memoryEvents, selectedEvent]);
+      raycaster.setFromCamera(mouse, camera);
+      // Only check for meshes (spheres), not lines
+      const meshes = scene.children.filter(
+        (child) => child instanceof THREE.Mesh
+      );
+      const intersects = raycaster.intersectObjects(meshes);
+
+      if (intersects.length > 0) {
+        const intersected = intersects[0].object;
+        if (intersected.userData && intersected.userData.event) {
+          onSelectEvent(intersected.userData.event);
+        }
+      }
+    };
+
+    const handleMouseMove = (event: MouseEvent) => {
+      if (!mountRef.current) return;
+
+      const rect = mountRef.current.getBoundingClientRect();
+      mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+
+      // Update mouse position for tooltip
+      setMousePosition({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+      });
+
+      raycaster.setFromCamera(mouse, camera);
+      // Only check for meshes (spheres), not lines
+      const meshes = scene.children.filter(
+        (child) => child instanceof THREE.Mesh
+      );
+      const intersects = raycaster.intersectObjects(meshes);
+
+      if (intersects.length > 0) {
+        const intersected = intersects[0].object;
+        if (intersected.userData && intersected.userData.event) {
+          handleHover(intersected.userData.event);
+        }
+      } else {
+        handleHover(null);
+      }
+    };
+
+    renderer.domElement.addEventListener("click", handleClick);
+    renderer.domElement.addEventListener("mousemove", handleMouseMove);
+
+    return () => {
+      renderer.domElement.removeEventListener("click", handleClick);
+      renderer.domElement.removeEventListener("mousemove", handleMouseMove);
+    };
+  }, [points, onSelectEvent, onHover, focusTarget, handleHover, handleFocus]);
+
+  // Camera presets - only run when cameraPreset changes, not when points change
+  useEffect(() => {
+    if (!cameraRef.current || !controlsRef.current || points.length === 0)
+      return;
+
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    // Calculate bounds of all points
+    const bounds = points.reduce(
+      (acc, point) => ({
+        minX: Math.min(acc.minX, point.x),
+        maxX: Math.max(acc.maxX, point.x),
+        minY: Math.min(acc.minY, point.y),
+        maxY: Math.max(acc.maxY, point.y),
+        minZ: Math.min(acc.minZ, point.z),
+        maxZ: Math.max(acc.maxZ, point.z),
+      }),
+      {
+        minX: Infinity,
+        maxX: -Infinity,
+        minY: Infinity,
+        maxY: -Infinity,
+        minZ: Infinity,
+        maxZ: -Infinity,
+      }
+    );
+
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+
+    const maxSize = Math.max(
+      bounds.maxX - bounds.minX,
+      bounds.maxY - bounds.minY,
+      bounds.maxZ - bounds.minZ
+    );
+    const distance = Math.max(maxSize * 0.8, 30);
+
+    switch (cameraPreset) {
+      case "top":
+        camera.position.set(centerX, centerY + distance, centerZ);
+        camera.lookAt(centerX, centerY, centerZ);
+        break;
+      case "isometric":
+        camera.position.set(
+          centerX + distance * 0.6,
+          centerY + distance * 0.6,
+          centerZ + distance * 0.6
+        );
+        camera.lookAt(centerX, centerY, centerZ);
+        break;
+      case "free":
+      default:
+        camera.position.set(
+          centerX + distance * 0.6,
+          centerY + distance * 0.6,
+          centerZ + distance * 0.6
+        );
+        camera.lookAt(centerX, centerY, centerZ);
+        break;
+    }
+
+    controls.target.set(centerX, centerY, centerZ);
+    controls.update();
+  }, [cameraPreset]); // Removed points dependency to prevent race condition
 
   return (
-    <div className="h-full flex flex-col min-h-0 p-2">
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Map className="w-5 h-5" />
-          3D Latent Space
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={clearWaypoints}
-            className="px-2 py-1 text-xs btn-secondary flex items-center gap-1"
-            disabled={waypoints.size === 0}
-          >
-            <RotateCcw className="w-3 h-3" />
-            Clear
-          </button>
+    <div className="relative w-full h-full">
+      <div
+        ref={mountRef}
+        className="w-full h-full"
+        style={{
+          minHeight: "400px", // Ensure minimum height
+          width: "100%",
+          height: "100%",
+          position: "relative",
+          overflow: "hidden",
+          background: "transparent", // Transparent like LatentScatter
+        }}
+      />
+
+      {isLoading && (
+        <div className="absolute top-4 left-4 bg-black/50 text-white px-3 py-2 rounded">
+          Computing embeddings...
         </div>
-      </div>
+      )}
 
-      <div className="relative flex-1 p-4 min-h-0 overflow-hidden">
-        {isComputing ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-              <div>Computing 3D latent space...</div>
-            </div>
-          </div>
-        ) : points.length === 0 ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <Eye className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <div className="text-lg mb-2">No data yet</div>
-              <div className="text-sm">
-                Capture some images or speak to see the 3D latent space
-              </div>
-            </div>
-          </div>
-        ) : webglError ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <Eye className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <div className="text-lg mb-2">WebGL Error</div>
-              <div className="text-sm">
-                WebGL context was lost. Please refresh the page.
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </div>
-        ) : (
-          <div ref={canvasContainerRef} className="h-full w-full min-h-0">
-            <Canvas
-              camera={{ position: [100, 100, 100], fov: 75 }}
-              style={{ background: "transparent" }}
-              onError={() => setWebglError(true)}
-            >
-              <Scene3D
-                points={points}
-                selectedEvent={selectedEvent}
-                onSelectEvent={onSelectEvent}
-                onHover={setHoveredEvent}
-                cameraPreset={cameraPreset}
-              />
-              <OrbitControls
-                enablePan={true}
-                enableZoom={true}
-                enableRotate={true}
-                autoRotate={false}
-                autoRotateSpeed={0.5}
-                rotateSpeed={0.5}
-                zoomSpeed={0.8}
-                panSpeed={0.8}
-                minDistance={10}
-                maxDistance={500}
-              />
-            </Canvas>
-          </div>
-        )}
-      </div>
+      {error && (
+        <div className="absolute top-4 left-4 bg-red-500/50 text-white px-3 py-2 rounded">
+          {error}
+        </div>
+      )}
 
-      {points.length > 0 && (
-        <div className="mt-4 text-xs text-gray-400 flex-shrink-0">
-          <div className="flex items-center gap-4">
-            <span>Points: {points.length}</span>
-            <span>Waypoints: {waypoints.size}</span>
-            <span>
-              Click points to select • Drag to rotate • Scroll to zoom
-            </span>
+      {/* Hover tooltip */}
+      {hoveredEvent && (
+        <div
+          className="absolute p-3 max-w-xs text-white rounded shadow-lg"
+          style={{
+            zIndex: 9999,
+            position: "absolute",
+            top: `${mousePosition.y + 10}px`,
+            left: `${mousePosition.x + 10}px`,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            color: "white",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #00E0BE",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            maxWidth: "300px",
+            fontSize: "12px",
+            pointerEvents: "none", // Prevent tooltip from interfering with mouse events
+          }}
+        >
+          <div className="text-sm font-bold mb-1" style={{ color: "#00E0BE" }}>
+            {hoveredEvent.source.toUpperCase()}
+          </div>
+          <div className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
+            {new Date(hoveredEvent.ts * 1000).toLocaleTimeString()}
+          </div>
+          <div className="space-y-1">
+            {Object.entries(hoveredEvent.facets)
+              .slice(0, 3)
+              .map(([key, value]) => (
+                <div key={key} className="text-xs">
+                  <span className="font-semibold" style={{ color: "#00E0BE" }}>
+                    {key}:
+                  </span>{" "}
+                  <span>{String(value)}</span>
+                </div>
+              ))}
           </div>
         </div>
       )}
 
-      {/* Tooltip rendered outside Canvas */}
-      <Tooltip
-        event={hoveredEvent}
-        visible={!!hoveredEvent}
-        container={canvasContainerRef.current}
-      />
+      {/* Debug: Show hoveredEvent state */}
+      {/* <div className="absolute top-4 right-4 bg-blue-500 text-white p-2 z-50">
+        Hovered: {hoveredEvent ? "YES" : "NO"}
+      </div> */}
+
+      {/* Test tooltip - always visible */}
+      {/* <div
+        className="absolute top-20 left-4 bg-green-500 text-white p-2 rounded"
+        style={{ zIndex: 9999 }}
+      >
+        TEST TOOLTIP - Always visible
+      </div> */}
     </div>
   );
 }

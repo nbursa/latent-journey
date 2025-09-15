@@ -1,6 +1,5 @@
 [workspace]
-members = ["services/sentience-rs", "services/ego-rs"]
+members = ["services/sentience-rs", "services/ego-rs", "services/embeddings-rs"]
 resolver = "2"
 
 [workspace.dependencies]
-# Common dependencies can be defined here if needed

@@ -108,7 +108,7 @@ export default function ExplorationPage() {
   ]);
 
   return (
-    <div className="flex-1 flex flex-col xl:flex-row gap-4 p-4 min-h-0 max-h-full">
+    <div className="flex-1 flex flex-col xl:flex-row gap-4 p-4 min-h-0 h-full">
       {/* Left Column: Camera + Latent Insight */}
       <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
         <div className="flex-shrink-0">

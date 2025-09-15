@@ -536,8 +536,8 @@ def get_thought_history():
 
 
 if __name__ == "__main__":
-    print(f"🧠 Starting LLM Service with {LLM_PROVIDER}")
-    print(f"📊 Model: {OLLAMA_MODEL if LLM_PROVIDER == 'ollama' else 'unknown'}")
-    print(f"🌐 Port: 8083")
+    print(f"Starting LLM Service with {LLM_PROVIDER}")
+    print(f"Model: {OLLAMA_MODEL if LLM_PROVIDER == 'ollama' else 'unknown'}")
+    print(f"Port: 8083")
 
     app.run(host="0.0.0.0", port=8083, debug=False)

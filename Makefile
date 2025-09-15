@@ -42,6 +42,7 @@ dev:
 	@lsof -ti:8082 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 	@echo "Waiting for cleanup..."
 	@sleep 5
@@ -61,6 +62,7 @@ dev:
 	@echo "Sentience Service: http://localhost:8082"
 	@echo "LLM Service: http://localhost:8083"
 	@echo "Ego Service: http://localhost:8084"
+	@echo "Embeddings Service: http://localhost:8085"
 	@echo "UI: http://localhost:5173"
 	@echo ""
 	@echo "⚠️  EXTERNAL DEPENDENCIES REQUIRED:"
@@ -70,7 +72,7 @@ dev:
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@echo ""
-	@trap 'echo "Stopping all services..."; pkill -f "go run main.go"; pkill -f "python app.py"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "sentience-rs"; pkill -f "ml-py"; pkill -f "llm-py"; pkill -f "ego-rs"; echo "Killing processes on ports..."; lsof -ti:8080 | xargs kill -9 2>/dev/null || true; lsof -ti:8081 | xargs kill -9 2>/dev/null || true; lsof -ti:8082 | xargs kill -9 2>/dev/null || true; lsof -ti:8083 | xargs kill -9 2>/dev/null || true; lsof -ti:8084 | xargs kill -9 2>/dev/null || true; lsof -ti:5173 | xargs kill -9 2>/dev/null || true; exit 0' INT; \
+	@trap 'echo "Stopping all services..."; pkill -f "go run main.go"; pkill -f "python app.py"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "sentience-rs"; pkill -f "ml-py"; pkill -f "llm-py"; pkill -f "ego-rs"; pkill -f "embeddings-rs"; echo "Killing processes on ports..."; lsof -ti:8080 | xargs kill -9 2>/dev/null || true; lsof -ti:8081 | xargs kill -9 2>/dev/null || true; lsof -ti:8082 | xargs kill -9 2>/dev/null || true; lsof -ti:8083 | xargs kill -9 2>/dev/null || true; lsof -ti:8084 | xargs kill -9 2>/dev/null || true; lsof -ti:8085 | xargs kill -9 2>/dev/null || true; lsof -ti:5173 | xargs kill -9 2>/dev/null || true; exit 0' INT; \
 	echo "Starting services in optimized order..."; \
 	echo ""; \
 	echo "1.Starting Gateway (API Router)..."; \
@@ -103,7 +105,13 @@ dev:
 	EGO_PID=$$!; \
 	PORT=8084 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "5.Starting UI (Frontend)..."; \
+	echo "5.Starting Embeddings Service (Real CLIP Embeddings)..."; \
+	PORT=8085 $(MAKE) check-port; \
+	cd services/embeddings-rs && cargo run & \
+	EMBEDDINGS_PID=$$!; \
+	PORT=8085 $(MAKE) wait-for-service; \
+	echo ""; \
+	echo "6.Starting UI (Frontend)..."; \
 	PORT=5173 $(MAKE) check-port; \
 	cd ui && npm run dev & \
 	UI_PID=$$!; \
@@ -117,6 +125,7 @@ dev:
 	echo "   • Sentience: http://localhost:8082"; \
 	echo "   • LLM: http://localhost:8083"; \
 	echo "   • Ego: http://localhost:8084"; \
+	echo "   • Embeddings: http://localhost:8085"; \
 	echo ""; \
 	wait
 
@@ -214,6 +223,7 @@ stop:
 	@lsof -ti:8082 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 	@echo "Force killing remaining processes..."
 	@pkill -9 -f "go run main.go" || true
@@ -269,7 +279,8 @@ help:
 	@echo "  2. Sentience (Memory + Agent) - Port 8082"
 	@echo "  3. ML Service (Whisper + CLIP) + LLM Service (Ollama) - Ports 8081, 8083 (parallel)"
 	@echo "  4. Ego Service (AI Reflection) - Port 8084"
-	@echo "  5. UI (Frontend) - Port 5173"
+	@echo "  5. Embeddings Service (Real CLIP Embeddings) - Port 8085"
+	@echo "  6. UI (Frontend) - Port 5173"
 	@echo ""
 	@echo "Startup modes:"
 	@echo "  dev    - Full functionality (all services, ~15-20 seconds)"
