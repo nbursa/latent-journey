@@ -17,7 +17,7 @@ export default function LatentInsight({
         {selectedMemoryEvent ? (
           <div className="space-y-2">
             <div className="text-sm font-semibold text-purple-300 mb-2">
-              Memory Event
+              Last Memory Event
             </div>
             <div className="text-xs text-gray-400 mb-3">
               Embedding: {selectedMemoryEvent.embedding_id}

@@ -13,7 +13,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting Ego service on port {}", config.port);
 
     // Initialize memory store and load existing thoughts data
-    let mut memory_store = MemoryStore::new_with_path("data/memory.jsonl".to_string());
+    let mut memory_store = MemoryStore::new_with_path("data/stm.jsonl".to_string());
 
     // Load existing thoughts from ego-rs STM file
     if let Err(e) = memory_store.load_ltm_from_jsonl() {

@@ -6,14 +6,14 @@ use std::io::{BufRead, BufReader, Write};
 
 pub struct MemoryStore {
     memories: HashMap<String, Memory>,
-    file_path: String, // Path to the memory.jsonl file
+    file_path: String,
 }
 
 impl MemoryStore {
     pub fn new() -> Self {
         Self {
             memories: HashMap::new(),
-            file_path: "data/memory.jsonl".to_string(), // STM file in ego-rs/data
+            file_path: "data/stm.jsonl".to_string(), // STM file in ego-rs/data
         }
     }
 
