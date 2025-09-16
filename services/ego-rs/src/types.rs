@@ -51,6 +51,35 @@ pub struct QualityMetrics {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Experience {
+    pub id: String,
+    pub title: String,
+    pub summary: String,
+    pub consolidated_from: Vec<String>, // IDs of STM thoughts that were consolidated
+    pub created_at: DateTime<Utc>,
+    pub consolidated_at: DateTime<Utc>,
+    pub themes: Vec<String>, // e.g., ["conversation", "introduction", "sustainability"]
+    pub emotional_tone: f32, // 0.0-1.0
+    pub importance: f32,     // 0.0-1.0
+    pub context_hash: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsolidationRequest {
+    pub force: Option<bool>,            // Force consolidation even if not needed
+    pub max_experiences: Option<usize>, // Limit number of experiences to create
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ConsolidationResult {
+    pub experiences_created: usize,
+    pub thoughts_consolidated: usize,
+    pub consolidation_time: DateTime<Utc>,
+    pub themes_identified: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReflectionRequest {
     pub memories: Vec<Memory>,
     pub user_query: Option<String>,

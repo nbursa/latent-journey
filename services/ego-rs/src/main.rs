@@ -1,4 +1,7 @@
-use ego_rs::{config::Config, handlers, memory::MemoryStore, reflection::ReflectionEngine};
+use ego_rs::{
+    config::Config, handlers, memory::MemoryStore, reflection::ReflectionEngine,
+    ConsolidationRequest, MemoryQuery,
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, Level};
@@ -16,8 +19,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut memory_store = MemoryStore::new_with_path("data/stm.jsonl".to_string());
 
     // Load existing thoughts from ego-rs STM file
-    if let Err(e) = memory_store.load_ltm_from_jsonl() {
+    if let Err(e) = memory_store.load_stm_from_jsonl() {
         tracing::info!("No existing thoughts data found, starting fresh: {}", e);
+    }
+
+    // Load existing experiences from ego-rs LTM file
+    if let Err(e) = memory_store.load_ltm_from_jsonl() {
+        tracing::info!("No existing experiences data found, starting fresh: {}", e);
     }
     let memory_store = Arc::new(RwLock::new(memory_store));
 
@@ -84,11 +92,60 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(handlers::clear_data),
     );
 
+    // LTM consolidation endpoints
+    let consolidate = warp::path("api").and(warp::path("ego")).and(
+        warp::path("consolidate")
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(with_memory_store(memory_store.clone()))
+            .and(with_reflection_engine(reflection_engine.clone()))
+            .and_then(
+                |request: ConsolidationRequest,
+                 memory_store: Arc<RwLock<MemoryStore>>,
+                 reflection_engine: Arc<ReflectionEngine>| {
+                    handlers::consolidate_stm_to_ltm(memory_store, reflection_engine, request)
+                },
+            ),
+    );
+
+    let ltm_experiences = warp::path("api").and(warp::path("ego")).and(
+        warp::path("experiences")
+            .and(warp::get())
+            .and(warp::query())
+            .and(with_memory_store(memory_store.clone()))
+            .and_then(
+                |query: MemoryQuery, memory_store: Arc<RwLock<MemoryStore>>| {
+                    handlers::get_ltm_experiences(memory_store, query)
+                },
+            ),
+    );
+
+    let ltm_experience = warp::path("api").and(warp::path("ego")).and(
+        warp::path("experiences")
+            .and(warp::path!(String))
+            .and(warp::get())
+            .and(with_memory_store(memory_store.clone()))
+            .and_then(|id: String, memory_store: Arc<RwLock<MemoryStore>>| {
+                handlers::get_ltm_experience(id, memory_store)
+            }),
+    );
+
+    let clear_ltm = warp::path("api").and(warp::path("ego")).and(
+        warp::path("clear-ltm")
+            .and(warp::post())
+            .and(with_memory_store(memory_store.clone()))
+            .and_then(handlers::clear_ltm_data),
+    );
+
     let routes = health
         .or(status)
         .or(reflect)
         .or(memories)
         .or(clear_data)
+        .or(consolidate)
+        .or(ltm_experiences)
+        .or(ltm_experience)
+        .or(clear_ltm)
         .with(
             warp::cors()
                 .allow_any_origin()

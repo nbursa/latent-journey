@@ -5,6 +5,7 @@ use reqwest::Client;
 use serde_json::json;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct ReflectionEngine {
     client: Client,
     ollama_url: String,
@@ -329,7 +330,7 @@ CONTEXT:
         )
     }
 
-    async fn call_ollama(&self, prompt: &str) -> Result<String> {
+    pub async fn call_ollama(&self, prompt: &str) -> Result<String> {
         let request_body = json!({
             "model": self.model,
             "prompt": prompt,

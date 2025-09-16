@@ -1,7 +1,11 @@
 use crate::{
+    consolidation::ConsolidationEngine,
     memory::{select_relevant_memories, MemoryStore},
     reflection::ReflectionEngine,
-    types::{ApiResponse, EgoThought, Memory, MemoryQuery},
+    types::{
+        ApiResponse, ConsolidationRequest, ConsolidationResult, EgoThought, Experience, Memory,
+        MemoryQuery,
+    },
 };
 use anyhow::Result;
 use chrono::Utc;
@@ -321,4 +325,156 @@ pub async fn status(
     });
 
     Ok(json(&status))
+}
+
+pub async fn consolidate_stm_to_ltm(
+    memory_store: Arc<RwLock<MemoryStore>>,
+    reflection_engine: Arc<ReflectionEngine>,
+    request: ConsolidationRequest,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    tracing::info!("Starting STM to LTM consolidation...");
+
+    let consolidation_engine = ConsolidationEngine::new_with_llm((*reflection_engine).clone());
+
+    // Get all memories from STM
+    let memories: Vec<Memory> = {
+        let store = memory_store.read().await;
+        store.get_all_memories().into_iter().cloned().collect()
+    };
+
+    if memories.is_empty() {
+        return Ok(json(&ApiResponse::<ConsolidationResult>::success(
+            ConsolidationResult {
+                experiences_created: 0,
+                thoughts_consolidated: 0,
+                consolidation_time: Utc::now(),
+                themes_identified: vec![],
+            },
+        )));
+    }
+
+    // Perform consolidation
+    let result = match consolidation_engine
+        .consolidate_thoughts(&memories, &request)
+        .await
+    {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::error!("Consolidation failed: {}", e);
+            return Ok(json(&ApiResponse::<ConsolidationResult>::error(format!(
+                "Consolidation failed: {}",
+                e
+            ))));
+        }
+    };
+
+    if result.experiences_created > 0 {
+        // Create experiences and add them to LTM
+        let groups = consolidation_engine.group_related_thoughts(&memories);
+        let mut experiences_added = 0;
+
+        for group in groups.iter().take(result.experiences_created) {
+            if group.len() < 2 {
+                continue;
+            }
+
+            match consolidation_engine
+                .create_experience_from_thoughts(
+                    group,
+                    "Summarize these related thoughts into a coherent experience.",
+                )
+                .await
+            {
+                Ok(experience) => {
+                    let mut store = memory_store.write().await;
+                    store.add_experience(experience);
+                    experiences_added += 1;
+                }
+                Err(e) => {
+                    tracing::error!("Failed to create experience: {}", e);
+                }
+            }
+        }
+
+        // Save LTM to file
+        {
+            let store = memory_store.read().await;
+            if let Err(e) = store.save_ltm_to_jsonl() {
+                tracing::error!("Failed to save LTM: {}", e);
+            }
+        }
+
+        tracing::info!(
+            "Consolidation completed: {} experiences created, {} thoughts consolidated",
+            experiences_added,
+            result.thoughts_consolidated
+        );
+    }
+
+    Ok(json(&ApiResponse::success(result)))
+}
+
+pub async fn get_ltm_experiences(
+    memory_store: Arc<RwLock<MemoryStore>>,
+    query: MemoryQuery,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    tracing::info!("Retrieving LTM experiences...");
+
+    let store = memory_store.read().await;
+    let mut experiences = store.get_experiences();
+
+    // Apply limit if specified
+    if let Some(limit) = query.limit {
+        experiences.truncate(limit);
+    }
+
+    // Sort by creation time (newest first)
+    experiences.sort_by(|a, b| b.created_at.cmp(&a.created_at));
+
+    tracing::info!("Retrieved {} experiences from LTM", experiences.len());
+    Ok(json(&ApiResponse::success(experiences)))
+}
+
+pub async fn get_ltm_experience(
+    id: String,
+    memory_store: Arc<RwLock<MemoryStore>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    tracing::info!("Retrieving LTM experience: {}", id);
+
+    let store = memory_store.read().await;
+
+    match store.get_experience(&id) {
+        Some(experience) => {
+            tracing::info!("Found experience: {}", experience.title);
+            Ok(json(&ApiResponse::success(experience)))
+        }
+        None => {
+            tracing::warn!("Experience not found: {}", id);
+            Ok(json(&ApiResponse::<&Experience>::error(
+                "Experience not found".to_string(),
+            )))
+        }
+    }
+}
+
+pub async fn clear_ltm_data(
+    memory_store: Arc<RwLock<MemoryStore>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    tracing::info!("Clearing all LTM data...");
+
+    let mut store = memory_store.write().await;
+
+    // Clear all experiences from the store
+    store.clear_all_experiences();
+
+    // Save the empty store to file
+    if let Err(e) = store.save_ltm_to_jsonl() {
+        tracing::error!("Failed to save empty LTM store: {}", e);
+        return Ok(json(&ApiResponse::<()>::error(
+            "Failed to clear LTM data".to_string(),
+        )));
+    }
+
+    tracing::info!("Successfully cleared all LTM data");
+    Ok(json(&ApiResponse::success(())))
 }

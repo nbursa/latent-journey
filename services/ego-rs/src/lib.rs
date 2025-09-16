@@ -1,4 +1,5 @@
 pub mod config;
+pub mod consolidation;
 pub mod handlers;
 pub mod memory;
 pub mod reflection;

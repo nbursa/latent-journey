@@ -1,4 +1,4 @@
-use crate::types::{Memory, Modality};
+use crate::types::{Experience, Memory, Modality};
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
@@ -6,21 +6,27 @@ use std::io::{BufRead, BufReader, Write};
 
 pub struct MemoryStore {
     memories: HashMap<String, Memory>,
+    experiences: HashMap<String, Experience>,
     file_path: String,
+    ltm_file_path: String,
 }
 
 impl MemoryStore {
     pub fn new() -> Self {
         Self {
             memories: HashMap::new(),
+            experiences: HashMap::new(),
             file_path: "data/stm.jsonl".to_string(), // STM file in ego-rs/data
+            ltm_file_path: "data/ltm.jsonl".to_string(), // LTM file in ego-rs/data
         }
     }
 
     pub fn new_with_path(file_path: String) -> Self {
         Self {
             memories: HashMap::new(),
+            experiences: HashMap::new(),
             file_path,
+            ltm_file_path: "data/ltm.jsonl".to_string(),
         }
     }
 
@@ -87,7 +93,7 @@ impl MemoryStore {
         Ok(())
     }
 
-    pub fn load_ltm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_stm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let file_path = self.file_path.clone();
         self.load_from_jsonl(&file_path)
     }
@@ -267,5 +273,69 @@ impl MemoryStore {
     pub fn clear_all_memories(&mut self) {
         self.memories.clear();
         tracing::info!("Cleared all memories from store");
+    }
+
+    // LTM (Long-Term Memory) Management Methods
+
+    pub fn get_ltm_file_path(&self) -> &str {
+        &self.ltm_file_path
+    }
+
+    pub fn load_ltm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        let file = File::open(&self.ltm_file_path)?;
+        let reader = BufReader::new(file);
+
+        for line in reader.lines() {
+            let line = line?;
+            if line.trim().is_empty() {
+                continue;
+            }
+
+            let experience: Experience = serde_json::from_str(&line)?;
+            self.experiences.insert(experience.id.clone(), experience);
+        }
+
+        tracing::info!(
+            "Loaded {} experiences from LTM file",
+            self.experiences.len()
+        );
+        Ok(())
+    }
+
+    pub fn save_ltm_to_jsonl(&self) -> Result<(), Box<dyn std::error::Error>> {
+        let mut file = OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&self.ltm_file_path)?;
+
+        for experience in self.experiences.values() {
+            let json = serde_json::to_string(experience)?;
+            writeln!(file, "{}", json)?;
+        }
+
+        tracing::info!("Saved {} experiences to LTM file", self.experiences.len());
+        Ok(())
+    }
+
+    pub fn add_experience(&mut self, experience: Experience) {
+        self.experiences.insert(experience.id.clone(), experience);
+    }
+
+    pub fn get_experiences(&self) -> Vec<&Experience> {
+        self.experiences.values().collect()
+    }
+
+    pub fn get_experience(&self, id: &str) -> Option<&Experience> {
+        self.experiences.get(id)
+    }
+
+    pub fn clear_all_experiences(&mut self) {
+        self.experiences.clear();
+        tracing::info!("Cleared all experiences from LTM store");
+    }
+
+    pub fn get_experience_count(&self) -> usize {
+        self.experiences.len()
     }
 }
