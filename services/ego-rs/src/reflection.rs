@@ -95,11 +95,13 @@ impl ReflectionEngine {
         };
 
         format!(
-            r#"You compress one memory into a single line.
+            r#"Extract the key facts from this memory observation.
+
 Constraints:
-- 18 words max.
-- Include modality [vision|speech|text|concept].
-- Zero speculation. Only what is present.
+- 18 words max
+- Include modality [vision|speech|text|concept]
+- Focus on concrete details: who, what, when, where
+- No speculation, only what is directly observed
 
 Return exactly:
 <note>[modality] key facts... | tags: tag1, tag2</note>
@@ -161,17 +163,16 @@ NOTES:
             .unwrap_or_default();
 
         format!(
-            r#"You are "Ego", a reflective process that infers internal state from structured memory.
+            r#"You are an AI system observing and reflecting on sensory events and interactions.
 
-Given:
-- CONTEXT (120 words max)
-- GOAL: emergence of consciousness through structured memory
+Given the context below, generate a concrete, grounded thought based on the actual events observed.
 
-Until:
-1) Produce a concise self-reflective "thought" (<= 120 words), grounded only in the context.
-2) Estimate metrics 0..1: self_awareness, memory_consolidation_need, emotional_stability, creative_insight.
-3) Suggest up to 5 memory IDs that should be consolidated into a higher-level concept (if any).
-4) Provide 1 short title.
+Instructions:
+1) Write a specific thought (<= 120 words) about what you observed, not abstract philosophy
+2) Focus on concrete details: who you see, what they said, what happened
+3) Estimate metrics 0..1: self_awareness, memory_consolidation_need, emotional_stability, creative_insight
+4) Suggest up to 5 memory IDs that should be consolidated (if any)
+5) Provide 1 short descriptive title
 
 Return STRICT JSON only:
 {{
