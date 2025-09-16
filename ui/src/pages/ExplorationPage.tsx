@@ -10,6 +10,7 @@ import LatentInsight from "../components/LatentInsight";
 import MemoryTimeline from "../components/MemoryTimeline";
 import ThoughtStream from "../components/ThoughtStream";
 import { Memory } from "../types/memory";
+import LTMExperiences from "../components/LTMExperiences";
 
 export default function ExplorationPage() {
   // Get data from Zustand store
@@ -174,18 +175,6 @@ export default function ExplorationPage() {
       {/* Second Column: Events */}
       <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
         <EventsList events={events} isProcessing={isProcessing} />
-        {/* <MemoryTimeline
-          memoryEvents={memoryEvents}
-          memoryFilter={memoryFilter}
-          selectedMemoryEvent={selectedMemoryEvent}
-          onSetMemoryFilter={setMemoryFilter}
-          onSelectMemoryEvent={setSelectedMemoryEvent}
-        /> */}
-      </div>
-
-      {/* Third Column: Memory */}
-      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
-        {/* <EventsList events={events} isProcessing={isProcessing} /> */}
         <MemoryTimeline
           memoryEvents={memoryEvents}
           memoryFilter={memoryFilter}
@@ -195,9 +184,23 @@ export default function ExplorationPage() {
         />
       </div>
 
+      {/* Third Column: Memory */}
+      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
+        {/* <EventsList events={events} isProcessing={isProcessing} /> */}
+        {/* <MemoryTimeline
+          memoryEvents={memoryEvents}
+          memoryFilter={memoryFilter}
+          selectedMemoryEvent={selectedMemoryEvent}
+          onSetMemoryFilter={setMemoryFilter}
+          onSelectMemoryEvent={setSelectedMemoryEvent}
+        /> */}
+        <ThoughtStream memories={memories} />
+      </div>
+
       {/* Right Column: Thought Stream Only */}
       <div className="flex-1 flex flex-col min-h-0 max-h-full">
-        <ThoughtStream memories={memories} />
+        {/* <ThoughtStream memories={memories} /> */}
+        <LTMExperiences />
       </div>
     </div>
   );
