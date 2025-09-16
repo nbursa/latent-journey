@@ -31,6 +31,18 @@ impl MemoryStore {
     }
 
     pub fn load_from_jsonl(&mut self, file_path: &str) -> Result<(), Box<dyn std::error::Error>> {
+        // Check if file exists, if not, create empty file
+        if !std::path::Path::new(file_path).exists() {
+            tracing::info!("File {} does not exist, creating empty file", file_path);
+            // Create parent directories if they don't exist
+            if let Some(parent) = std::path::Path::new(file_path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            // Create empty file
+            std::fs::write(file_path, "")?;
+            return Ok(());
+        }
+
         let file = File::open(file_path)?;
         let reader = BufReader::new(file);
 
@@ -99,6 +111,11 @@ impl MemoryStore {
     }
 
     pub fn save_to_jsonl(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Ensure parent directory exists
+        if let Some(parent) = std::path::Path::new(&self.file_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)
@@ -282,6 +299,21 @@ impl MemoryStore {
     }
 
     pub fn load_ltm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+        // Check if file exists, if not, create empty file
+        if !std::path::Path::new(&self.ltm_file_path).exists() {
+            tracing::info!(
+                "LTM file {} does not exist, creating empty file",
+                self.ltm_file_path
+            );
+            // Create parent directories if they don't exist
+            if let Some(parent) = std::path::Path::new(&self.ltm_file_path).parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            // Create empty file
+            std::fs::write(&self.ltm_file_path, "")?;
+            return Ok(());
+        }
+
         let file = File::open(&self.ltm_file_path)?;
         let reader = BufReader::new(file);
 
@@ -303,6 +335,11 @@ impl MemoryStore {
     }
 
     pub fn save_ltm_to_jsonl(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // Ensure parent directory exists
+        if let Some(parent) = std::path::Path::new(&self.ltm_file_path).parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+
         let mut file = OpenOptions::new()
             .create(true)
             .write(true)

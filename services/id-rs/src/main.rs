@@ -127,6 +127,18 @@ fn add_to_memory(event: MemoryEvent) {
 }
 
 fn load_memory_from_file() {
+    // Check if file exists, if not, create empty file
+    if !std::path::Path::new("data/events.jsonl").exists() {
+        println!("Events file does not exist, creating empty file");
+        // Create parent directories if they don't exist
+        if let Some(parent) = std::path::Path::new("data/events.jsonl").parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        // Create empty file
+        let _ = std::fs::write("data/events.jsonl", "");
+        return;
+    }
+
     if let Ok(content) = std::fs::read_to_string("data/events.jsonl") {
         if let Ok(mut memory) = MEMORY_STORE.lock() {
             for line in content.lines() {

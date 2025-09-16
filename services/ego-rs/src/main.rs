@@ -15,6 +15,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let config = Config::default();
     info!("Starting Ego service on port {}", config.port);
 
+    // Create data directory if it doesn't exist
+    if let Err(e) = std::fs::create_dir_all("data") {
+        tracing::error!("Failed to create data directory: {}", e);
+    } else {
+        tracing::info!("Ensured data directory exists");
+    }
+
     // Initialize memory store and load existing thoughts data
     let mut memory_store = MemoryStore::new_with_path("data/stm.jsonl".to_string());
 
