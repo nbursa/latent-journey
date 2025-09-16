@@ -515,4 +515,11 @@ def reduce_dimensions():
 if __name__ == "__main__":
     print("ML service starting on :8081")
     print("I am ML service")
+
+    # Disable Flask request logging
+    import logging
+
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
+
     app.run(host="0.0.0.0", port=8081, debug=False)

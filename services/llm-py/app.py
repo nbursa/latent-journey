@@ -540,4 +540,10 @@ if __name__ == "__main__":
     print(f"Model: {OLLAMA_MODEL if LLM_PROVIDER == 'ollama' else 'unknown'}")
     print(f"Port: 8083")
 
+    # Disable Flask request logging
+    import logging
+
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
+
     app.run(host="0.0.0.0", port=8083, debug=False)

@@ -694,7 +694,7 @@ func startServiceStatusMonitor() {
 				}
 
 				statusBytes, _ := json.Marshal(statusEvent)
-				fmt.Printf("Broadcasting status: %s = %s\n", serviceName, statusEvent["status"])
+				// fmt.Printf("Broadcasting status: %s = %s\n", serviceName, statusEvent["status"])
 				hub.Broadcast(string(statusBytes))
 			}(service, port)
 		}
