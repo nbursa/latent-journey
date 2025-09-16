@@ -117,7 +117,7 @@ fn add_to_memory(event: MemoryEvent) {
         if let Ok(mut file) = std::fs::OpenOptions::new()
             .create(true)
             .append(true)
-            .open("data/memory.jsonl")
+            .open("data/events.jsonl")
         {
             if let Ok(json) = serde_json::to_string(&event) {
                 let _ = writeln!(file, "{}", json);
@@ -127,7 +127,7 @@ fn add_to_memory(event: MemoryEvent) {
 }
 
 fn load_memory_from_file() {
-    if let Ok(content) = std::fs::read_to_string("data/memory.jsonl") {
+    if let Ok(content) = std::fs::read_to_string("data/events.jsonl") {
         if let Ok(mut memory) = MEMORY_STORE.lock() {
             for line in content.lines() {
                 if let Ok(event) = serde_json::from_str::<MemoryEvent>(line) {
@@ -151,7 +151,7 @@ async fn main() {
 
     // Load memory from file
     load_memory_from_file();
-    println!("Loaded memory from data/memory.jsonl");
+    println!("Loaded events from data/events.jsonl");
 
     // Load the Sentience agent from file
     let agent_code = match fs::read_to_string("agent.sentience") {
@@ -709,11 +709,11 @@ agent MultiModalAnalyzer {
             }
             
             // Clear the memory file
-            if let Err(e) = fs::write("data/memory.jsonl", "") {
-                eprintln!("Failed to clear memory file: {}", e);
+            if let Err(e) = fs::write("data/events.jsonl", "") {
+                eprintln!("Failed to clear events file: {}", e);
                 return warp::reply::json(&serde_json::json!({
                     "success": false,
-                    "error": format!("Failed to clear memory file: {}", e)
+                    "error": format!("Failed to clear events file: {}", e)
                 }));
             }
             
