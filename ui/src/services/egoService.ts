@@ -164,6 +164,22 @@ export class EgoService {
       throw error;
     }
   }
+
+  async startGeneration(): Promise<void> {
+    try {
+      await fetch("/api/ai/generation/start", { method: "POST" });
+    } catch (error) {
+      console.error("Failed to start AI generation signal:", error);
+    }
+  }
+
+  async stopGeneration(): Promise<void> {
+    try {
+      await fetch("/api/ai/generation/stop", { method: "POST" });
+    } catch (error) {
+      console.error("Failed to stop AI generation signal:", error);
+    }
+  }
 }
 
 export const egoService = new EgoService();

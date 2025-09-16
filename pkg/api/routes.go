@@ -11,6 +11,9 @@ import (
 
 var hub = NewSSEHub()
 
+// Global flag to pause status monitoring during AI generation
+var isAIGenerating = false
+
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/events", hub)
 	mux.HandleFunc("/api/vision/frame", postVisionFrame)
@@ -27,6 +30,10 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ego/consolidate", postEgoConsolidate)
 	mux.HandleFunc("/api/ego/memories", getEgoMemories)
 	mux.HandleFunc("/api/ego/status", getEgoStatus)
+
+	// AI generation control routes
+	mux.HandleFunc("/api/ai/generation/start", postAIGenerationStart)
+	mux.HandleFunc("/api/ai/generation/stop", postAIGenerationStop)
 
 	// Embeddings service routes
 	mux.HandleFunc("/api/embeddings/add", postAddEmbedding)
@@ -666,6 +673,13 @@ func startServiceStatusMonitor() {
 	client := &http.Client{Timeout: 500 * time.Millisecond} // Ultra-fast timeout
 
 	for {
+		// Skip status checking if AI is generating
+		if isAIGenerating {
+			fmt.Println("Skipping status check - AI is generating")
+			time.Sleep(10 * time.Second) // Wait longer during generation
+			continue
+		}
+
 		for service, port := range servicePorts {
 			go func(serviceName string, servicePort int) {
 				// Check service health
@@ -728,4 +742,19 @@ func checkServiceHealth(client *http.Client, port int, serviceName string) bool 
 	}
 
 	return true
+}
+
+// AI generation control handlers
+func postAIGenerationStart(w http.ResponseWriter, r *http.Request) {
+	isAIGenerating = true
+	fmt.Println("AI generation started - pausing status checks")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "AI generation started"}`))
+}
+
+func postAIGenerationStop(w http.ResponseWriter, r *http.Request) {
+	isAIGenerating = false
+	fmt.Println("AI generation stopped - resuming status checks")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "AI generation stopped"}`))
 }

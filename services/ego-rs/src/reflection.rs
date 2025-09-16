@@ -17,7 +17,7 @@ impl ReflectionEngine {
             .timeout(std::time::Duration::from_secs(120)) // 120 seconds timeout
             .build()
             .unwrap_or_else(|_| Client::new());
-        
+
         Self {
             client,
             ollama_url,
@@ -32,35 +32,35 @@ impl ReflectionEngine {
     ) -> Result<EgoThought> {
         // Step 1: Map memories to notes
         let notes = self.map_memories_to_notes(memories).await?;
-        
+
         // Step 2: Reduce notes to context
         let context = self.reduce_notes_to_context(&notes).await?;
-        
+
         // Step 3: Generate reflection
         let thought = self.generate_reflection(&context, user_query).await?;
-        
+
         Ok(thought)
     }
 
     async fn map_memories_to_notes(&self, memories: &[&Memory]) -> Result<Vec<MemoryNote>> {
         let mut notes = Vec::new();
-        
+
         for memory in memories {
             let prompt = self.create_map_prompt(memory);
             let response = self.call_ollama(&prompt).await?;
-            
+
             if let Some(note) = self.parse_memory_note(&response, &memory.id) {
                 notes.push(note);
             }
         }
-        
+
         Ok(notes)
     }
 
     async fn reduce_notes_to_context(&self, notes: &[MemoryNote]) -> Result<ContextSummary> {
         let prompt = self.create_reduce_prompt(notes);
         let response = self.call_ollama(&prompt).await?;
-        
+
         Ok(self.parse_context_summary(&response, notes.len()))
     }
 
@@ -71,9 +71,9 @@ impl ReflectionEngine {
     ) -> Result<EgoThought> {
         let prompt = self.create_reflection_prompt(context, user_query);
         let response = self.call_ollama(&prompt).await?;
-        
+
         let thought_data = self.parse_reflection_response(&response)?;
-        
+
         Ok(EgoThought {
             id: Uuid::new_v4().to_string(),
             title: thought_data.title,
@@ -151,7 +151,11 @@ NOTES:
         )
     }
 
-    fn create_reflection_prompt(&self, context: &ContextSummary, user_query: Option<&str>) -> String {
+    fn create_reflection_prompt(
+        &self,
+        context: &ContextSummary,
+        user_query: Option<&str>,
+    ) -> String {
         let query_context = user_query
             .map(|q| format!("\n\nUSER QUERY: {}", q))
             .unwrap_or_default();
@@ -215,7 +219,7 @@ CONTEXT:
 
         let text = response.text().await?;
         let lines: Vec<&str> = text.trim().split('\n').collect();
-        
+
         let mut result = String::new();
         for line in lines {
             if let Ok(json) = serde_json::from_str::<serde_json::Value>(line) {
@@ -229,9 +233,10 @@ CONTEXT:
     }
 
     fn parse_memory_note(&self, response: &str, memory_id: &str) -> Option<MemoryNote> {
-        let regex = regex::Regex::new(r"<note>\[([^\]]+)\]\s*(.+?)\s*\|\s*tags:\s*(.+?)</note>").ok()?;
+        let regex =
+            regex::Regex::new(r"<note>\[([^\]]+)\]\s*(.+?)\s*\|\s*tags:\s*(.+?)</note>").ok()?;
         let captures = regex.captures(response)?;
-        
+
         let modality = match captures.get(1)?.as_str() {
             "vision" => crate::types::Modality::Vision,
             "speech" => crate::types::Modality::Speech,
@@ -276,14 +281,14 @@ CONTEXT:
         // Extract JSON from response
         let start = response.find('{');
         let end = response.rfind('}');
-        
+
         let json_str = match (start, end) {
             (Some(start), Some(end)) => &response[start..=end],
             _ => anyhow::bail!("No JSON found in response"),
         };
 
         let parsed: ReflectionResponse = serde_json::from_str(json_str)?;
-        
+
         // Validate the response
         if parsed.title.is_empty() || parsed.thought.is_empty() {
             anyhow::bail!("Invalid reflection response: missing title or thought");
@@ -299,22 +304,23 @@ CONTEXT:
     fn generate_context_hash(&self, context: &ContextSummary) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
-        
+
         let mut hasher = DefaultHasher::new();
         context.summary.hash(&mut hasher);
         context.memory_count.hash(&mut hasher);
         self.model.hash(&mut hasher);
-        
+
         format!("{:x}", hasher.finish())
     }
 
     pub async fn check_ollama_health(&self) -> Result<bool> {
-        let response = self.client
+        let response = self
+            .client
             .get(&format!("{}/api/tags", self.ollama_url))
             .timeout(std::time::Duration::from_secs(5))
             .send()
             .await;
-        
+
         match response {
             Ok(resp) => Ok(resp.status().is_success()),
             Err(_) => Ok(false),

@@ -80,6 +80,9 @@ export function useEgo({
       setError(null);
 
       try {
+        // Signal gateway to pause status checks
+        await egoService.startGeneration();
+
         const thought = await egoService.reflect(memories, userQuery);
 
         if (thought) {
@@ -94,6 +97,8 @@ export function useEgo({
         setError(`Reflection generation failed: ${errorMessage}`);
         console.error("Reflection generation error:", err);
       } finally {
+        // Signal gateway to resume status checks
+        await egoService.stopGeneration();
         setIsGenerating(false);
       }
     },
