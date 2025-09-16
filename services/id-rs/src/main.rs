@@ -201,7 +201,7 @@ agent MultiModalAnalyzer {
     let ping = warp::path("ping").and(warp::get()).map(|| {
         warp::reply::json(&serde_json::json!({
             "message": "I am Sentience service",
-            "service": "sentience-rs",
+            "service": "id-rs",
             "status": "running"
         }))
     });
@@ -214,7 +214,7 @@ agent MultiModalAnalyzer {
             .as_secs();
         warp::reply::json(&serde_json::json!({
             "status": "healthy",
-            "service": "sentience-rs",
+            "service": "id-rs",
             "timestamp": timestamp
         }))
     });

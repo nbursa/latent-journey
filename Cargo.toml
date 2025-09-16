@@ -1,5 +1,5 @@
 [workspace]
-members = ["services/sentience-rs", "services/ego-rs", "services/embeddings-rs"]
+members = ["services/id-rs", "services/ego-rs", "services/embeddings-rs"]
 resolver = "2"
 
 [workspace.dependencies]

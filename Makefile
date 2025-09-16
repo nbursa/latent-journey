@@ -32,7 +32,7 @@ dev:
 	@pkill -f "cargo run" || true
 	@pkill -f "vite" || true
 	@pkill -f "gateway" || true
-	@pkill -f "sentience-rs" || true
+	@pkill -f "id-rs" || true
 	@pkill -f "ml-py" || true
 	@pkill -f "llm-py" || true
 	@pkill -f "ego-rs" || true
@@ -52,14 +52,14 @@ dev:
 	@pkill -9 -f "cargo run" || true
 	@pkill -9 -f "vite" || true
 	@pkill -9 -f "gateway" || true
-	@pkill -9 -f "sentience-rs" || true
+	@pkill -9 -f "id-rs" || true
 	@pkill -9 -f "ml-py" || true
 	@pkill -9 -f "llm-py" || true
 	@sleep 2
 	@echo "Starting all services..."
 	@echo "Gateway: http://localhost:8080"
 	@echo "ML Service: http://localhost:8081"
-	@echo "Sentience Service: http://localhost:8082"
+	@echo "ID Service: http://localhost:8082"
 	@echo "LLM Service: http://localhost:8083"
 	@echo "Ego Service: http://localhost:8084"
 	@echo "Embeddings Service: http://localhost:8085"
@@ -72,7 +72,7 @@ dev:
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@echo ""
-	@trap 'echo "Stopping all services..."; pkill -f "go run main.go"; pkill -f "python app.py"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "sentience-rs"; pkill -f "ml-py"; pkill -f "llm-py"; pkill -f "ego-rs"; pkill -f "embeddings-rs"; echo "Killing processes on ports..."; lsof -ti:8080 | xargs kill -9 2>/dev/null || true; lsof -ti:8081 | xargs kill -9 2>/dev/null || true; lsof -ti:8082 | xargs kill -9 2>/dev/null || true; lsof -ti:8083 | xargs kill -9 2>/dev/null || true; lsof -ti:8084 | xargs kill -9 2>/dev/null || true; lsof -ti:8085 | xargs kill -9 2>/dev/null || true; lsof -ti:5173 | xargs kill -9 2>/dev/null || true; exit 0' INT; \
+	@trap 'echo "Stopping all services..."; pkill -f "go run main.go"; pkill -f "python app.py"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ml-py"; pkill -f "llm-py"; pkill -f "ego-rs"; pkill -f "embeddings-rs"; echo "Killing processes on ports..."; lsof -ti:8080 | xargs kill -9 2>/dev/null || true; lsof -ti:8081 | xargs kill -9 2>/dev/null || true; lsof -ti:8082 | xargs kill -9 2>/dev/null || true; lsof -ti:8083 | xargs kill -9 2>/dev/null || true; lsof -ti:8084 | xargs kill -9 2>/dev/null || true; lsof -ti:8085 | xargs kill -9 2>/dev/null || true; lsof -ti:5173 | xargs kill -9 2>/dev/null || true; exit 0' INT; \
 	echo "Starting services in optimized order..."; \
 	echo ""; \
 	echo "1.Starting Gateway (API Router)..."; \
@@ -81,10 +81,10 @@ dev:
 	GATEWAY_PID=$$!; \
 	PORT=8080 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "2.Starting Sentience (Memory + Agent)..."; \
+	echo "2.Starting ID (Memory + Agent)..."; \
 	PORT=8082 $(MAKE) check-port; \
-	cd services/sentience-rs && cargo run & \
-	SENTIENCE_PID=$$!; \
+	cd services/id-rs && cargo run & \
+	ID_PID=$$!; \
 	PORT=8082 $(MAKE) wait-for-service; \
 	echo ""; \
 	echo "3.Starting ML Service (Whisper + CLIP) and LLM Service (Ollama Interface) in parallel..."; \
@@ -122,7 +122,7 @@ dev:
 	echo "   • UI: http://localhost:5173"; \
 	echo "   • Gateway: http://localhost:8080"; \
 	echo "   • ML: http://localhost:8081"; \
-	echo "   • Sentience: http://localhost:8082"; \
+	echo "   • ID: http://localhost:8082"; \
 	echo "   • LLM: http://localhost:8083"; \
 	echo "   • Ego: http://localhost:8084"; \
 	echo "   • Embeddings: http://localhost:8085"; \
@@ -132,15 +132,15 @@ dev:
 # Quick start - minimal services for development
 quick:
 	@echo "Quick start - essential services only..."
-	@echo "Starting Gateway + Sentience + Ego + UI..."
-	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "sentience-rs"; pkill -f "ego-rs"; exit 0' INT; \
+	@echo "Starting Gateway + ID + Ego + UI..."
+	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ego-rs"; exit 0' INT; \
 	echo "1.Gateway..."; \
 	PORT=8080 $(MAKE) check-port; \
 	cd cmd/gateway && go run main.go & \
 	PORT=8080 $(MAKE) wait-for-service; \
-	echo "2.Sentience..."; \
+	echo "2.ID..."; \
 	PORT=8082 $(MAKE) check-port; \
-	cd services/sentience-rs && cargo run & \
+	cd services/id-rs && cargo run & \
 	PORT=8082 $(MAKE) wait-for-service; \
 	echo "3.Ego..."; \
 	PORT=8084 $(MAKE) check-port; \
@@ -155,15 +155,15 @@ quick:
 # Fast start - no ML services (for UI development)
 fast:
 	@echo "Fast start - UI development mode..."
-	@echo "Starting Gateway + Sentience + Ego + UI (no ML/LLM)..."
-	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "sentience-rs"; pkill -f "ego-rs"; exit 0' INT; \
+	@echo "Starting Gateway + ID + Ego + UI (no ML/LLM)..."
+	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ego-rs"; exit 0' INT; \
 	echo "1.Gateway..."; \
 	PORT=8080 $(MAKE) check-port; \
 	cd cmd/gateway && go run main.go & \
 	PORT=8080 $(MAKE) wait-for-service; \
-	echo "2.Sentience..."; \
+	echo "2.ID..."; \
 	PORT=8082 $(MAKE) check-port; \
-	cd services/sentience-rs && cargo run & \
+	cd services/id-rs && cargo run & \
 	PORT=8082 $(MAKE) wait-for-service; \
 	echo "3.Ego..."; \
 	PORT=8084 $(MAKE) check-port; \
@@ -180,8 +180,8 @@ fast:
 build:
 	@echo "Building Gateway..."
 	@cd cmd/gateway && go build -o ../../bin/gateway main.go
-	@echo "Building Sentience service..."
-	@cd services/sentience-rs && cargo build --release
+	@echo "Building ID service..."
+	@cd services/id-rs && cargo build --release
 	@echo "Building Ego service..."
 	@cd services/ego-rs && cargo build --release
 	@echo "Building UI..."
@@ -195,7 +195,7 @@ install:
 	@cd services/ml-py && pip install -r requirements.txt
 	@cd services/llm-py && pip install -r requirements.txt
 	@echo "Installing Rust dependencies..."
-	@cd services/sentience-rs && cargo build
+	@cd services/id-rs && cargo build
 	@cd services/ego-rs && cargo build
 	@echo "Installing Node.js dependencies..."
 	@cd ui && npm install
@@ -213,7 +213,7 @@ stop:
 	@pkill -f "cargo run" || true
 	@pkill -f "vite" || true
 	@pkill -f "gateway" || true
-	@pkill -f "sentience-rs" || true
+	@pkill -f "id-rs" || true
 	@pkill -f "ml-py" || true
 	@pkill -f "llm-py" || true
 	@pkill -f "ego-rs" || true
@@ -231,7 +231,7 @@ stop:
 	@pkill -9 -f "cargo run" || true
 	@pkill -9 -f "vite" || true
 	@pkill -9 -f "gateway" || true
-	@pkill -9 -f "sentience-rs" || true
+	@pkill -9 -f "id-rs" || true
 	@pkill -9 -f "ml-py" || true
 	@pkill -9 -f "llm-py" || true
 	@echo "All services stopped"
@@ -246,7 +246,7 @@ restart: stop
 clean:
 	@echo "Cleaning build artifacts..."
 	@rm -rf bin/
-	@cd services/sentience-rs && cargo clean
+	@cd services/id-rs && cargo clean
 	@cd ui && rm -rf dist/ node_modules/
 
 # Test all services
@@ -255,8 +255,8 @@ test:
 	@curl -s http://localhost:8080/ping || echo "Gateway not running"
 	@echo "Testing ML Service..."
 	@curl -s http://localhost:8081/ping || echo "ML Service not running"
-	@echo "Testing Sentience Service..."
-	@curl -s http://localhost:8082/ping || echo "Sentience Service not running"
+	@echo "Testing ID Service..."
+	@curl -s http://localhost:8082/ping || echo "ID Service not running"
 	@echo "Testing LLM Service..."
 	@curl -s http://localhost:8083/health || echo "LLM Service not running"
 
@@ -264,7 +264,7 @@ test:
 help:
 	@echo "Available commands:"
 	@echo "  dev          - Start all services with health checks (recommended)"
-	@echo "  quick        - Start essential services only (Gateway + Sentience + Ego + UI)"
+	@echo "  quick        - Start essential services only (Gateway + ID + Ego + UI)"
 	@echo "  fast         - Start UI development mode (no ML/LLM services)"
 	@echo "  stop         - Stop all running services"
 	@echo "  restart      - Clean stop and restart all services"
@@ -276,7 +276,7 @@ help:
 	@echo ""
 	@echo "Service startup order (dev):"
 	@echo "  1. Gateway (API Router) - Port 8080"
-	@echo "  2. Sentience (Memory + Agent) - Port 8082"
+	@echo "  2. ID (Memory + Agent) - Port 8082"
 	@echo "  3. ML Service (Whisper + CLIP) + LLM Service (Ollama) - Ports 8081, 8083 (parallel)"
 	@echo "  4. Ego Service (AI Reflection) - Port 8084"
 	@echo "  5. Embeddings Service (Real CLIP Embeddings) - Port 8085"
