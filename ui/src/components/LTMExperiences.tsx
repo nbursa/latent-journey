@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { RefreshCw, Trash2, Layers, Clock, Sparkles } from "lucide-react";
+import { RefreshCw, Trash2, Layers, Sparkles, AlertCircle } from "lucide-react";
+import { useEgo } from "../hooks/useEgo";
 
 interface Experience {
   id: string;
@@ -19,8 +20,13 @@ export default function LTMExperiences() {
   const [experiences, setExperiences] = useState<Experience[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [selectedExperience, setSelectedExperience] =
-    useState<Experience | null>(null);
+
+  // Use the ego service to get Ollama status
+  const { isEgoAvailable, ollamaAvailable, ollamaStatus } = useEgo({
+    memories: [],
+    autoGenerate: false,
+    intervalMs: 30000,
+  });
 
   const loadExperiences = async () => {
     setLoading(true);
@@ -101,7 +107,6 @@ export default function LTMExperiences() {
       const data = await response.json();
       if (data.success) {
         setExperiences([]);
-        setSelectedExperience(null);
       } else {
         throw new Error(data.error || "Failed to clear experiences");
       }
@@ -127,135 +132,205 @@ export default function LTMExperiences() {
     }
   };
 
-  const getEmotionalToneColor = (tone: number) => {
-    if (tone < 0.3) return "text-red-300";
-    if (tone < 0.7) return "text-yellow-300";
-    return "text-green-300";
-  };
-
-  const getImportanceColor = (importance: number) => {
-    if (importance < 0.3) return "bg-gray-500/20 text-gray-300";
-    if (importance < 0.7) return "bg-yellow-500/20 text-yellow-300";
-    return "bg-green-500/20 text-green-300";
-  };
-
   return (
-    <div className="flex-1 flex flex-col min-h-0 max-h-full">
-      <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold text-ui-text flex items-center gap-2">
           <Layers className="w-5 h-5" />
           Experiences
         </h2>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          {!isEgoAvailable && (
+            <div title="Ego service not available">
+              <AlertCircle className="w-4 h-4 text-red-400" />
+            </div>
+          )}
+
+          {/* Consolidate button */}
           <button
             onClick={consolidateMemories}
-            disabled={loading}
-            className="px-3 py-1 text-xs btn-primary flex items-center gap-1"
+            disabled={loading || !isEgoAvailable || !ollamaAvailable}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
+            title={
+              !isEgoAvailable
+                ? "Ego service not available"
+                : !ollamaAvailable
+                ? "Ollama not available - needed for AI consolidation"
+                : "Consolidate thoughts into experiences"
+            }
           >
             <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
-            {loading ? "Consolidating..." : "Consolidate"}
+            Consolidate
           </button>
+
           <button
             onClick={clearExperiences}
-            disabled={loading}
-            className="px-3 py-1 text-xs btn-primary flex items-center gap-1"
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
+            title="Clear all experiences"
           >
             <Trash2 className="w-3 h-3" />
             Clear
           </button>
         </div>
       </div>
-      <div className="text-xs text-gray-400 mb-3">
-        {experiences.length} experience{experiences.length !== 1 ? "s" : ""}{" "}
-        stored
-      </div>
 
-      {/* Error Message */}
-      {error && (
-        <div className="flex-shrink-0 mb-3 p-3 bg-red-500/10 border border-red-500/20 rounded">
-          <div className="text-sm text-red-300">{error}</div>
-          <button
-            onClick={loadExperiences}
-            className="mt-2 text-xs text-red-400 underline hover:no-underline"
-          >
-            Retry
-          </button>
-        </div>
-      )}
-
-      {/* Content */}
-      <div className="glass flat p-3 flex-1 overflow-y-auto min-h-0 max-h-full">
-        {loading && experiences.length === 0 ? (
-          <div className="text-gray-400 text-sm text-center py-4">
-            Loading experiences...
-          </div>
-        ) : experiences.length === 0 ? (
-          <div className="text-gray-400 text-sm text-center py-4">
-            No experiences yet. Click "Consolidate" to create experiences from
-            thoughts.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {experiences.map((experience) => (
-              <div
-                key={experience.id}
-                onClick={() => setSelectedExperience(experience)}
-                className={`border-b border-white/10 pb-3 last:border-b-0 cursor-pointer hover:bg-white/5 p-2 rounded ${
-                  selectedExperience?.id === experience.id
-                    ? "bg-blue-500/10 border border-blue-500/30"
-                    : ""
-                }`}
-              >
-                <div className="flex items-start justify-between mb-2">
-                  <div className="flex-1 min-w-0">
-                    <h4 className="text-sm font-semibold text-blue-300 truncate">
-                      {experience.title}
-                    </h4>
-                    <p className="text-xs text-gray-400 mt-1 line-clamp-2">
-                      {experience.summary}
-                    </p>
-                    <div className="flex items-center gap-2 mt-2">
-                      <span
-                        className={`text-xs ${getEmotionalToneColor(
-                          experience.emotional_tone
-                        )}`}
-                      >
-                        Tone: {(experience.emotional_tone * 100).toFixed(0)}%
-                      </span>
-                      <div
-                        className={`text-xs px-2 py-1 rounded ${getImportanceColor(
-                          experience.importance
-                        )}`}
-                      >
-                        {(experience.importance * 100).toFixed(0)}% important
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-xs text-gray-400 flex items-center gap-1 ml-2">
-                    <Clock className="w-3 h-3" />
-                    {formatDate(experience.consolidated_at)}
-                  </div>
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  {experience.themes.slice(0, 3).map((theme, index) => (
-                    <span
-                      key={index}
-                      className="text-xs px-2 py-1 bg-green-500/20 text-green-300 rounded flex items-center gap-1"
-                    >
-                      <Sparkles className="w-3 h-3" />
-                      {theme}
-                    </span>
-                  ))}
-                  {experience.themes.length > 3 && (
-                    <span className="text-xs text-gray-500">
-                      +{experience.themes.length - 3} more
-                    </span>
-                  )}
-                </div>
-              </div>
-            ))}
+      {/* Main content */}
+      <div className="flex-1 glass flat p-3 flex flex-col overflow-hidden">
+        {/* Error message */}
+        {error && (
+          <div className="mb-3 p-2 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+            {error}
           </div>
         )}
+
+        {/* Ollama Status */}
+        {!ollamaAvailable && ollamaStatus && (
+          <div className="mb-3 p-3 bg-yellow-500/20 text-yellow-300 text-sm">
+            <div className="font-semibold mb-2 flex items-center gap-2">
+              <AlertCircle className="w-4 h-4" />
+              Ollama Not Available
+            </div>
+            <div className="space-y-2 text-xs">
+              <p>
+                To enable AI experience consolidation, you need to install and
+                run Ollama:
+              </p>
+              <div className="bg-black/20 p-2 rounded font-mono text-xs">
+                <div>
+                  <strong>Install:</strong>
+                </div>
+                <div>
+                  • macOS: <code>brew install ollama</code>
+                </div>
+                <div>
+                  • Linux:{" "}
+                  <code>curl -fsSL https://ollama.ai/install.sh | sh</code>
+                </div>
+                <div>• Windows: Download from https://ollama.ai/download</div>
+                <div className="mt-2">
+                  <strong>Run:</strong>
+                </div>
+                <div>
+                  • <code>ollama serve</code>
+                </div>
+                <div className="mt-2">
+                  <strong>Pull Model:</strong>
+                </div>
+                <div>
+                  •{" "}
+                  <code>
+                    ollama pull{" "}
+                    {ollamaStatus.ollama?.model || "llama3.1:8b-instruct"}
+                  </code>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Experiences List */}
+        <div className="flex-1 min-h-0 overflow-hidden">
+          <div className="h-full overflow-y-auto scrollbar-thin">
+            <div className="space-y-2 p-1">
+              {loading && experiences.length === 0 ? (
+                <div className="text-center text-ui-muted py-8">
+                  <div className="flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading experiences...</span>
+                  </div>
+                </div>
+              ) : experiences.length === 0 ? (
+                <div className="text-center text-ui-muted py-8">
+                  <div className="text-sm">
+                    No experiences yet. Click "Consolidate" to create
+                    experiences from thoughts.
+                  </div>
+                </div>
+              ) : (
+                experiences.map((experience) => (
+                  <div
+                    key={experience.id}
+                    className="p-2 bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
+                  >
+                    {/* Experience Header */}
+                    <div className="flex flex-col gap-2 mb-2">
+                      <div className="flex items-center justify-between text-xs text-ui-muted">
+                        <span>{formatDate(experience.consolidated_at)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="px-1 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">
+                            LTM
+                          </span>
+                          <span className="px-1 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">
+                            Consolidated
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-ui-muted">
+                          Tone: {(experience.emotional_tone * 100).toFixed(0)}%
+                        </span>
+                        <span className="text-ui-muted">
+                          Importance: {(experience.importance * 100).toFixed(0)}
+                          %
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Experience Content */}
+                    <div className="text-sm text-ui-text leading-relaxed mb-2">
+                      <div className="font-semibold text-blue-300 mb-1">
+                        {experience.title}
+                      </div>
+                      <div className="text-ui-muted">{experience.summary}</div>
+                    </div>
+
+                    {/* Themes */}
+                    <div className="flex flex-wrap gap-1">
+                      {experience.themes.slice(0, 3).map((theme, index) => (
+                        <span
+                          key={index}
+                          className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-xs flex items-center gap-1"
+                        >
+                          <Sparkles className="w-3 h-3" />
+                          {theme}
+                        </span>
+                      ))}
+                      {experience.themes.length > 3 && (
+                        <span className="text-xs text-ui-muted">
+                          +{experience.themes.length - 3} more
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between text-xs text-ui-muted mt-2 pt-2 border-t border-white/10">
+          <div className="flex items-center gap-2">
+            <span>Mode: Manual</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <span>Experiences: {experiences.length}</span>
+            <span>Service: Ego</span>
+            <span
+              className={`flex items-center gap-1 ${
+                ollamaAvailable ? "text-green-400" : "text-red-400"
+              }`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  ollamaAvailable ? "bg-green-400" : "bg-red-400"
+                }`}
+              ></div>
+              Ollama
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
