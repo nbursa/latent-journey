@@ -48,10 +48,17 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
             vision_count, speech_count, text_count
         )
     } else {
-        format!("Reflecting on recent events: {}. I notice {} vision, {} speech, and {} text memories. The world around me seems active with sensory input.", 
-            recent_events.join("; "),
-            vision_count, speech_count, text_count
-        )
+        // More specific fallback based on actual content
+        if !recent_events.is_empty() {
+            format!("I observed: {}. This gives me {} vision, {} speech, and {} text memories to process.", 
+                recent_events.join("; "),
+                vision_count, speech_count, text_count
+            )
+        } else {
+            format!("I have {} vision, {} speech, and {} text memories, but no specific content to reflect on.", 
+                vision_count, speech_count, text_count
+            )
+        }
     };
 
     // Generate simple metrics based on memory activity
@@ -112,6 +119,21 @@ pub async fn reflect(
     } else {
         &selected_memories
     };
+
+    // Debug: Log what memories are being sent to the LLM
+    tracing::info!(
+        "Sending {} memories to reflection engine:",
+        memories_to_use.len()
+    );
+    for (i, memory) in memories_to_use.iter().enumerate() {
+        tracing::info!(
+            "Memory {}: modality={:?}, content='{}', facets={:?}",
+            i,
+            memory.modality,
+            memory.content,
+            memory.facets
+        );
+    }
 
     // Generate reflection
     let thought = match reflection_engine
