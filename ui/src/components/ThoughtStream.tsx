@@ -259,14 +259,14 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       <div className="flex-1 glass flat flex flex-col overflow-hidden">
         {/* Error message */}
         {error && (
-          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
             {error}
           </div>
         )}
 
         {/* STM Error message */}
         {stmError && (
-          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
             STM Error: {stmError}
           </div>
         )}
@@ -283,7 +283,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                 To enable AI thought generation, you need to install and run
                 Ollama:
               </p>
-              <div className="bg-black/20 p-2 rounded font-mono text-xs">
+              <div className="bg-black/20 p-2 font-mono text-xs">
                 <div>
                   <strong>Install:</strong>
                 </div>
