@@ -1,6 +1,14 @@
-import { useState, useEffect } from "react";
-import { RefreshCw, Trash2, Layers, Sparkles, AlertCircle } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  Layers,
+  RefreshCw,
+  Trash2,
+  AlertCircle,
+  Play,
+  Pause,
+} from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
+import { Memory } from "../types/memory";
 
 interface Experience {
   id: string;
@@ -16,46 +24,71 @@ interface Experience {
   tags: string[];
 }
 
-export default function LTMExperiences() {
+interface LTMExperiencesProps {
+  className?: string;
+  memories?: Memory[];
+}
+
+const LTMExperiences: React.FC<LTMExperiencesProps> = ({
+  className = "",
+  memories = [],
+}) => {
   const [experiences, setExperiences] = useState<Experience[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [isAutoGenerate, setIsAutoGenerate] = useState(false);
+  const [isConsolidating, setIsConsolidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Use the ego service to get Ollama status
-  const { isEgoAvailable, ollamaAvailable, ollamaStatus } = useEgo({
-    memories: [],
-    autoGenerate: false,
-    intervalMs: 30000,
-  });
+  // Use the simplified ego service
+  const { isEgoAvailable, ollamaAvailable, ollamaStatus, totalMemories } =
+    useEgo({
+      memories,
+      autoGenerate: false,
+      intervalMs: 30000, // 30 seconds
+    });
 
+  // Load LTM experiences
   const loadExperiences = async () => {
-    setLoading(true);
-    setError(null);
     try {
+      console.log("Fetching LTM experiences from /api/ego/experiences");
       const response = await fetch("/api/ego/experiences");
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error("HTTP error response:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
+
       const data = await response.json();
+      console.log("LTM experiences response:", data);
+
       if (data.success) {
         setExperiences(data.data);
+        console.log(
+          "LTM experiences loaded successfully:",
+          data.data.length,
+          "experiences"
+        );
       } else {
-        throw new Error(data.error || "Failed to load experiences");
+        throw new Error(data.error || "Failed to load LTM experiences");
       }
     } catch (err) {
-      console.error("Failed to load experiences:", err);
+      console.error("Failed to load LTM experiences:", err);
       setError(
-        err instanceof Error ? err.message : "Failed to load experiences"
+        err instanceof Error ? err.message : "Failed to load LTM experiences"
       );
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Consolidate memories into experiences
   const consolidateMemories = async () => {
-    setLoading(true);
+    setIsConsolidating(true);
     setError(null);
     try {
+      console.log("Consolidating memories into experiences");
       const response = await fetch("/api/ego/consolidate", {
         method: "POST",
         headers: {
@@ -68,13 +101,20 @@ export default function LTMExperiences() {
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error("HTTP error response:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
 
       const data = await response.json();
+      console.log("Consolidation response:", data);
+
       if (data.success) {
         // Reload experiences after consolidation
         await loadExperiences();
+        console.log("Memories consolidated successfully");
       } else {
         throw new Error(data.error || "Failed to consolidate memories");
       }
@@ -84,29 +124,37 @@ export default function LTMExperiences() {
         err instanceof Error ? err.message : "Failed to consolidate memories"
       );
     } finally {
-      setLoading(false);
+      setIsConsolidating(false);
     }
   };
 
+  // Clear experiences
   const clearExperiences = async () => {
     if (!confirm("Are you sure you want to clear all experiences?")) {
       return;
     }
 
-    setLoading(true);
     setError(null);
     try {
+      console.log("Clearing LTM experiences");
       const response = await fetch("/api/ego/clear-ltm", {
         method: "POST",
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error("HTTP error response:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
 
       const data = await response.json();
+      console.log("Clear LTM response:", data);
+
       if (data.success) {
         setExperiences([]);
+        console.log("LTM experiences cleared successfully");
       } else {
         throw new Error(data.error || "Failed to clear experiences");
       }
@@ -115,42 +163,68 @@ export default function LTMExperiences() {
       setError(
         err instanceof Error ? err.message : "Failed to clear experiences"
       );
-    } finally {
-      setLoading(false);
     }
   };
 
+  // Load experiences on mount
   useEffect(() => {
     loadExperiences();
   }, []);
 
-  const formatDate = (dateString: string) => {
-    try {
-      return new Date(dateString).toLocaleString();
-    } catch {
-      return dateString;
+  // Clear experiences when memories array becomes empty (indicating data was cleared)
+  useEffect(() => {
+    if (memories.length === 0) {
+      setExperiences([]);
     }
+  }, [memories.length]);
+
+  // Toggle auto-generation
+  const toggleAutoGenerate = () => {
+    setIsAutoGenerate(!isAutoGenerate);
+  };
+
+  const formatTimestamp = (timestamp: string) => {
+    return new Date(timestamp).toLocaleTimeString();
   };
 
   return (
-    <div className="flex flex-col h-full">
+    <div className={`flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap gap-y-2 items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-ui-text flex items-center gap-2">
           <Layers className="w-5 h-5" />
           Experiences
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-y-2 items-center gap-2">
           {!isEgoAvailable && (
             <div title="Ego service not available">
               <AlertCircle className="w-4 h-4 text-red-400" />
             </div>
           )}
 
-          {/* Consolidate button */}
+          {/* Auto-generate toggle */}
+          <button
+            onClick={toggleAutoGenerate}
+            disabled={!isEgoAvailable}
+            className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+              isAutoGenerate ? "btn-primary" : "btn-secondary"
+            }`}
+            title={
+              isAutoGenerate ? "Stop auto-generation" : "Start auto-generation"
+            }
+          >
+            {isAutoGenerate ? (
+              <Pause className="w-3 h-3" />
+            ) : (
+              <Play className="w-3 h-3" />
+            )}
+            {isAutoGenerate ? "Pause" : "Auto"}
+          </button>
+
+          {/* Manual consolidate */}
           <button
             onClick={consolidateMemories}
-            disabled={loading || !isEgoAvailable || !ollamaAvailable}
+            disabled={isConsolidating || !isEgoAvailable || !ollamaAvailable}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
             title={
               !isEgoAvailable
@@ -160,14 +234,25 @@ export default function LTMExperiences() {
                 : "Consolidate thoughts into experiences"
             }
           >
-            <RefreshCw className={`w-3 h-3 ${loading ? "animate-spin" : ""}`} />
+            <RefreshCw
+              className={`w-3 h-3 ${isConsolidating ? "animate-spin" : ""}`}
+            />
             Consolidate
+          </button>
+
+          <button
+            onClick={loadExperiences}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
+            title="Refresh LTM data"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refresh
           </button>
 
           <button
             onClick={clearExperiences}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Clear all experiences"
+            title="Clear experiences"
           >
             <Trash2 className="w-3 h-3" />
             Clear
@@ -175,11 +260,21 @@ export default function LTMExperiences() {
         </div>
       </div>
 
+      {/* Auto-generation status */}
+      {isAutoGenerate && (
+        <div className="mb-2 p-2 bg-green-500/10 text-xs text-green-300">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+            <span>Auto-generating thoughts every 30 seconds</span>
+          </div>
+        </div>
+      )}
+
       {/* Main content */}
-      <div className="flex-1 glass flat p-3 flex flex-col overflow-hidden">
+      <div className="flex-1 glass flat flex flex-col overflow-hidden">
         {/* Error message */}
         {error && (
-          <div className="mb-3 p-2 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 text-red-300 text-sm">
             {error}
           </div>
         )}
@@ -232,36 +327,41 @@ export default function LTMExperiences() {
         {/* Experiences List */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto scrollbar-thin">
-            <div className="space-y-2 p-1">
-              {loading && experiences.length === 0 ? (
+            <div className="space-y-2 p-3">
+              {experiences.length === 0 ? (
                 <div className="text-center text-ui-muted py-8">
-                  <div className="flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4 animate-spin" />
-                    <span>Loading experiences...</span>
-                  </div>
-                </div>
-              ) : experiences.length === 0 ? (
-                <div className="text-center text-ui-muted py-8">
-                  <div className="text-sm">
-                    No experiences yet. Click "Consolidate" to create
-                    experiences from thoughts.
-                  </div>
+                  {isConsolidating ? (
+                    <div className="flex items-center justify-center gap-2">
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>Consolidating experiences...</span>
+                    </div>
+                  ) : (
+                    <div className="text-sm">
+                      {!isEgoAvailable
+                        ? "Ego service not available"
+                        : isAutoGenerate
+                        ? "Auto-generation enabled - experiences will appear here"
+                        : "Click Consolidate to create experiences from thoughts"}
+                    </div>
+                  )}
                 </div>
               ) : (
-                experiences.map((experience) => (
+                experiences.map((experience, index) => (
                   <div
-                    key={experience.id}
-                    className="p-2 bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
+                    key={index}
+                    className="text-sm bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
                   >
                     {/* Experience Header */}
                     <div className="flex flex-col gap-2 mb-2">
                       <div className="flex items-center justify-between text-xs text-ui-muted">
-                        <span>{formatDate(experience.consolidated_at)}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="px-1 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">
+                        <span>
+                          {formatTimestamp(experience.consolidated_at)}
+                        </span>
+                        <div className="flex flex-wrap justify-end gap-y-2 items-center gap-2">
+                          <span className="px-2 py-1 bg-blue-500/20 text-blue-300 text-xs">
                             LTM
                           </span>
-                          <span className="px-1 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">
+                          <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs">
                             Consolidated
                           </span>
                         </div>
@@ -278,29 +378,11 @@ export default function LTMExperiences() {
                     </div>
 
                     {/* Experience Content */}
-                    <div className="text-sm text-ui-text leading-relaxed mb-2">
+                    <div className="text-xs pb-2 text-ui-text leading-relaxed">
                       <div className="font-semibold text-blue-300 mb-1">
                         {experience.title}
                       </div>
                       <div className="text-ui-muted">{experience.summary}</div>
-                    </div>
-
-                    {/* Themes */}
-                    <div className="flex flex-wrap gap-1">
-                      {experience.themes.slice(0, 3).map((theme, index) => (
-                        <span
-                          key={index}
-                          className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-xs flex items-center gap-1"
-                        >
-                          <Sparkles className="w-3 h-3" />
-                          {theme}
-                        </span>
-                      ))}
-                      {experience.themes.length > 3 && (
-                        <span className="text-xs text-ui-muted">
-                          +{experience.themes.length - 3} more
-                        </span>
-                      )}
                     </div>
                   </div>
                 ))
@@ -310,12 +392,13 @@ export default function LTMExperiences() {
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs text-ui-muted mt-2 pt-2 border-t border-white/10">
+        <div className="flex flex-wrap gap-y-2 items-center justify-between text-xs text-ui-muted mt-2 p-3 border-t border-white/10">
           <div className="flex items-center gap-2">
-            <span>Mode: Manual</span>
+            <span>Mode: {isAutoGenerate ? "Auto" : "Manual"}</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap gap-y-2 items-center gap-4">
             <span>Experiences: {experiences.length}</span>
+            <span>Memories: {totalMemories}</span>
             <span>Service: Ego</span>
             <span
               className={`flex items-center gap-1 ${
@@ -334,4 +417,6 @@ export default function LTMExperiences() {
       </div>
     </div>
   );
-}
+};
+
+export default LTMExperiences;
