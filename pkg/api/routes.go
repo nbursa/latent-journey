@@ -30,6 +30,8 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ego/consolidate", postEgoConsolidate)
 	mux.HandleFunc("/api/ego/memories", getEgoMemories)
 	mux.HandleFunc("/api/ego/status", getEgoStatus)
+	mux.HandleFunc("/api/ego/experiences", getEgoExperiences)
+	mux.HandleFunc("/api/ego/clear-ltm", postEgoClearLTM)
 
 	// AI generation control routes
 	mux.HandleFunc("/api/ai/generation/start", postAIGenerationStart)
@@ -490,6 +492,61 @@ func getEgoStatus(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 10 * time.Second}
 	url := "http://localhost:8084/api/ego/status"
 	resp, err := client.Get(url)
+	if err != nil {
+		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getEgoExperiences(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Forward request to ego service
+	client := &http.Client{Timeout: 10 * time.Second}
+	url := "http://localhost:8084/api/ego/experiences" + r.URL.RawQuery
+	resp, err := client.Get(url)
+	if err != nil {
+		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func postEgoClearLTM(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// Forward request to ego service
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post("http://localhost:8084/api/ego/clear-ltm", "application/json", r.Body)
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return

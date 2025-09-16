@@ -72,7 +72,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     refetch: refetchSTM,
   } = useSTMData();
 
-  // Convert STM data to thoughts format on load
+  // Convert STM data to thoughts format - USE ACTUAL DATA
   useEffect(() => {
     if (stmThoughts.length > 0) {
       const convertedThoughts = stmThoughts.map((thought) => ({
@@ -100,11 +100,18 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
             return new Date().toISOString();
           }
         })(),
-        context_hash: thought.facets.context_hash,
+        context_hash: thought.facets.context_hash || "unknown",
       }));
       setThoughts(convertedThoughts);
+    } else {
+      setThoughts([]);
     }
   }, [stmThoughts]);
+
+  // Handle STM refresh - just refetch, the effect will handle it
+  const handleSTMRefresh = () => {
+    refetchSTM();
+  };
 
   // Clear thoughts when memories array becomes empty (indicating data was cleared)
   useEffect(() => {
@@ -115,27 +122,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     }
   }, [memories.length, clearHistory]);
 
-  // Convert ego thought to legacy format for compatibility
-  useEffect(() => {
-    if (currentThought) {
-      const legacyThought: Thought = {
-        content: currentThought.thought,
-        confidence: 0.8, // Default confidence
-        evidence: [], // Could be populated from memory references
-        emotional_tone:
-          currentThought.metrics.emotional_stability > 0.7
-            ? "positive"
-            : currentThought.metrics.emotional_stability < 0.3
-            ? "negative"
-            : "neutral",
-        self_reference: currentThought.metrics.self_awareness > 0.5,
-        creative_insight: currentThought.metrics.creative_insight > 0.5,
-        timestamp: currentThought.generated_at,
-        context_hash: currentThought.context_hash,
-      };
-      setThoughts([legacyThought]);
-    }
-  }, [currentThought]);
+  // Note: We only show STM data, not currentThought
 
   // Convert ego metrics to legacy format
   useEffect(() => {
@@ -166,7 +153,17 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   };
 
   const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleTimeString();
+    try {
+      const date = new Date(timestamp);
+      if (isNaN(date.getTime())) {
+        console.warn("Invalid timestamp in formatTimestamp:", timestamp);
+        return "Invalid time";
+      }
+      return date.toLocaleTimeString();
+    } catch (error) {
+      console.warn("Error formatting timestamp:", timestamp, error);
+      return "Invalid time";
+    }
   };
 
   const getMetricColor = (value: number) => {
@@ -229,7 +226,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           </button>
 
           <button
-            onClick={refetchSTM}
+            onClick={handleSTMRefresh}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
             title="Refresh STM data"
           >
