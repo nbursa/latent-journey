@@ -306,7 +306,7 @@ agent MultiModalAnalyzer {
                 facets.insert("affect.arousal".into(), serde_json::json!(arousal));
             }
 
-            // Use real Sentience agent to analyze input
+            // Use Sentience agent to analyze input
             if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
                 // Map incoming JSON to percept.* keys expected by the agent.
                 let transcript = req["transcript"].as_str().unwrap_or("");
@@ -504,7 +504,7 @@ agent MultiModalAnalyzer {
 
             let mut facets = HashMap::new();
 
-            // Use real Sentience agent to analyze input
+            // Use Sentience agent to analyze input
             if let Ok(mut agent) = SENTIENCE_AGENT.lock() {
                 // Build a DSL snippet that seeds percept.* keys the agent expects.
                 // Vision (pick top-1 label if present)
@@ -699,9 +699,34 @@ agent MultiModalAnalyzer {
             )
         });
 
+    let clear_data = warp::path("clear")
+        .and(warp::post())
+        .map(|| {
+            // Clear all memory data
+            if let Ok(mut memory_store) = MEMORY_STORE.lock() {
+                memory_store.clear();
+                println!("Cleared all memory data");
+            }
+            
+            // Clear the memory file
+            if let Err(e) = fs::write("data/memory.jsonl", "") {
+                eprintln!("Failed to clear memory file: {}", e);
+                return warp::reply::json(&serde_json::json!({
+                    "success": false,
+                    "error": format!("Failed to clear memory file: {}", e)
+                }));
+            }
+            
+            println!("Successfully cleared all ID data");
+            warp::reply::json(&serde_json::json!({
+                "success": true,
+                "message": "All data cleared successfully"
+            }))
+        });
+
     let root = warp::path::end().map(|| "I am Sentience service");
 
-    let routes = ping.or(healthz).or(run).or(tokenize).or(memory).or(memory_stream).or(root).with(cors);
+    let routes = ping.or(healthz).or(run).or(tokenize).or(memory).or(memory_stream).or(clear_data).or(root).with(cors);
 
     warp::serve(routes).run(([0, 0, 0, 0], 8082)).await;
 }

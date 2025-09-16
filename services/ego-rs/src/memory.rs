@@ -262,3 +262,10 @@ pub fn select_relevant_memories<'a>(
     result.truncate(max_count);
     result
 }
+
+impl MemoryStore {
+    pub fn clear_all_memories(&mut self) {
+        self.memories.clear();
+        tracing::info!("Cleared all memories from store");
+    }
+}

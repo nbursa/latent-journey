@@ -139,8 +139,27 @@ export const useAppStore = create<AppState>()(
         set({ isProcessing: processing });
       },
 
-      // Cleanup actions - only clear UI data, not persistent memory data
-      clearAllData: () => {
+      // Cleanup actions - clear UI data and persistent memory data
+      clearAllData: async () => {
+        try {
+          // Clear ID service data
+          await fetch("http://localhost:8082/clear", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          // Clear Ego service data
+          await fetch("http://localhost:8084/api/ego/clear", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+          });
+
+          console.log("Successfully cleared all data from services");
+        } catch (error) {
+          console.error("Failed to clear service data:", error);
+        }
+
+        // Clear UI state
         set({
           events: [],
           lastSentienceToken: null,

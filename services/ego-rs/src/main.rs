@@ -76,12 +76,25 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .and_then(handlers::get_memories),
     );
 
-    let routes = health.or(status).or(reflect).or(memories).with(
-        warp::cors()
-            .allow_any_origin()
-            .allow_headers(vec!["content-type"])
-            .allow_methods(vec!["GET", "POST"]),
+    // Clear data endpoint
+    let clear_data = warp::path("api").and(warp::path("ego")).and(
+        warp::path("clear")
+            .and(warp::post())
+            .and(with_memory_store(memory_store.clone()))
+            .and_then(handlers::clear_data),
     );
+
+    let routes = health
+        .or(status)
+        .or(reflect)
+        .or(memories)
+        .or(clear_data)
+        .with(
+            warp::cors()
+                .allow_any_origin()
+                .allow_headers(vec!["content-type"])
+                .allow_methods(vec!["GET", "POST"]),
+        );
 
     info!("Ego service ready");
     warp::serve(routes).run(([0, 0, 0, 0], config.port)).await;

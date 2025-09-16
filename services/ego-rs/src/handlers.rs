@@ -269,6 +269,28 @@ pub async fn get_memories(
     Ok(json(&ApiResponse::success(memories)))
 }
 
+pub async fn clear_data(
+    memory_store: Arc<RwLock<MemoryStore>>,
+) -> Result<impl warp::Reply, warp::Rejection> {
+    tracing::info!("Clearing all ego data...");
+
+    let mut store = memory_store.write().await;
+
+    // Clear all memories from the store
+    store.clear_all_memories();
+
+    // Save the empty store to file
+    if let Err(e) = store.save_all_memories() {
+        tracing::error!("Failed to save empty memory store: {}", e);
+        return Ok(json(&ApiResponse::<()>::error(
+            "Failed to clear data".to_string(),
+        )));
+    }
+
+    tracing::info!("Successfully cleared all ego data");
+    Ok(json(&ApiResponse::success(())))
+}
+
 pub async fn status(
     reflection_engine: Arc<ReflectionEngine>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
