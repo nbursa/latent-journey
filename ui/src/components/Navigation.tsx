@@ -13,8 +13,13 @@ export default function Navigation() {
 
   // Clear data confirmation modal
   const clearDataConfirmation = useConfirmationModal({
-    onConfirm: () => {
-      clearAllData();
+    onConfirm: async () => {
+      try {
+        await clearAllData();
+      } catch (error) {
+        console.error("Error during clear all data:", error);
+        throw error; // Re-throw to let the modal handle the error
+      }
     },
     title: "Clear All Data",
     message:
@@ -22,6 +27,7 @@ export default function Navigation() {
     confirmText: "Clear All Data",
     cancelText: "Cancel",
     type: "danger",
+    isLoading: false, // Will be set to true during the action
   });
 
   const pages = [
@@ -110,7 +116,13 @@ export default function Navigation() {
       <ConfirmationModal
         isOpen={clearDataConfirmation.isOpen}
         onClose={clearDataConfirmation.close}
-        {...clearDataConfirmation.confirmationProps}
+        onConfirm={clearDataConfirmation.onConfirm}
+        title={clearDataConfirmation.confirmationProps.title}
+        message={clearDataConfirmation.confirmationProps.message}
+        confirmText={clearDataConfirmation.confirmationProps.confirmText}
+        cancelText={clearDataConfirmation.confirmationProps.cancelText}
+        type={clearDataConfirmation.confirmationProps.type}
+        isLoading={clearDataConfirmation.confirmationProps.isLoading}
       />
     </>
   );

@@ -63,6 +63,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     intervalMs: 30000, // 30 seconds
   });
 
+  // Clear thoughts when memories array becomes empty (indicating data was cleared)
+  useEffect(() => {
+    if (memories.length === 0) {
+      setThoughts([]);
+      setMetrics(null);
+      clearHistory();
+    }
+  }, [memories.length, clearHistory]);
+
   // Convert ego thought to legacy format for compatibility
   useEffect(() => {
     if (currentThought) {

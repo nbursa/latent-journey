@@ -163,6 +163,7 @@ export const useAppStore = create<AppState>()(
         set({
           events: [],
           lastSentienceToken: null,
+          memoryEvents: [],
           captures: [],
           selectedMemoryEvent: null,
           memoryFilter: "all",
