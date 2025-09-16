@@ -94,6 +94,125 @@ impl ReflectionEngine {
             crate::types::Modality::Concept => "concept",
         };
 
+        // Extract comprehensive content from facets based on modality
+        let specific_content = match memory.modality {
+            crate::types::Modality::Vision => {
+                let object = memory
+                    .facets
+                    .get("vision.object")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let color = memory
+                    .facets
+                    .get("color.dominant")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+
+                // Extract emotional context from vision
+                let valence = memory
+                    .facets
+                    .get("affect.valence")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("valence: {:.2}", v))
+                    .unwrap_or_default();
+                let arousal = memory
+                    .facets
+                    .get("affect.arousal")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("arousal: {:.2}", v))
+                    .unwrap_or_default();
+
+                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
+                    let emotions: Vec<String> = [valence, arousal]
+                        .iter()
+                        .filter(|s| !s.is_empty())
+                        .cloned()
+                        .collect();
+                    format!(" (emotional: {})", emotions.join(", "))
+                } else {
+                    String::new()
+                };
+
+                format!("I see a {} {} object{}", color, object, emotional_context)
+            }
+            crate::types::Modality::Speech => {
+                let transcript = memory
+                    .facets
+                    .get("speech.transcript")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let intent = memory
+                    .facets
+                    .get("speech.intent")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+                let sentiment = memory
+                    .facets
+                    .get("speech.sentiment")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("unknown");
+
+                // Extract emotional context from speech
+                let valence = memory
+                    .facets
+                    .get("affect.valence")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("valence: {:.2}", v))
+                    .unwrap_or_default();
+                let arousal = memory
+                    .facets
+                    .get("affect.arousal")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("arousal: {:.2}", v))
+                    .unwrap_or_default();
+
+                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
+                    let emotions: Vec<String> = [valence, arousal]
+                        .iter()
+                        .filter(|s| !s.is_empty())
+                        .cloned()
+                        .collect();
+                    format!(" (emotional: {})", emotions.join(", "))
+                } else {
+                    String::new()
+                };
+
+                format!(
+                    "Someone said: \"{}\" (intent: {}, sentiment: {}){}",
+                    transcript, intent, sentiment, emotional_context
+                )
+            }
+            crate::types::Modality::Text => {
+                // For text/thoughts, include any emotional context
+                let valence = memory
+                    .facets
+                    .get("affect.valence")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("valence: {:.2}", v))
+                    .unwrap_or_default();
+                let arousal = memory
+                    .facets
+                    .get("affect.arousal")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("arousal: {:.2}", v))
+                    .unwrap_or_default();
+
+                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
+                    let emotions: Vec<String> = [valence, arousal]
+                        .iter()
+                        .filter(|s| !s.is_empty())
+                        .cloned()
+                        .collect();
+                    format!(" (emotional: {})", emotions.join(", "))
+                } else {
+                    String::new()
+                };
+
+                format!("{}{}", memory.content, emotional_context)
+            }
+            crate::types::Modality::Concept => memory.content.clone(),
+        };
+
         format!(
             r#"Extract the key facts from this memory observation.
 
@@ -101,6 +220,7 @@ Constraints:
 - 18 words max
 - Include modality [vision|speech|text|concept]
 - Focus on concrete details: who, what, when, where
+- Use the specific content provided below
 - No speculation, only what is directly observed
 
 Return exactly:
@@ -113,12 +233,16 @@ MEMORY:
   "timestamp": "{}",
   "content": "{}",
   "facets": {}
-}}"#,
+}}
+
+SPECIFIC CONTENT TO FOCUS ON:
+{}"#,
             memory.id,
             modality_str,
             memory.timestamp.to_rfc3339(),
             memory.content,
-            serde_json::to_string_pretty(&memory.facets).unwrap_or_default()
+            serde_json::to_string_pretty(&memory.facets).unwrap_or_default(),
+            specific_content
         )
     }
 
@@ -143,9 +267,12 @@ MEMORY:
 
         format!(
             r#"You merge short memory notes into a compact context (<= 120 words).
-- Preserve chronology.
-- Group by motif (e.g., "agent", "object on desk").
-- Output 3 bullet points, no extra text.
+- Preserve chronology and temporal relationships
+- Group by motif (e.g., "person interaction", "visual observation")
+- Include specific details: names, objects, colors, emotions, speech content
+- Connect related events (e.g., "I see a person and they introduce themselves")
+- Preserve emotional context (valence/arousal) when available
+- Output 3 bullet points, no extra text
 
 NOTES:
 {}"#,
@@ -165,14 +292,21 @@ NOTES:
         format!(
             r#"You are an AI system observing and reflecting on sensory events and interactions.
 
-Given the context below, generate a concrete, grounded thought based on the actual events observed.
+Given the context below, generate a concrete, grounded thought based on the ACTUAL events observed.
+
+CRITICAL: Base your thought ONLY on the specific events described in the context. Do not make up or hallucinate details that aren't mentioned.
 
 Instructions:
-1) Write a specific thought (<= 120 words) about what you observed, not abstract philosophy
-2) Focus on concrete details: who you see, what they said, what happened
-3) Estimate metrics 0..1: self_awareness, memory_consolidation_need, emotional_stability, creative_insight
-4) Suggest up to 5 memory IDs that should be consolidated (if any)
-5) Provide 1 short descriptive title
+1) Write a specific thought (<= 120 words) about what you actually observed
+2) Reference the specific people, objects, or speech mentioned in the context
+3) If someone introduced themselves, mention their name
+4) If you saw an object, describe what you actually saw (color, type, etc.)
+5) If someone spoke, reference what they actually said and their intent/sentiment
+6) Consider the emotional context (valence/arousal) if available
+7) Connect related events (e.g., "I see a person and they introduced themselves as...")
+8) Estimate metrics 0..1: self_awareness, memory_consolidation_need, emotional_stability, creative_insight
+9) Suggest up to 5 memory IDs that should be consolidated (if any)
+10) Provide 1 short descriptive title
 
 Return STRICT JSON only:
 {{
