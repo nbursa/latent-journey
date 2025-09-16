@@ -1,13 +1,5 @@
 import { MemoryEvent, MemoryFilter } from "../types";
-import {
-  Mic,
-  Eye,
-  Clock,
-  Sparkles,
-  Filter,
-  Bookmark,
-  HardDrive,
-} from "lucide-react";
+import { Mic, Eye, Clock, Filter, Bookmark, HardDrive } from "lucide-react";
 import {
   useWaypoints,
   useWaypointActions,

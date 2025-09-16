@@ -1,5 +1,5 @@
 import { Event } from "../types";
-import { Activity, Clock, Sparkles } from "lucide-react";
+import { Activity, Clock } from "lucide-react";
 
 interface EventsListProps {
   events: Event[];
