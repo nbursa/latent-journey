@@ -214,35 +214,35 @@ impl ReflectionEngine {
         };
 
         format!(
-            r#"Extract the key facts from this memory observation.
+            r#"You are a strict data extractor. Extract ONLY the facts explicitly provided below.
 
-Constraints:
-- 18 words max
-- Include modality [vision|speech|text|concept]
-- Focus on concrete details: who, what, when, where
-- Use the specific content provided below
-- No speculation, only what is directly observed
+CRITICAL RULES:
+- Use ONLY the data in "SPECIFIC CONTENT TO FOCUS ON" section
+- Do NOT add any details not explicitly mentioned
+- Do NOT make assumptions or inferences
+- Do NOT add visual details not provided
+- Do NOT add behavioral descriptions not mentioned
 
-Return exactly:
-<note>[modality] key facts... | tags: tag1, tag2</note>
+Return exactly this format:
+<note>[modality] exact facts from data | tags: relevant</note>
 
-MEMORY:
+SPECIFIC CONTENT TO FOCUS ON:
+{}
+
+MEMORY DATA (for reference only):
 {{
   "id": "{}",
   "modality": "{}",
   "timestamp": "{}",
   "content": "{}",
   "facets": {}
-}}
-
-SPECIFIC CONTENT TO FOCUS ON:
-{}"#,
+}}"#,
+            specific_content,
             memory.id,
             modality_str,
             memory.timestamp.to_rfc3339(),
             memory.content,
-            serde_json::to_string_pretty(&memory.facets).unwrap_or_default(),
-            specific_content
+            serde_json::to_string_pretty(&memory.facets).unwrap_or_default()
         )
     }
 
