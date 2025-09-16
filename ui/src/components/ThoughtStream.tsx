@@ -262,21 +262,21 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       <div className="flex-1 glass flat flex flex-col overflow-hidden">
         {/* Error message */}
         {error && (
-          <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
             {error}
           </div>
         )}
 
         {/* STM Error message */}
         {stmError && (
-          <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mx-3 mt-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
             STM Error: {stmError}
           </div>
         )}
 
         {/* Ollama Status */}
         {!ollamaAvailable && ollamaStatus && (
-          <div className="mb-3 p-3 bg-yellow-500/20 text-yellow-300 text-sm">
+          <div className="m-3 p-3 bg-yellow-500/20 text-yellow-300 text-sm">
             <div className="font-semibold mb-2 flex items-center gap-2">
               <AlertCircle className="w-4 h-4" />
               Ollama Not Available
