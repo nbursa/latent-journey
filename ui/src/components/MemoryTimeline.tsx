@@ -89,8 +89,8 @@ export default function MemoryTimeline({
                         {new Date(event.ts * 1000).toLocaleTimeString()}
                       </span>
                       {index < 1 && (
-                        <span className="text-xs bg-orange-500/20 text-orange-300 px-1 py-0.5 rounded flex items-center gap-1">
-                          <Sparkles className="w-3 h-3" />
+                        <span className="text-xs bg-orange-500/20 text-orange-300 px-2 py-1 flex items-center gap-1">
+                          {/* <Sparkles className="w-3 h-3" /> */}
                           NEW
                         </span>
                       )}

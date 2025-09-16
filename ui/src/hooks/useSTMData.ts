@@ -32,13 +32,29 @@ export function useSTMData(): STMData {
     setLoading(true);
     setError(null);
     try {
+      console.log("Fetching STM data from /api/ego/memories");
       const response = await fetch("/api/ego/memories");
+      console.log("Response status:", response.status);
+      console.log("Response headers:", response.headers);
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text();
+        console.error("HTTP error response:", errorText);
+        throw new Error(
+          `HTTP error! status: ${response.status}, body: ${errorText}`
+        );
       }
+
       const data = await response.json();
+      console.log("STM data response:", data);
+
       if (data.success) {
         setThoughts(data.data);
+        console.log(
+          "STM data loaded successfully:",
+          data.data.length,
+          "thoughts"
+        );
       } else {
         throw new Error(data.error || "Failed to load STM data");
       }

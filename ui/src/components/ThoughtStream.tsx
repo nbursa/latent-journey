@@ -9,6 +9,7 @@ import {
   Pause,
 } from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
+import { useSTMData } from "../hooks/useSTMData";
 import { Memory } from "../types/memory";
 
 interface Thought {
@@ -62,6 +63,48 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     autoGenerate: isAutoGenerate,
     intervalMs: 30000, // 30 seconds
   });
+
+  // Get STM data
+  const {
+    thoughts: stmThoughts,
+    loading: stmLoading,
+    error: stmError,
+    refetch: refetchSTM,
+  } = useSTMData();
+
+  // Convert STM data to thoughts format on load
+  useEffect(() => {
+    if (stmThoughts.length > 0) {
+      const convertedThoughts = stmThoughts.map((thought) => ({
+        content: thought.content,
+        confidence: 0.8,
+        evidence: [],
+        emotional_tone:
+          thought.facets.emotional_stability > 0.7
+            ? "positive"
+            : thought.facets.emotional_stability < 0.3
+            ? "negative"
+            : "neutral",
+        self_reference: thought.facets.self_awareness > 0.5,
+        creative_insight: thought.facets.creative_insight > 0.5,
+        timestamp: (() => {
+          try {
+            const date = new Date(thought.ts * 1000);
+            if (isNaN(date.getTime())) {
+              console.warn("Invalid timestamp:", thought.ts);
+              return new Date().toISOString();
+            }
+            return date.toISOString();
+          } catch (error) {
+            console.warn("Error converting timestamp:", thought.ts, error);
+            return new Date().toISOString();
+          }
+        })(),
+        context_hash: thought.facets.context_hash,
+      }));
+      setThoughts(convertedThoughts);
+    }
+  }, [stmThoughts]);
 
   // Clear thoughts when memories array becomes empty (indicating data was cleared)
   useEffect(() => {
@@ -141,12 +184,12 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   return (
     <div className={`flex flex-col h-full ${className}`}>
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex flex-wrap gap-y-2 items-center justify-between mb-3">
         <h2 className="text-lg font-semibold text-ui-text flex items-center gap-2">
           <Brain className="w-5 h-5" />
           Thoughts
         </h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap gap-y-2 items-center gap-2">
           {!isEgoAvailable && (
             <div title="Ego service not available">
               <AlertCircle className="w-4 h-4 text-red-400" />
@@ -186,6 +229,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           </button>
 
           <button
+            onClick={refetchSTM}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
+            title="Refresh STM data"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Refresh
+          </button>
+
+          <button
             onClick={clearHistory}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
             title="Clear history"
@@ -207,11 +259,18 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       )}
 
       {/* Main content */}
-      <div className="flex-1 glass flat p-3 flex flex-col overflow-hidden">
+      <div className="flex-1 glass flat flex flex-col overflow-hidden">
         {/* Error message */}
         {error && (
-          <div className="mb-3 p-2 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+          <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
             {error}
+          </div>
+        )}
+
+        {/* STM Error message */}
+        {stmError && (
+          <div className="mb-3 p-3 bg-red-500/20 border border-red-500/30 rounded text-red-300 text-sm">
+            STM Error: {stmError}
           </div>
         )}
 
@@ -262,7 +321,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
 
         {/* Consciousness Metrics */}
         {metrics && (
-          <div className="mb-3 p-2 pb-3 bg-ui-surface/50 border-b border-white/10">
+          <div className="mb-3 p-3 pb-3 bg-ui-surface/50 border-b border-white/10">
             <div className="grid grid-cols-2 gap-2 text-xs">
               <div className="flex justify-between">
                 <span className="text-ui-muted">Self-Awareness:</span>
@@ -295,8 +354,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
         {/* Thoughts List */}
         <div className="flex-1 min-h-0 overflow-hidden">
           <div className="h-full overflow-y-auto scrollbar-thin">
-            <div className="space-y-2 p-1">
-              {thoughts.length === 0 ? (
+            <div className="space-y-2 p-3">
+              {stmLoading ? (
+                <div className="text-center text-ui-muted py-8">
+                  <div className="flex items-center justify-center gap-2">
+                    <RefreshCw className="w-4 h-4 animate-spin" />
+                    <span>Loading STM data...</span>
+                  </div>
+                </div>
+              ) : thoughts.length === 0 ? (
                 <div className="text-center text-ui-muted py-8">
                   {isGenerating ? (
                     <div className="flex items-center justify-center gap-2">
@@ -317,24 +383,24 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                 thoughts.map((thought, index) => (
                   <div
                     key={index}
-                    className="p-2 bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
+                    className="text-sm bg-ui-surface/30 border-b border-white/10 hover:border-white/20 transition-colors"
                   >
                     {/* Thought Header */}
                     <div className="flex flex-col gap-2 mb-2">
                       <div className="flex items-center justify-between text-xs text-ui-muted">
                         <span>{formatTimestamp(thought.timestamp)}</span>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap justify-end gap-y-2 items-center gap-2">
                           {thought.self_reference && (
-                            <span className="px-1 py-0.5 bg-blue-500/20 text-blue-300 rounded text-xs">
+                            <span className="px-2 py-1 bg-blue-500/20 text-blue-300  text-xs">
                               Self-Ref
                             </span>
                           )}
                           {thought.creative_insight && (
-                            <span className="px-1 py-0.5 bg-purple-500/20 text-purple-300 rounded text-xs">
+                            <span className="px-2 py-1 bg-purple-500/20 text-purple-300 text-xs">
                               Creative
                             </span>
                           )}
-                          <span className="px-1 py-0.5 bg-green-500/20 text-green-300 rounded text-xs">
+                          <span className="px-2 py-1 bg-green-500/20 text-green-300 text-xs">
                             Grounded
                           </span>
                         </div>
@@ -350,7 +416,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                     </div>
 
                     {/* Thought Content */}
-                    <div className="text-sm text-ui-text leading-relaxed">
+                    <div className="text-xs pb-2 text-ui-text leading-relaxed">
                       {thought.content}
                     </div>
 
@@ -376,11 +442,12 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between text-xs text-ui-muted mt-2 pt-2 border-t border-white/10">
+        <div className="flex flex-wrap gap-y-2 items-center justify-between text-xs text-ui-muted mt-2 p-3 border-t border-white/10">
           <div className="flex items-center gap-2">
             <span>Mode: {isAutoGenerate ? "Auto" : "Manual"}</span>
           </div>
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap gap-y-2 items-center gap-4">
+            <span>Thoughts: {thoughts.length}</span>
             <span>Memories: {totalMemories}</span>
             <span>Service: Ego</span>
             <span

@@ -37,8 +37,8 @@ export default function EventsList({ events, isProcessing }: EventsListProps) {
                       {event.type}
                     </div>
                     {index < 2 && (
-                      <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1 rounded flex items-center gap-1">
-                        <Sparkles className="w-3 h-3" />
+                      <span className="text-xs bg-green-500/20 text-green-300 px-2 py-1  flex items-center gap-1">
+                        {/* <Sparkles className="w-3 h-3" /> */}
                         NEW
                       </span>
                     )}
