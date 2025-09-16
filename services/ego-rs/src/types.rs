@@ -58,19 +58,6 @@ pub struct ReflectionRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConsolidationRequest {
-    pub memory_ids: Vec<String>,
-    pub title: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ConsolidationResponse {
-    pub concept_id: String,
-    pub title: String,
-    pub child_count: usize,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryQuery {
     pub limit: Option<usize>,
     pub modality: Option<Modality>,

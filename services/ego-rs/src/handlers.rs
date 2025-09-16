@@ -1,10 +1,7 @@
 use crate::{
-    memory::{MemoryStore, select_relevant_memories, average_embedding},
+    memory::{select_relevant_memories, MemoryStore},
     reflection::ReflectionEngine,
-    types::{
-        ApiResponse, ConsolidationRequest, ConsolidationResponse, EgoThought, Memory, MemoryQuery,
-        Modality,
-    },
+    types::{ApiResponse, EgoThought, Memory, MemoryQuery},
 };
 use anyhow::Result;
 use chrono::Utc;
@@ -13,130 +10,212 @@ use tokio::sync::RwLock;
 use uuid::Uuid;
 use warp::reply::json;
 
+fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> EgoThought {
+    // Analyze the memories to generate a simple thought
+    let mut vision_count = 0;
+    let mut speech_count = 0;
+    let mut text_count = 0;
+    let mut recent_events = Vec::new();
+
+    for memory in memories.iter().take(5) {
+        // Only look at recent memories
+        match memory.modality {
+            crate::types::Modality::Vision => vision_count += 1,
+            crate::types::Modality::Speech => speech_count += 1,
+            crate::types::Modality::Text => text_count += 1,
+            crate::types::Modality::Concept => text_count += 1,
+        }
+
+        if !memory.content.is_empty() {
+            recent_events.push(format!(
+                "[{}] {}",
+                match memory.modality {
+                    crate::types::Modality::Vision => "vision",
+                    crate::types::Modality::Speech => "speech",
+                    crate::types::Modality::Text => "text",
+                    crate::types::Modality::Concept => "concept",
+                },
+                memory.content
+            ));
+        }
+    }
+
+    // Generate thought based on the analysis
+    let thought_content = if let Some(query) = user_query {
+        format!("Processing query: '{}'. Recent events: {}. I observe {} vision, {} speech, and {} text events.", 
+            query,
+            recent_events.join("; "),
+            vision_count, speech_count, text_count
+        )
+    } else {
+        format!("Reflecting on recent events: {}. I notice {} vision, {} speech, and {} text memories. The world around me seems active with sensory input.", 
+            recent_events.join("; "),
+            vision_count, speech_count, text_count
+        )
+    };
+
+    // Generate simple metrics based on memory activity
+    let total_memories = memories.len();
+    let self_awareness = if total_memories > 0 { 0.6 } else { 0.3 };
+    let memory_consolidation_need = if total_memories > 3 { 0.7 } else { 0.4 };
+    let emotional_stability = 0.5; // Neutral
+    let creative_insight = if vision_count > 0 && speech_count > 0 {
+        0.6
+    } else {
+        0.3
+    };
+
+    EgoThought {
+        id: Uuid::new_v4().to_string(),
+        title: "Fallback Reflection".to_string(),
+        thought: thought_content,
+        metrics: crate::types::ThoughtMetrics {
+            self_awareness,
+            memory_consolidation_need,
+            emotional_stability,
+            creative_insight,
+        },
+        consolidate: if total_memories > 2 {
+            memories.iter().take(3).map(|m| m.id.clone()).collect()
+        } else {
+            Vec::new()
+        },
+        generated_at: Utc::now(),
+        context_hash: format!("fallback_{}", total_memories),
+        model: "fallback".to_string(),
+    }
+}
+
 pub async fn reflect(
     request: crate::types::ReflectionRequest,
     memory_store: Arc<RwLock<MemoryStore>>,
     reflection_engine: Arc<ReflectionEngine>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    // Add memories to store if they don't exist
-    {
-        let mut store = memory_store.write().await;
-        for memory in &request.memories {
-            store.add_memory(memory.clone());
-        }
-    }
+    // Get existing thoughts from store (release read lock immediately)
+    let existing_thoughts: Vec<Memory> = {
+        let store = memory_store.read().await;
+        store.get_all_memories().into_iter().cloned().collect()
+    };
 
-    // Get all memories for reflection (temporarily disable time filtering)
-    let store = memory_store.read().await;
-    let recent_memories = store.get_all_memories();
-    
+    // Combine existing thoughts with incoming context memories for reflection
+    let mut all_memories = existing_thoughts;
+    all_memories.extend(request.memories.iter().cloned());
+
     // Select relevant memories
-    let selected_memories = select_relevant_memories(
-        &recent_memories,
-        request.focus_embedding.as_deref(),
-        18,
-    );
+    let all_memories_refs: Vec<&Memory> = all_memories.iter().collect();
+    let selected_memories =
+        select_relevant_memories(&all_memories_refs, request.focus_embedding.as_deref(), 18);
 
-    if selected_memories.is_empty() {
-        return Ok(json(&ApiResponse::<EgoThought>::error(
-            "No relevant memories found for reflection".to_string(),
-        )));
-    }
+    // If no memories selected, use all available memories for fallback
+    let memories_to_use = if selected_memories.is_empty() {
+        &all_memories_refs
+    } else {
+        &selected_memories
+    };
 
     // Generate reflection
-    match reflection_engine
-        .reflect_on_memories(&selected_memories, request.user_query.as_deref())
+    let thought = match reflection_engine
+        .reflect_on_memories(memories_to_use, request.user_query.as_deref())
         .await
     {
-        Ok(thought) => Ok(json(&ApiResponse::success(thought))),
-        Err(e) => {
-            tracing::error!("Reflection generation failed: {}", e);
-            Ok(json(&ApiResponse::<EgoThought>::error(format!(
-                "Reflection generation failed: {}",
-                e
-            ))))
+        Ok(thought) => {
+            tracing::info!("Successfully generated thought via Ollama");
+            thought
         }
-    }
-}
+        Err(e) => {
+            tracing::warn!(
+                "Reflection engine failed, generating fallback thought: {}",
+                e
+            );
+            // Generate a simple fallback thought based on the memories
+            tracing::info!(
+                "Generating fallback thought with {} memories",
+                memories_to_use.len()
+            );
+            generate_fallback_thought(memories_to_use, request.user_query.as_deref())
+        }
+    };
 
-pub async fn consolidate(
-    request: ConsolidationRequest,
-    memory_store: Arc<RwLock<MemoryStore>>,
-) -> Result<impl warp::Reply, warp::Rejection> {
+    // Convert EgoThought to Memory and save to store
+    tracing::info!("Converting thought to memory and saving...");
+
+    let memory = match std::panic::catch_unwind(|| {
+        Memory {
+            id: thought.id.clone(),
+            timestamp: Utc::now(), // Use current time for simplicity
+            modality: crate::types::Modality::Text,
+            embedding: vec![], // Thoughts don't have embeddings in this context
+            content: thought.thought.clone(),
+            facets: {
+                let mut facets = std::collections::HashMap::new();
+                facets.insert(
+                    "self_awareness".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(thought.metrics.self_awareness as f64)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ),
+                );
+                facets.insert(
+                    "memory_consolidation_need".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(
+                            thought.metrics.memory_consolidation_need as f64,
+                        )
+                        .unwrap_or(serde_json::Number::from(0)),
+                    ),
+                );
+                facets.insert(
+                    "emotional_stability".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(thought.metrics.emotional_stability as f64)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ),
+                );
+                facets.insert(
+                    "creative_insight".to_string(),
+                    serde_json::Value::Number(
+                        serde_json::Number::from_f64(thought.metrics.creative_insight as f64)
+                            .unwrap_or(serde_json::Number::from(0)),
+                    ),
+                );
+                facets.insert(
+                    "context_hash".to_string(),
+                    serde_json::Value::String(thought.context_hash.clone()),
+                );
+                facets
+            },
+            tags: vec!["thought".to_string(), "ego".to_string()],
+        }
+    }) {
+        Ok(memory) => memory,
+        Err(_) => {
+            tracing::error!("Panic during memory conversion");
+            return Ok(json(&ApiResponse::<EgoThought>::error(
+                "Memory conversion failed".to_string(),
+            )));
+        }
+    };
+
+    // Save the thought to the store
+    tracing::info!("Acquiring write lock for memory store...");
     let mut store = memory_store.write().await;
-    
-    // Get the memories to consolidate
-    let memory_ids = request.memory_ids.clone();
-    let memories: Vec<Memory> = memory_ids
-        .iter()
-        .filter_map(|id| store.get_memory(id).cloned())
-        .collect();
+    tracing::info!("Write lock acquired, attempting to save memory...");
 
-    if memories.is_empty() {
-        return Ok(json(&ApiResponse::<ConsolidationResponse>::error(
-            "No valid memories found for consolidation".to_string(),
-        )));
+    // Try to add memory first
+    store.add_memory(memory.clone());
+    tracing::info!("Memory added to store, attempting to save to file...");
+
+    if let Err(e) = store.save_all_memories() {
+        tracing::error!("Failed to save thought to file: {}", e);
+        // Continue even if save fails - don't return error to user
+    } else {
+        tracing::info!("Successfully saved thought to file");
     }
 
-    // Generate concept title
-    let title = request.title.unwrap_or_else(|| {
-        let modalities: Vec<String> = memories
-            .iter()
-            .map(|m| match m.modality {
-                Modality::Vision => "vision".to_string(),
-                Modality::Speech => "speech".to_string(),
-                Modality::Text => "text".to_string(),
-                Modality::Concept => "concept".to_string(),
-            })
-            .collect::<std::collections::HashSet<_>>()
-            .into_iter()
-            .collect();
-        
-        format!("Concept from {} memories", modalities.join(", "))
-    });
+    tracing::info!("Memory store operation completed");
 
-    // Calculate average embedding
-    let embeddings: Vec<Vec<f32>> = memories.iter().map(|m| m.embedding.clone()).collect();
-    let avg_embedding = average_embedding(&embeddings);
-
-    // Create concept memory
-    let concept_id = Uuid::new_v4().to_string();
-    let concept_memory = Memory {
-        id: concept_id.clone(),
-        timestamp: Utc::now(),
-        modality: Modality::Concept,
-        embedding: avg_embedding,
-        content: format!("Consolidated concept: {}", title),
-        facets: {
-            let mut facets = std::collections::HashMap::new();
-            facets.insert("title".to_string(), serde_json::Value::String(title.clone()));
-            facets.insert("children".to_string(), serde_json::Value::Array(
-                memory_ids.iter().map(|id| serde_json::Value::String(id.clone())).collect()
-            ));
-            facets.insert("child_count".to_string(), serde_json::Value::Number(
-                serde_json::Number::from(memories.len())
-            ));
-            facets.insert("consolidated_at".to_string(), serde_json::Value::String(
-                Utc::now().to_rfc3339()
-            ));
-            facets
-        },
-        tags: vec!["concept".to_string(), "consolidated".to_string()],
-    };
-
-    // Add concept to store and save to file
-    if let Err(e) = store.add_memory_and_save(concept_memory) {
-        eprintln!("Failed to save consolidated memory to file: {}", e);
-    }
-    store.create_concept(concept_id.clone(), memory_ids, title.clone());
-
-    let response = ConsolidationResponse {
-        concept_id,
-        title,
-        child_count: memories.len(),
-    };
-
-    Ok(json(&ApiResponse::success(response)))
+    tracing::info!("Returning successful response");
+    Ok(json(&ApiResponse::success(thought)))
 }
 
 pub async fn get_memories(
@@ -144,7 +223,7 @@ pub async fn get_memories(
     memory_store: Arc<RwLock<MemoryStore>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     let store = memory_store.read().await;
-    
+
     let mut memories = if let Some(modality) = query.modality {
         store.get_memories_by_modality(&modality)
     } else {
@@ -171,8 +250,11 @@ pub async fn get_memories(
 pub async fn status(
     reflection_engine: Arc<ReflectionEngine>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    let ollama_available = reflection_engine.check_ollama_health().await.unwrap_or(false);
-    
+    let ollama_available = reflection_engine
+        .check_ollama_health()
+        .await
+        .unwrap_or(false);
+
     let status = serde_json::json!({
         "service": "ego-rs",
         "status": "healthy",
@@ -193,6 +275,6 @@ pub async fn status(
             "verify": "curl http://localhost:11434/api/tags"
         }
     });
-    
+
     Ok(json(&status))
 }

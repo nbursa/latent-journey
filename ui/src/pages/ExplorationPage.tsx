@@ -47,7 +47,33 @@ export default function ExplorationPage() {
     return memoryEvents.map(
       (event): Memory => ({
         id: event.embedding_id,
-        ts: event.ts,
+        timestamp: (() => {
+          // Handle different timestamp formats
+          let timestamp = event.ts;
+
+          // If timestamp is in seconds (typical Unix timestamp), convert to milliseconds
+          if (timestamp < 10000000000) {
+            // Less than year 2286 in seconds
+            timestamp = timestamp * 1000;
+          }
+
+          // If timestamp is still too large, use current time as fallback
+          if (timestamp > 4102444800000) {
+            // Year 2100 in milliseconds
+            timestamp = Date.now();
+          }
+
+          try {
+            return new Date(timestamp).toISOString();
+          } catch (error) {
+            console.warn(
+              "Invalid timestamp, using current time:",
+              event.ts,
+              error
+            );
+            return new Date().toISOString();
+          }
+        })(),
         modality:
           event.source === "vision"
             ? "vision"
@@ -56,7 +82,20 @@ export default function ExplorationPage() {
             : "text",
         embedding: [],
         facets: event.facets,
-        content: "",
+        content: (() => {
+          // Extract content from facets based on source
+          if (event.source === "speech" && event.facets["speech.transcript"]) {
+            return String(event.facets["speech.transcript"]);
+          } else if (
+            event.source === "vision" &&
+            event.facets["vision.object"]
+          ) {
+            return `I see a ${String(event.facets["vision.object"])}`;
+          } else if (event.source === "text" && event.facets["text.content"]) {
+            return String(event.facets["text.content"]);
+          }
+          return "";
+        })(),
         tags: [],
       })
     );

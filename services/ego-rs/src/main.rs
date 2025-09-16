@@ -1,9 +1,4 @@
-use ego_rs::{
-    config::Config,
-    handlers,
-    memory::MemoryStore,
-    reflection::ReflectionEngine,
-};
+use ego_rs::{config::Config, handlers, memory::MemoryStore, reflection::ReflectionEngine};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tracing::{info, Level};
@@ -12,24 +7,17 @@ use warp::Filter;
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize tracing
-    tracing_subscriber::fmt()
-        .with_max_level(Level::INFO)
-        .init();
+    tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 
     let config = Config::default();
     info!("Starting Ego service on port {}", config.port);
 
-    // Initialize memory store and load existing data
+    // Initialize memory store and load existing thoughts data
     let mut memory_store = MemoryStore::new_with_path("data/memory.jsonl".to_string());
-    
-    // Load unconsolidated memories from sentience-rs (read-only for context)
-    if let Err(e) = memory_store.load_unconsolidated_from_sentience("../sentience-rs/data/memory.jsonl") {
-        tracing::warn!("Failed to load unconsolidated memory data: {}", e);
-    }
-    
-    // Load consolidated memories from ego-rs LTM file
+
+    // Load existing thoughts from ego-rs STM file
     if let Err(e) = memory_store.load_ltm_from_jsonl() {
-        tracing::info!("No existing LTM data found, starting fresh: {}", e);
+        tracing::info!("No existing thoughts data found, starting fresh: {}", e);
     }
     let memory_store = Arc::new(RwLock::new(memory_store));
 
@@ -40,9 +28,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         loop {
             interval.tick().await;
             if let Err(e) = memory_store_save.read().await.save_all_memories() {
-                tracing::error!("Failed to save memories periodically: {}", e);
+                tracing::error!("Failed to save thoughts periodically: {}", e);
             } else {
-                tracing::debug!("Periodically saved all memories to file");
+                tracing::debug!("Periodically saved all thoughts to file");
             }
         }
     });
@@ -54,12 +42,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     ));
 
     // Health check endpoint
-    let health = warp::path("health")
-        .and(warp::get())
-        .map(|| warp::reply::json(&serde_json::json!({
+    let health = warp::path("health").and(warp::get()).map(|| {
+        warp::reply::json(&serde_json::json!({
             "status": "healthy",
             "service": "ego-rs"
-        })));
+        }))
+    });
 
     // Status endpoint with Ollama check
     let status = warp::path("api")
@@ -70,50 +58,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(handlers::status);
 
     // Reflection endpoints
-    let reflect = warp::path("api")
-        .and(warp::path("ego"))
-        .and(
-            warp::path("reflect")
-                .and(warp::post())
-                .and(warp::body::json())
-                .and(with_memory_store(memory_store.clone()))
-                .and(with_reflection_engine(reflection_engine.clone()))
-                .and_then(handlers::reflect),
-        );
-
-    // Memory consolidation endpoints
-    let consolidate = warp::path("api")
-        .and(warp::path("ego"))
-        .and(
-            warp::path("consolidate")
-                .and(warp::post())
-                .and(warp::body::json())
-                .and(with_memory_store(memory_store.clone()))
-                .and_then(handlers::consolidate),
-        );
+    let reflect = warp::path("api").and(warp::path("ego")).and(
+        warp::path("reflect")
+            .and(warp::post())
+            .and(warp::body::json())
+            .and(with_memory_store(memory_store.clone()))
+            .and(with_reflection_engine(reflection_engine.clone()))
+            .and_then(handlers::reflect),
+    );
 
     // Memory query endpoints
-    let memories = warp::path("api")
-        .and(warp::path("ego"))
-        .and(
-            warp::path("memories")
-                .and(warp::get())
-                .and(warp::query())
-                .and(with_memory_store(memory_store.clone()))
-                .and_then(handlers::get_memories),
-        );
+    let memories = warp::path("api").and(warp::path("ego")).and(
+        warp::path("memories")
+            .and(warp::get())
+            .and(warp::query())
+            .and(with_memory_store(memory_store.clone()))
+            .and_then(handlers::get_memories),
+    );
 
-    let routes = health
-        .or(status)
-        .or(reflect)
-        .or(consolidate)
-        .or(memories)
-        .with(warp::cors().allow_any_origin().allow_headers(vec!["content-type"]).allow_methods(vec!["GET", "POST"]));
+    let routes = health.or(status).or(reflect).or(memories).with(
+        warp::cors()
+            .allow_any_origin()
+            .allow_headers(vec!["content-type"])
+            .allow_methods(vec!["GET", "POST"]),
+    );
 
     info!("Ego service ready");
-    warp::serve(routes)
-        .run(([0, 0, 0, 0], config.port))
-        .await;
+    warp::serve(routes).run(([0, 0, 0, 0], config.port)).await;
 
     Ok(())
 }

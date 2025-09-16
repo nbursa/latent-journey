@@ -1,6 +1,6 @@
 export interface Memory {
   id: string;
-  ts: number;
+  timestamp: string; // ISO 8601 string for DateTime<Utc>
   modality: "vision" | "speech" | "text" | "concept";
   embedding: number[];
   facets: Record<string, any>;

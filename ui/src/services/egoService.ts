@@ -49,7 +49,7 @@ export class EgoService {
         body: JSON.stringify({
           memories: memories.map((m) => ({
             id: m.id,
-            timestamp: new Date(m.ts).toISOString(),
+            timestamp: m.timestamp, // Already converted to ISO string in ExplorationPage
             modality: m.modality,
             embedding: m.embedding,
             content: m.content || "",
@@ -130,7 +130,7 @@ export class EgoService {
       // Convert backend memory format to frontend format
       return result.data.map((m) => ({
         id: m.id,
-        ts: m.ts,
+        timestamp: m.timestamp,
         modality: m.modality,
         embedding: m.embedding,
         facets: m.facets,

@@ -6,23 +6,20 @@ use std::io::{BufRead, BufReader, Write};
 
 pub struct MemoryStore {
     memories: HashMap<String, Memory>,
-    concepts: HashMap<String, Vec<String>>, // concept_id -> child_memory_ids
-    file_path: String,                      // Path to the memory.jsonl file
+    file_path: String, // Path to the memory.jsonl file
 }
 
 impl MemoryStore {
     pub fn new() -> Self {
         Self {
             memories: HashMap::new(),
-            concepts: HashMap::new(),
-            file_path: "data/memory.jsonl".to_string(), // LTM file in ego-rs/data
+            file_path: "data/memory.jsonl".to_string(), // STM file in ego-rs/data
         }
     }
 
     pub fn new_with_path(file_path: String) -> Self {
         Self {
             memories: HashMap::new(),
-            concepts: HashMap::new(),
             file_path,
         }
     }
@@ -93,13 +90,6 @@ impl MemoryStore {
     pub fn load_ltm_from_jsonl(&mut self) -> Result<(), Box<dyn std::error::Error>> {
         let file_path = self.file_path.clone();
         self.load_from_jsonl(&file_path)
-    }
-
-    pub fn load_unconsolidated_from_sentience(
-        &mut self,
-        file_path: &str,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        self.load_from_jsonl(file_path)
     }
 
     pub fn save_to_jsonl(&self) -> Result<(), Box<dyn std::error::Error>> {
@@ -202,79 +192,9 @@ impl MemoryStore {
             .collect()
     }
 
-    pub fn create_concept(&mut self, concept_id: String, child_ids: Vec<String>, _title: String) {
-        self.concepts.insert(concept_id.clone(), child_ids);
-
-        // Mark child memories as consolidated
-        for child_id in &self.concepts[&concept_id] {
-            if let Some(memory) = self.memories.get_mut(child_id) {
-                memory
-                    .facets
-                    .insert("consolidated".to_string(), serde_json::Value::Bool(true));
-                memory.facets.insert(
-                    "concept_id".to_string(),
-                    serde_json::Value::String(concept_id.clone()),
-                );
-            }
-        }
-    }
-
-    pub fn get_concept_children(&self, concept_id: &str) -> Vec<&Memory> {
-        self.concepts
-            .get(concept_id)
-            .map(|child_ids| {
-                child_ids
-                    .iter()
-                    .filter_map(|id| self.memories.get(id))
-                    .collect()
-            })
-            .unwrap_or_default()
-    }
-
     pub fn get_all_memories(&self) -> Vec<&Memory> {
         self.memories.values().collect()
     }
-
-    pub fn get_concept_memories(&self) -> Vec<&Memory> {
-        self.memories
-            .values()
-            .filter(|m| matches!(m.modality, Modality::Concept))
-            .collect()
-    }
-
-    pub fn get_consolidation_stats(&self) -> ConsolidationStats {
-        let total = self.memories.len();
-        let consolidated = self
-            .memories
-            .values()
-            .filter(|m| {
-                m.facets
-                    .get("consolidated")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false)
-            })
-            .count();
-        let concepts = self.concepts.len();
-
-        ConsolidationStats {
-            total_memories: total,
-            concept_count: concepts,
-            consolidated_count: consolidated,
-            consolidation_rate: if total > 0 {
-                consolidated as f32 / total as f32
-            } else {
-                0.0
-            },
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct ConsolidationStats {
-    pub total_memories: usize,
-    pub concept_count: usize,
-    pub consolidated_count: usize,
-    pub consolidation_rate: f32,
 }
 
 // Helper functions for memory selection and processing
@@ -340,30 +260,5 @@ pub fn select_relevant_memories<'a>(
     }
 
     result.truncate(max_count);
-    result
-}
-
-pub fn average_embedding(embeddings: &[Vec<f32>]) -> Vec<f32> {
-    if embeddings.is_empty() {
-        return Vec::new();
-    }
-
-    let dimensions = embeddings[0].len();
-    let mut result = vec![0.0; dimensions];
-
-    for embedding in embeddings {
-        for (i, &value) in embedding.iter().enumerate() {
-            if i < dimensions {
-                result[i] += value;
-            }
-        }
-    }
-
-    // Normalize by count
-    let count = embeddings.len() as f32;
-    for value in &mut result {
-        *value /= count;
-    }
-
     result
 }
