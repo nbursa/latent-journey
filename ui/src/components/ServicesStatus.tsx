@@ -56,10 +56,7 @@ export default function ServicesStatus({
       <div className="flex items-center justify-between mb-2">
         <h3 className="text-sm font-semibold">Services Status</h3>
         {onRefresh && (
-          <button
-            onClick={onRefresh}
-            className="text-xs px-2 py-1 bg-accent/20 hover:bg-accent/30 rounded"
-          >
+          <button onClick={onRefresh} className="text-xs px-2 py-1 btn-primary">
             Refresh
           </button>
         )}
