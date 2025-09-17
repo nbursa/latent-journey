@@ -187,6 +187,66 @@ const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
   });
 };
 
+// Individual Points Component (more stable for small datasets)
+function IndividualPoints({
+  points,
+  onSelectEvent,
+  onHoverEvent,
+}: {
+  points: Point3D[];
+  onSelectEvent: (event: MemoryEvent) => void;
+  onHoverEvent: (
+    event: MemoryEvent | null,
+    mousePos?: { x: number; y: number }
+  ) => void;
+}) {
+  // Limit points for display to prevent performance issues
+  const maxPoints = 1000;
+  const limitedPoints = points.slice(0, maxPoints);
+
+  console.log(
+    `IndividualPoints: Rendering ${limitedPoints.length} points out of ${points.length} total`
+  );
+
+  if (limitedPoints.length === 0) {
+    return null;
+  }
+
+  return (
+    <>
+      {limitedPoints.map((point, index) => (
+        <mesh
+          key={`point-${point.event.ts}-${index}`}
+          position={[point.x, point.y, point.z]}
+          scale={[point.size, point.size, point.size]}
+          onClick={() => onSelectEvent(point.event)}
+          onPointerOver={(event) => {
+            const target = event.nativeEvent.target as HTMLElement;
+            if (target) {
+              const rect = target.getBoundingClientRect();
+              const mousePos = {
+                x: event.nativeEvent.clientX - rect.left,
+                y: event.nativeEvent.clientY - rect.top,
+              };
+              onHoverEvent(point.event, mousePos);
+            }
+          }}
+          onPointerOut={() => onHoverEvent(null)}
+        >
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial
+            color={point.color}
+            transparent
+            opacity={0.8}
+            roughness={0.2}
+            metalness={0.8}
+          />
+        </mesh>
+      ))}
+    </>
+  );
+}
+
 // Journey Lines Component
 function JourneyLines({ points }: { points: Point3D[] }) {
   const lineGeometry = useMemo(() => {
@@ -347,39 +407,11 @@ function Scene3D({
       {points.length > 1 && <JourneyLines points={points} />}
 
       {/* Individual points */}
-      {points.map((point, index) => (
-        <mesh
-          key={`${point.event.ts}-${index}`}
-          position={[point.x, point.y, point.z]}
-          scale={[point.size, point.size, point.size]}
-          userData={{ event: point.event, index }}
-          onClick={(event) => {
-            event.stopPropagation();
-            onSelectEvent(point.event);
-          }}
-          onPointerOver={(event) => {
-            const target = event.nativeEvent.target as HTMLElement;
-            if (target) {
-              const rect = target.getBoundingClientRect();
-              const mousePos = {
-                x: event.nativeEvent.clientX - rect.left,
-                y: event.nativeEvent.clientY - rect.top,
-              };
-              onHoverEvent(point.event, mousePos);
-            }
-          }}
-          onPointerOut={() => onHoverEvent(null)}
-        >
-          <sphereGeometry args={[1, 16, 16]} />
-          <meshStandardMaterial
-            color={point.color}
-            transparent
-            opacity={0.8}
-            roughness={0.2}
-            metalness={0.8}
-          />
-        </mesh>
-      ))}
+      <IndividualPoints
+        points={points}
+        onSelectEvent={onSelectEvent}
+        onHoverEvent={onHoverEvent}
+      />
     </>
   );
 }
@@ -428,6 +460,7 @@ export default function LatentScatter({
         isSelected: selectedEvent?.ts === point.event.ts,
       }));
 
+      console.log(`LatentScatter3D: Generated ${updatedPoints.length} points`);
       setPoints(updatedPoints);
       setIsComputing(false);
     }, 500);
@@ -504,7 +537,7 @@ export default function LatentScatter({
               const handleContextRestored = () => {
                 console.log("WebGL context restored");
                 setWebglError(false);
-                // Force re-render
+                // Force re-render by resetting the renderer
                 gl.resetState();
               };
 
