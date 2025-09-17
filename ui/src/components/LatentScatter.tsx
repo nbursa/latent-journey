@@ -371,7 +371,7 @@ function Scene3D({
         bounds.maxY - bounds.minY,
         bounds.maxZ - bounds.minZ
       );
-      const distance = Math.max(maxSize * 0.8, 30);
+      const distance = Math.max(maxSize * 2, 10);
 
       switch (cameraPreset) {
         case "top":
@@ -380,19 +380,18 @@ function Scene3D({
           setCameraPosition({ x: centerX, y: centerY + distance, z: centerZ });
           break;
         case "isometric":
-          const isoDistance = distance * 1.2;
-          const isoX = centerX + isoDistance * 0.7;
-          const isoY = centerY + isoDistance * 0.7;
-          const isoZ = centerZ + isoDistance * 0.7;
+          const isoX = centerX + distance * 0.5;
+          const isoY = centerY + distance * 0.5;
+          const isoZ = centerZ + distance * 0.5;
           camera.position.set(isoX, isoY, isoZ);
           camera.lookAt(centerX, centerY, centerZ);
           setCameraPosition({ x: isoX, y: isoY, z: isoZ });
           break;
         case "free":
         default:
-          const freeX = centerX + distance * 0.65;
-          const freeY = centerY + distance * 0.65;
-          const freeZ = centerZ + distance * 0.65;
+          const freeX = centerX + distance * 0.5;
+          const freeY = centerY + distance * 0.5;
+          const freeZ = centerZ + distance * 0.5;
           camera.position.set(freeX, freeY, freeZ);
           camera.lookAt(centerX, centerY, centerZ);
           setCameraPosition({ x: freeX, y: freeY, z: freeZ });

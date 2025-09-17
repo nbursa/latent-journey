@@ -298,7 +298,7 @@ export default function RealLatentSpace3D({
     scene.add(fillLight);
 
     // Add subtle grid for spatial reference
-    const gridHelper = new THREE.GridHelper(200, 40, 0x333333, 0x222222);
+    const gridHelper = new THREE.GridHelper(600, 30, 0x1e2531, 0x0f131a);
     gridHelper.position.y = -50; // Place below the data points
     scene.add(gridHelper);
 
@@ -635,18 +635,18 @@ export default function RealLatentSpace3D({
         break;
       case "isometric":
         camera.position.set(
-          centerX + distance * 0.6,
-          centerY + distance * 0.6,
-          centerZ + distance * 0.6
+          centerX + distance * 0.5,
+          centerY + distance * 0.5,
+          centerZ + distance * 0.5
         );
         camera.lookAt(centerX, centerY, centerZ);
         break;
       case "free":
       default:
         camera.position.set(
-          centerX + distance * 0.6,
-          centerY + distance * 0.6,
-          centerZ + distance * 0.6
+          centerX + distance * 0.5,
+          centerY + distance * 0.5,
+          centerZ + distance * 0.5
         );
         camera.lookAt(centerX, centerY, centerZ);
         break;
