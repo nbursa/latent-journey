@@ -83,7 +83,7 @@ export default function UnifiedMiniMap({
 
   return (
     <div
-      className={`absolute top-4 right-4 w-60 h-50 glass flat border border-ui-border overflow-visible z-10 ${className}`}
+      className={`absolute bottom-4 right-4 w-60 h-50 glass flat border border-ui-border overflow-visible z-10 ${className}`}
     >
       {/* Header with controls */}
       <div className="p-2 text-xs text-ui-dim border-b border-ui-border flex items-center justify-between">

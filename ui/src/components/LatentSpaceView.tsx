@@ -356,10 +356,22 @@ export default function LatentSpaceView({
           d3.selectAll(".tooltip").remove();
         });
 
-      // Add legend
+      // Legend
       const legend = g
         .append("g")
-        .attr("transform", `translate(${innerWidth - 120}, 20)`);
+        .attr(
+          "transform",
+          `translate(${innerWidth - 80}, ${innerHeight - 60})`
+        );
+
+      legend
+        .append("rect")
+        .attr("x", -10)
+        .attr("y", -10)
+        .attr("width", 100)
+        .attr("height", 60)
+        .attr("fill", "rgba(0, 0, 0, 0.25)")
+        .attr("rx", 4);
 
       legend
         .append("circle")
@@ -417,7 +429,7 @@ export default function LatentSpaceView({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [points, selectedEvent, onSelectEvent]);
+  }, [points, selectedEvent, onSelectEvent, showTrajectory]);
 
   const handleToggleWaypoint = (event: MemoryEvent) => {
     toggleWaypoint(event.ts);
@@ -455,7 +467,6 @@ export default function LatentSpaceView({
           <div className="flex items-center gap-4">
             <span>Points: {points.length}</span>
             <span>Waypoints: {waypoints.size}</span>
-            <span>Click points to select • Right-click to bookmark</span>
           </div>
         </div>
       )}
