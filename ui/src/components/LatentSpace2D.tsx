@@ -315,6 +315,7 @@ export default function LatentSpaceView({
         .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
         .style("cursor", "pointer")
         .on("click", (_, d) => {
+          d3.selectAll(".tooltip").remove();
           onSelectEvent(d.event);
         })
         .on("contextmenu", (event, d) => {
