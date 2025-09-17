@@ -16,6 +16,9 @@ export interface MemoryEvent {
   embedding: number[];
   facets: Record<string, string | number>;
   source: string; // "vision" or "speech"
+  content?: string;
+  title?: string;
+  tags?: string[];
 }
 
 export interface ServicesStatus {

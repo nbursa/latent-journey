@@ -1,7 +1,7 @@
 import { useAppStore } from "../stores/appStore";
 import MemoryAnalysisView from "../components/MemoryAnalysisView";
 import ProgressiveDisclosure from "../components/ProgressiveDisclosure";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import {
   Brain,
   Clock,
@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 
 export default function MemoryAnalysisPage() {
-  const memoryEvents = useAppStore((state) => state.memoryEvents);
   const selectedMemoryEvent = useAppStore((state) => state.selectedMemoryEvent);
   const setSelectedMemoryEvent = useAppStore(
     (state) => state.setSelectedMemoryEvent
@@ -33,14 +32,107 @@ export default function MemoryAnalysisPage() {
     null
   );
   const [memoryInsights, setMemoryInsights] = useState<string>("");
+  const [stmData, setStmData] = useState<any[]>([]);
+  const [ltmData, setLtmData] = useState<any[]>([]);
+  const [eventsData, setEventsData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const playbackIntervalRef = useRef<number | null>(null);
+  const previousSelectedMemoryRef = useRef<any>(null);
+  const isUpdatingRef = useRef<boolean>(false);
 
-  // Enhanced playback functionality
+  // Combine all memory data into a unified timeline
+  const allMemoryEvents = useMemo(() => {
+    const events = [
+      // STM data - text-based thoughts with facets
+      ...stmData.map((item) => ({
+        ...item,
+        source: "stm",
+        type: "short_term",
+        ts: new Date(item.timestamp).getTime() / 1000, // Convert timestamp to seconds
+        content: item.content,
+        facets: item.facets || {},
+        tags: item.tags || [],
+        embedding_id: item.id, // Use id as embedding_id
+      })),
+      // LTM data - consolidated experiences
+      ...ltmData.map((item) => ({
+        ...item,
+        source: "ltm",
+        type: "long_term",
+        ts: new Date(item.created_at).getTime() / 1000,
+        content: item.summary,
+        facets: {
+          "affect.valence": item.emotional_tone || 0,
+          "affect.arousal": item.importance || 0,
+          "consolidation.themes": item.themes || [],
+          "consolidation.consolidated_from": item.consolidated_from || [],
+        },
+        tags: item.tags || [],
+        title: item.title,
+        summary: item.summary,
+      })),
+      // Events data - perception events (vision, speech)
+      ...eventsData.map((item) => ({
+        ...item,
+        source: item.source || "event",
+        type: "perception",
+        ts: item.ts || Date.now() / 1000,
+        facets: item.facets || {},
+        embedding_id: item.embedding_id,
+      })),
+    ];
+
+    const sortedEvents = events.sort((a, b) => a.ts - b.ts);
+    return sortedEvents;
+  }, [stmData, ltmData, eventsData]);
+
+  // Load data
+  useEffect(() => {
+    const loadMemoryData = async () => {
+      setIsLoading(true);
+      try {
+        // Load STM data from API
+        const stmResponse = await fetch("/api/ego/memories");
+        if (stmResponse.ok) {
+          const stmResult = await stmResponse.json();
+          const stmData = stmResult.data || [];
+          setStmData(stmData);
+        }
+
+        // Load LTM data from API
+        const ltmResponse = await fetch("/api/ego/experiences");
+        if (ltmResponse.ok) {
+          const ltmResult = await ltmResponse.json();
+          const ltmData = ltmResult.data || [];
+          setLtmData(ltmData);
+        }
+
+        // Load events data from API
+        const eventsResponse = await fetch("/api/memory");
+        if (eventsResponse.ok) {
+          const eventsData = await eventsResponse.json();
+          setEventsData(eventsData);
+        }
+      } catch (error) {
+        console.error("Error loading memory data:", error);
+        // Fallback to empty arrays if API calls fail
+        setStmData([]);
+        setLtmData([]);
+        setEventsData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadMemoryData();
+  }, []);
+
+  // Playback functionality
   useEffect(() => {
     if (isPlaying) {
       playbackIntervalRef.current = setInterval(() => {
         setCurrentTime((prev) => {
-          const maxTime = memoryEvents.length * 10; // 10 seconds per event
+          const maxTime = allMemoryEvents.length * 10; // 10 seconds per event
           if (prev >= maxTime) {
             setIsPlaying(false);
             return maxTime;
@@ -59,19 +151,40 @@ export default function MemoryAnalysisPage() {
         clearInterval(playbackIntervalRef.current);
       }
     };
-  }, [isPlaying, playbackSpeed, memoryEvents.length]);
+  }, [isPlaying, playbackSpeed, allMemoryEvents.length]);
 
   // Auto-select memory event based on current time
   useEffect(() => {
-    if (memoryEvents.length > 0) {
+    if (allMemoryEvents.length > 0 && !isUpdatingRef.current) {
       const eventIndex = Math.floor(currentTime / 10);
       const targetEvent =
-        memoryEvents[Math.min(eventIndex, memoryEvents.length - 1)];
-      if (targetEvent && targetEvent !== selectedMemoryEvent) {
+        allMemoryEvents[Math.min(eventIndex, allMemoryEvents.length - 1)];
+
+      // Compare by unique properties
+      const isDifferent =
+        !previousSelectedMemoryRef.current ||
+        previousSelectedMemoryRef.current.ts !== targetEvent.ts ||
+        previousSelectedMemoryRef.current.source !== targetEvent.source ||
+        previousSelectedMemoryRef.current.embedding_id !==
+          targetEvent.embedding_id;
+
+      if (targetEvent && isDifferent) {
+        isUpdatingRef.current = true;
         setSelectedMemoryEvent(targetEvent);
+        previousSelectedMemoryRef.current = targetEvent;
+        // Reset the flag after a delay
+        setTimeout(() => {
+          isUpdatingRef.current = false;
+        }, 100);
       }
     }
-  }, [currentTime, memoryEvents, selectedMemoryEvent, setSelectedMemoryEvent]);
+  }, [currentTime, allMemoryEvents, setSelectedMemoryEvent]);
+
+  // Reset previous memory ref when allMemoryEvents changes
+  useEffect(() => {
+    previousSelectedMemoryRef.current = null;
+    isUpdatingRef.current = false;
+  }, [allMemoryEvents]);
 
   // Generate AI insights when memory is selected
   useEffect(() => {
@@ -81,11 +194,17 @@ export default function MemoryAnalysisPage() {
   }, [selectedMemoryEvent]);
 
   const generateMemoryInsights = (event: any) => {
-    const arousal = Number(event.facets["affect.arousal"]) || 0;
-    const valence = Number(event.facets["affect.valence"]) || 0;
+    const arousal = Number(event.facets?.["affect.arousal"]) || 0;
+    const valence = Number(event.facets?.["affect.valence"]) || 0;
     const source = event.source;
+    const content = event.content || "";
+    const title = event.title || "";
+    const creativeInsight = Number(event.facets?.["creative_insight"]) || 0;
+    const selfAwareness = Number(event.facets?.["self_awareness"]) || 0;
 
     let insight = "";
+
+    // Analyze arousal patterns
     if (arousal > 0.7) {
       insight +=
         "This memory shows high arousal patterns, suggesting significant attention or emotional engagement. ";
@@ -94,24 +213,66 @@ export default function MemoryAnalysisPage() {
         "This memory exhibits low arousal, indicating a more passive or background perception. ";
     }
 
+    // Analyze valence
     if (valence > 0.5) {
       insight +=
         "The positive valence suggests this was a pleasant or rewarding experience. ";
     } else if (valence < -0.5) {
       insight +=
         "The negative valence indicates this was an unpleasant or aversive experience. ";
+    } else {
+      insight +=
+        "The neutral valence suggests this was a balanced or routine experience. ";
     }
 
+    // Analyze source-specific characteristics
     if (source === "vision") {
-      insight +=
-        "As a visual memory, this likely represents a key moment of visual attention or recognition. ";
+      const object = event.facets?.["vision.object"];
+      const color = event.facets?.["color.dominant"];
+      insight += `As a visual memory, this represents a moment of visual attention${
+        object ? ` focused on a ${object}` : ""
+      }${color ? ` with dominant ${color} coloring` : ""}. `;
     } else if (source === "speech") {
+      const transcript = event.facets?.["speech.transcript"];
+      const intent = event.facets?.["speech.intent"];
+      insight += `This speech-based memory contains linguistic elements${
+        transcript ? `: "${transcript}"` : ""
+      }${intent ? ` with ${intent} intent` : ""}. `;
+    } else if (source === "stm") {
       insight +=
-        "This speech-based memory may contain important linguistic or conversational elements. ";
+        "This short-term memory represents a recent thought or observation that was processed by the ego system. ";
+    } else if (source === "ltm") {
+      insight +=
+        "This long-term memory has been consolidated from multiple experiences, representing a deeper understanding. ";
     }
 
-    insight +=
-      "Despite its apparent simplicity, it may have seeded several later thoughts around perception and memory formation.";
+    // Analyze cognitive aspects
+    if (creativeInsight > 0.7) {
+      insight +=
+        "The high creative insight score suggests this memory sparked novel connections or ideas. ";
+    }
+
+    if (selfAwareness > 0.7) {
+      insight +=
+        "The high self-awareness score indicates this memory involved significant introspection or self-reflection. ";
+    }
+
+    // Add content-specific insights
+    if (content.includes("Nanat") || content.includes("introduction")) {
+      insight +=
+        "This memory centers around social interaction and identity formation, marking an important moment of human connection. ";
+    }
+
+    if (title && title.includes("Mystery")) {
+      insight +=
+        "The consolidated nature of this memory suggests it represents a deeper pattern or recurring theme in the AI's experience. ";
+    }
+
+    // Fallback insight
+    if (!insight) {
+      insight =
+        "This memory, while appearing simple, may have seeded several later thoughts around perception and memory formation.";
+    }
 
     setMemoryInsights(insight);
   };
@@ -129,12 +290,12 @@ export default function MemoryAnalysisPage() {
     const rect = event.currentTarget.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const percentage = clickX / rect.width;
-    const newTime = percentage * (memoryEvents.length * 10);
+    const newTime = percentage * (allMemoryEvents.length * 10);
     setCurrentTime(newTime);
   };
 
   const handleExport = () => {
-    // Export functionality would be implemented here
+    // Export functionality
     console.log("Exporting memory data...");
   };
 
@@ -163,17 +324,17 @@ export default function MemoryAnalysisPage() {
   ];
 
   return (
-    <div className="h-full flex flex-col xl:flex-row gap-4 p-4 overflow-hidden">
+    <div className="h-full flex flex-col xl:flex-row gap-4 p-4">
       {/* Primary Panel - Memory Timeline & Analysis */}
       <div className="flex-1 flex flex-col min-h-0">
         {/* Header */}
         <div className="flex items-center justify-between mb-4 flex-shrink-0">
           <div className="flex items-center gap-3">
-            <h1 className="text-xl font-bold text-gradient scanline relative">
+            <h1 className="text-xl font-bold text-gradient relative">
               Memory Lab
             </h1>
             <div className="hud-element text-xs">
-              {memoryEvents.length} events
+              {isLoading ? "Loading..." : `${allMemoryEvents.length} events`}
             </div>
           </div>
 
@@ -223,16 +384,16 @@ export default function MemoryAnalysisPage() {
                   className="h-full bg-gradient-to-r from-ui-accent to-ui-warn rounded-full transition-all duration-300"
                   style={{
                     width: `${
-                      (currentTime / (memoryEvents.length * 10)) * 100
+                      (currentTime / (allMemoryEvents.length * 10)) * 100
                     }%`,
                   }}
                 />
 
                 {/* Memory event markers */}
-                {memoryEvents.map((event, index) => {
-                  const arousal = Number(event.facets["affect.arousal"]) || 0;
-                  const valence = Number(event.facets["affect.valence"]) || 0;
-                  const position = (index / memoryEvents.length) * 100;
+                {allMemoryEvents.map((event, index) => {
+                  const arousal = Number(event.facets?.["affect.arousal"]) || 0;
+                  const valence = Number(event.facets?.["affect.valence"]) || 0;
+                  const position = (index / allMemoryEvents.length) * 100;
                   const isActive = Math.floor(currentTime / 10) === index;
 
                   return (
@@ -252,7 +413,9 @@ export default function MemoryAnalysisPage() {
                         height: `${Math.max(arousal * 24, 8)}px`,
                         top: `${12 - arousal * 12}px`,
                       }}
-                      title={`Event ${index + 1}: Arousal ${arousal.toFixed(
+                      title={`Event ${index + 1}: ${
+                        event.source
+                      } - Arousal ${arousal.toFixed(
                         2
                       )}, Valence ${valence.toFixed(2)}`}
                     />
@@ -264,7 +427,7 @@ export default function MemoryAnalysisPage() {
                   className="absolute top-0 w-1 h-8 bg-white rounded-full shadow-lg"
                   style={{
                     left: `${
-                      (currentTime / (memoryEvents.length * 10)) * 100
+                      (currentTime / (allMemoryEvents.length * 10)) * 100
                     }%`,
                   }}
                 />
@@ -289,7 +452,7 @@ export default function MemoryAnalysisPage() {
                 </select>
               </div>
               <div className="flex items-center gap-2">
-                <span>Events: {memoryEvents.length}</span>
+                <span>Events: {allMemoryEvents.length}</span>
                 <div className="w-2 h-2 bg-green-400 rounded-full"></div>
                 <span className="text-xs">Positive</span>
                 <div className="w-2 h-2 bg-red-400 rounded-full"></div>
@@ -303,25 +466,75 @@ export default function MemoryAnalysisPage() {
 
         {/* Memory Analysis View */}
         <div className="flex-1 min-h-0 overflow-hidden">
-          <MemoryAnalysisView
-            memoryEvents={memoryEvents}
-            selectedEvent={selectedMemoryEvent}
-            onSelectEvent={setSelectedMemoryEvent}
-          />
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center text-ui-dim">
+              <div className="text-center">
+                <Brain className="w-12 h-12 mx-auto mb-4 opacity-50 animate-pulse" />
+                <div className="text-lg mb-2">Loading Memory Data...</div>
+                <div className="text-sm">Fetching STM, LTM, and Events</div>
+              </div>
+            </div>
+          ) : (
+            <div className="h-full flex flex-col">
+              {/* <div className="p-4 bg-ui-surface/50 rounded mb-4">
+                <h3 className="text-sm font-medium mb-2">
+                  Memory Events Summary
+                </h3>
+                <div className="text-xs space-y-1">
+                  <div>Total Events: {allMemoryEvents.length}</div>
+                  <div>
+                    STM:{" "}
+                    {allMemoryEvents.filter((e) => e.source === "stm").length}
+                  </div>
+                  <div>
+                    LTM:{" "}
+                    {allMemoryEvents.filter((e) => e.source === "ltm").length}
+                  </div>
+                  <div>
+                    Vision:{" "}
+                    {
+                      allMemoryEvents.filter((e) => e.source === "vision")
+                        .length
+                    }
+                  </div>
+                  <div>
+                    Speech:{" "}
+                    {
+                      allMemoryEvents.filter((e) => e.source === "speech")
+                        .length
+                    }
+                  </div>
+                  <div>
+                    Selected:{" "}
+                    {selectedMemoryEvent
+                      ? `${
+                          selectedMemoryEvent.source
+                        } - ${selectedMemoryEvent.content?.substring(0, 30)}...`
+                      : "None"}
+                  </div>
+                </div>
+              </div> */}
+              <MemoryAnalysisView
+                memoryEvents={allMemoryEvents}
+                selectedEvent={selectedMemoryEvent}
+                onSelectEvent={setSelectedMemoryEvent}
+              />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Enhanced Side Dock - Advanced Analysis & Insights */}
-      <div className="w-96 flex flex-col min-h-0 overflow-hidden gap-4">
+      <div className="w-96 flex flex-col h-full gap-4">
         {/* Advanced Memory Analysis Panel */}
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2">
+        <div className="flex-1 min-h-0 flex flex-col">
+          <h2 className="text-lg font-semibold mb-3 flex items-center gap-2 flex-shrink-0">
             <BarChart3 className="w-5 h-5" />
             Advanced Memory Analysis
           </h2>
 
-          <div className="space-y-3 h-full overflow-y-auto">
-            {selectedMemoryEvent ? (
+          <div className="space-y-3 flex-1 overflow-y-auto pr-2 pb-4">
+            {selectedMemoryEvent && selectedMemoryEvent.facets ? (
               <>
                 {/* Event Snapshot with Enhanced Data */}
                 <ProgressiveDisclosure
@@ -334,33 +547,33 @@ export default function MemoryAnalysisPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-ui-dim">Source:</span>
                         <span className="text-ui-text capitalize font-medium">
-                          {selectedMemoryEvent.source}
+                          {selectedMemoryEvent.source || "unknown"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-ui-dim">Depth:</span>
+                        <span className="text-ui-dim">Type:</span>
                         <span className="text-ui-text font-medium">
-                          {selectedMemoryEvent.source === "vision"
-                            ? "STM"
-                            : "LTM"}
+                          {(selectedMemoryEvent as any).type ||
+                            selectedMemoryEvent.source ||
+                            "unknown"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-ui-dim">Usage:</span>
+                        <span className="text-ui-dim">Timestamp:</span>
                         <span className="text-ui-text font-medium">
-                          {Math.floor(Math.random() * 5) + 1} thoughts
+                          {selectedMemoryEvent.ts
+                            ? new Date(
+                                selectedMemoryEvent.ts * 1000
+                              ).toLocaleString()
+                            : "Unknown"}
                         </span>
                       </div>
                       <div className="flex items-center justify-between">
-                        <span className="text-ui-dim">Conflicts:</span>
+                        <span className="text-ui-dim">Data Available:</span>
                         <span className="text-ui-text font-medium">
-                          {Math.random() > 0.8 ? "None" : "Contradiction"}
+                          {selectedMemoryEvent.facets ? "Yes" : "No"}
                         </span>
                       </div>
-                    </div>
-
-                    <div className="text-xs text-ui-dim font-mono">
-                      {new Date(selectedMemoryEvent.ts * 1000).toLocaleString()}
                     </div>
                   </div>
                 </ProgressiveDisclosure>
@@ -373,15 +586,44 @@ export default function MemoryAnalysisPage() {
                   explainerText="Visual concepts extracted from the memory"
                 >
                   <div className="flex flex-wrap gap-1">
-                    {["person", "book", "banana", "indoor", "bookshelf"].map(
-                      (concept, index) => (
-                        <span
-                          key={index}
-                          className="px-2 py-1 bg-ui-surface/50 rounded text-xs"
-                        >
-                          {concept}
-                        </span>
-                      )
+                    {selectedMemoryEvent.facets?.["vision.object"] && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {selectedMemoryEvent.facets["vision.object"]}
+                      </span>
+                    )}
+                    {selectedMemoryEvent.facets?.["color.dominant"] && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {selectedMemoryEvent.facets["color.dominant"]}
+                      </span>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.transcript"] && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {selectedMemoryEvent.facets["speech.transcript"]}
+                      </span>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.intent"] && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {selectedMemoryEvent.facets["speech.intent"]}
+                      </span>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.sentiment"] && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {selectedMemoryEvent.facets["speech.sentiment"]}
+                      </span>
+                    )}
+                    {(selectedMemoryEvent as any).content && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {(selectedMemoryEvent as any).content
+                          .split(" ")
+                          .slice(0, 3)
+                          .join(" ")}
+                        ...
+                      </span>
+                    )}
+                    {(selectedMemoryEvent as any).title && (
+                      <span className="px-2 py-1 bg-ui-surface/50 rounded text-xs">
+                        {(selectedMemoryEvent as any).title}
+                      </span>
                     )}
                   </div>
                 </ProgressiveDisclosure>
@@ -404,14 +646,54 @@ export default function MemoryAnalysisPage() {
                       <span className="text-ui-dim">Valence:</span>
                       <span className="text-ui-text font-medium">
                         {Number(
-                          selectedMemoryEvent.facets["affect.valence"] || 0
+                          selectedMemoryEvent.facets?.["affect.valence"] || 0
                         ).toFixed(2)}
                       </span>
                     </div>
                     <div className="flex items-center justify-between">
-                      <span className="text-ui-dim">Object:</span>
-                      <span className="text-ui-text font-medium">person</span>
+                      <span className="text-ui-dim">Arousal:</span>
+                      <span className="text-ui-text font-medium">
+                        {Number(
+                          selectedMemoryEvent.facets?.["affect.arousal"] || 0
+                        ).toFixed(2)}
+                      </span>
                     </div>
+                    {selectedMemoryEvent.facets?.["vision.object"] && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-ui-dim">Object:</span>
+                        <span className="text-ui-text font-medium">
+                          {selectedMemoryEvent.facets["vision.object"]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.intent"] && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-ui-dim">Intent:</span>
+                        <span className="text-ui-text font-medium">
+                          {selectedMemoryEvent.facets["speech.intent"]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["creative_insight"] && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-ui-dim">Creative Insight:</span>
+                        <span className="text-ui-text font-medium">
+                          {Number(
+                            selectedMemoryEvent.facets["creative_insight"]
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["self_awareness"] && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-ui-dim">Self Awareness:</span>
+                        <span className="text-ui-text font-medium">
+                          {Number(
+                            selectedMemoryEvent.facets["self_awareness"]
+                          ).toFixed(2)}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </ProgressiveDisclosure>
 
@@ -428,7 +710,8 @@ export default function MemoryAnalysisPage() {
                         style={{
                           left: `${
                             (Number(
-                              selectedMemoryEvent.facets["affect.valence"] || 0
+                              selectedMemoryEvent.facets?.["affect.valence"] ||
+                                0
                             ) +
                               1) *
                             50
@@ -436,8 +719,9 @@ export default function MemoryAnalysisPage() {
                           top: `${
                             (1 -
                               Number(
-                                selectedMemoryEvent.facets["affect.arousal"] ||
-                                  0
+                                selectedMemoryEvent.facets?.[
+                                  "affect.arousal"
+                                ] || 0
                               )) *
                             100
                           }%`,
@@ -492,33 +776,94 @@ export default function MemoryAnalysisPage() {
                   explainerText="Synthesized semantic properties"
                 >
                   <div className="space-y-2 text-xs">
-                    <div className="flex items-center gap-2">
-                      <Eye className="w-4 h-4 text-yellow-400" />
-                      <span className="text-ui-dim">Object:</span>
-                      <span className="text-ui-text">person</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Palette className="w-4 h-4 text-blue-400" />
-                      <span className="text-ui-dim">Dominant Color:</span>
-                      <span className="text-ui-text">white</span>
-                    </div>
+                    {selectedMemoryEvent.facets?.["vision.object"] && (
+                      <div className="flex items-center gap-2">
+                        <Eye className="w-4 h-4 text-yellow-400" />
+                        <span className="text-ui-dim">Object:</span>
+                        <span className="text-ui-text">
+                          {selectedMemoryEvent.facets["vision.object"]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["color.dominant"] && (
+                      <div className="flex items-center gap-2">
+                        <Palette className="w-4 h-4 text-blue-400" />
+                        <span className="text-ui-dim">Dominant Color:</span>
+                        <span className="text-ui-text">
+                          {selectedMemoryEvent.facets["color.dominant"]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.transcript"] && (
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-green-400" />
+                        <span className="text-ui-dim">Transcript:</span>
+                        <span className="text-ui-text">
+                          {selectedMemoryEvent.facets["speech.transcript"]}
+                        </span>
+                      </div>
+                    )}
+                    {selectedMemoryEvent.facets?.["speech.intent"] && (
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-blue-400" />
+                        <span className="text-ui-dim">Intent:</span>
+                        <span className="text-ui-text">
+                          {selectedMemoryEvent.facets["speech.intent"]}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-green-400" />
-                      <span className="text-ui-dim">Location:</span>
-                      <span className="text-ui-text">indoor, bookshelf</span>
+                      <span className="text-ui-dim">Source:</span>
+                      <span className="text-ui-text">
+                        {selectedMemoryEvent.source}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Heart className="w-4 h-4 text-red-400" />
-                      <span className="text-ui-dim">Emotional tone:</span>
-                      <span className="text-ui-text">neutral → positive</span>
+                      <span className="text-ui-dim">Valence:</span>
+                      <span className="text-ui-text">
+                        {Number(
+                          selectedMemoryEvent.facets?.["affect.valence"] || 0
+                        ).toFixed(2)}
+                      </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Hash className="w-4 h-4 text-purple-400" />
-                      <span className="text-ui-dim">Symbolic tags:</span>
+                      <span className="text-ui-dim">Arousal:</span>
                       <span className="text-ui-text">
-                        identity, interaction, first-person
+                        {Number(
+                          selectedMemoryEvent.facets?.["affect.arousal"] || 0
+                        ).toFixed(2)}
                       </span>
                     </div>
+                    {(selectedMemoryEvent as any).tags &&
+                      (selectedMemoryEvent as any).tags.length > 0 && (
+                        <div className="flex items-center gap-2">
+                          <Hash className="w-4 h-4 text-purple-400" />
+                          <span className="text-ui-dim">Tags:</span>
+                          <span className="text-ui-text">
+                            {(selectedMemoryEvent as any).tags.join(", ")}
+                          </span>
+                        </div>
+                      )}
+                    {selectedMemoryEvent.facets?.["consolidation.themes"] && (
+                      <div className="flex items-center gap-2">
+                        <Hash className="w-4 h-4 text-orange-400" />
+                        <span className="text-ui-dim">Themes:</span>
+                        <span className="text-ui-text">
+                          {Array.isArray(
+                            selectedMemoryEvent.facets["consolidation.themes"]
+                          )
+                            ? selectedMemoryEvent.facets[
+                                "consolidation.themes"
+                              ].join(", ")
+                            : selectedMemoryEvent.facets[
+                                "consolidation.themes"
+                              ]}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </ProgressiveDisclosure>
 
@@ -576,6 +921,16 @@ export default function MemoryAnalysisPage() {
                   </div>
                 </ProgressiveDisclosure>
               </>
+            ) : selectedMemoryEvent ? (
+              <div className="h-full flex items-center justify-center text-ui-dim">
+                <div className="text-center">
+                  <Brain className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <div className="text-lg mb-2">Memory Selected</div>
+                  <div className="text-sm">
+                    This memory doesn't have analysis data available
+                  </div>
+                </div>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-ui-dim">
                 <div className="text-center">

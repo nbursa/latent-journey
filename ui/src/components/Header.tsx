@@ -1,5 +1,6 @@
 import ServicesStatus from "./ServicesStatus";
 import CapturesGallery from "./CapturesGallery";
+import MemorySummary from "./MemorySummary";
 import Navigation from "./Navigation";
 import { ServicesStatus as ServicesStatusType } from "../types";
 import { useLocation } from "react-router-dom";
@@ -17,6 +18,7 @@ export default function Header({
 }: HeaderProps) {
   const location = useLocation();
   const isExplorationPage = location.pathname === "/";
+  const isMemoryAnalysisPage = location.pathname === "/memory";
 
   return (
     <div className="flex-shrink-0 p-2 sm:p-4">
@@ -28,10 +30,11 @@ export default function Header({
         <Navigation />
       </div>
 
-      {/* Services Status and Captures */}
+      {/* Page-specific Components */}
       <div className="flex flex-col sm:flex-row gap-2 sm:gap-4">
         <ServicesStatus servicesStatus={servicesStatus} onRefresh={onRefresh} />
         {isExplorationPage && <CapturesGallery captures={captures} />}
+        {isMemoryAnalysisPage && <MemorySummary />}
       </div>
     </div>
   );
