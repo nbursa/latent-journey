@@ -4,7 +4,6 @@ import LatentSpace3D from "../components/LatentSpace3D";
 import LatentScatter from "../components/LatentScatter3D";
 import WaypointComparison from "../components/WaypointComparison";
 import VisualizationControls from "../components/VisualizationControls";
-import UnifiedMiniMap from "../components/UnifiedMiniMap";
 import ExplorationPanel from "../components/ExplorationPanel";
 import JourneyTimeline from "../components/JourneyTimeline";
 import ProgressiveDisclosure, {
@@ -30,6 +29,7 @@ export default function LatentSpacePage() {
   const [filter, setFilter] = useState<
     "all" | "vision" | "speech" | "stm" | "ltm"
   >("all");
+
   const [showTrajectory, setShowTrajectory] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
@@ -166,26 +166,10 @@ export default function LatentSpacePage() {
     return filtered;
   }, [allMemoryEvents, filter, searchQuery, selectedCluster, selectedGroup]);
 
-  // Convert memory events to 2D points for mini-map
-  const miniMapPoints = useMemo(() => {
-    return filteredMemoryEvents.map((event, index) => {
-      const x = (index % 10) * 20 - 100; // Spread horizontally
-      const y = Math.floor(index / 10) * 20 - 100; // Spread vertically
-
-      return {
-        x,
-        y,
-        event,
-        isSelected: selectedMemoryEvent?.ts === event.ts,
-        isWaypoint: false,
-        color: event.source === "vision" ? "#00E0BE" : "#1BB4F2",
-        source: event.source,
-      };
-    });
-  }, [filteredMemoryEvents, selectedMemoryEvent]);
-
-  const handleFocus = (x: number, y: number) => {
-    console.log("Focus on:", x, y);
+  const handleFilterChange = (
+    newFilter: "all" | "vision" | "speech" | "stm" | "ltm"
+  ) => {
+    setFilter(newFilter);
   };
 
   const handleResetView = () => {
@@ -307,7 +291,7 @@ export default function LatentSpacePage() {
             <>
               {/* Unified Controls */}
               <VisualizationControls
-                onFilterChange={setFilter}
+                onFilterChange={handleFilterChange}
                 onCameraPresetChange={setCameraPreset}
                 onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
                 onResetView={handleResetView}
@@ -316,15 +300,6 @@ export default function LatentSpacePage() {
                 currentFilter={filter}
                 currentPreset={cameraPreset}
                 pointCount={filteredMemoryEvents.length}
-              />
-
-              {/* Unified Mini Map */}
-              <UnifiedMiniMap
-                points={miniMapPoints}
-                onFocus={handleFocus}
-                onSelectEvent={setSelectedMemoryEvent}
-                selectedEvent={selectedMemoryEvent}
-                showTrajectory={showTrajectory}
               />
 
               {/* Visualization Components */}

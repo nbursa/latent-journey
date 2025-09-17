@@ -70,26 +70,119 @@ export default function RealLatentSpace3D({
     if (memoryEvents.length === 0) return [];
 
     const embeddings = [];
-    for (const event of memoryEvents) {
+    for (let index = 0; index < memoryEvents.length; index++) {
+      const event = memoryEvents[index];
+      let embedding: number[];
+
+      // Use existing embedding if available, otherwise generate one
       if (
         event.embedding &&
         Array.isArray(event.embedding) &&
         event.embedding.length > 0
       ) {
-        embeddings.push({
-          id: event.embedding_id,
-          embedding: event.embedding as number[],
-          source: event.source,
-          facets: event.facets,
-          confidence: Number(event.facets.confidence) || 0.5,
-        });
-      }
-    }
+        embedding = event.embedding as number[];
+      } else {
+        // Generate embedding for STM/LTM data (similar to LatentScatter3D)
+        embedding = new Array(128).fill(0);
+        const facets = event.facets;
 
-    // Filter embeddings to ensure they all have the same length
-    if (embeddings.length > 0) {
-      const targetLength = embeddings[0].embedding.length;
-      return embeddings.filter((e) => e.embedding.length === targetLength);
+        // Vision object features (dimensions 0-19)
+        if (facets["vision.object"]) {
+          const object = String(facets["vision.object"]).toLowerCase();
+          const objectHash = object.split("").reduce((a, b) => {
+            a = (a << 5) - a + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          for (let i = 0; i < 20; i++) {
+            embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
+          }
+        }
+
+        // Vision color features (dimensions 20-29)
+        if (facets["vision.color"]) {
+          const color = String(facets["vision.color"]).toLowerCase();
+          const colorHash = color.split("").reduce((a, b) => {
+            a = (a << 5) - a + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          for (let i = 20; i < 30; i++) {
+            embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
+          }
+        }
+
+        // Speech intent features (dimensions 30-49)
+        if (facets["speech.intent"]) {
+          const intent = String(facets["speech.intent"]).toLowerCase();
+          const intentHash = intent.split("").reduce((a, b) => {
+            a = (a << 5) - a + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          for (let i = 30; i < 50; i++) {
+            embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
+          }
+        }
+
+        // Affect features (dimensions 50-69)
+        if (facets["affect.valence"]) {
+          const valence = Number(facets["affect.valence"]);
+          for (let i = 50; i < 60; i++) {
+            embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
+          }
+        }
+
+        if (facets["affect.arousal"]) {
+          const arousal = Number(facets["affect.arousal"]);
+          for (let i = 60; i < 70; i++) {
+            embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
+          }
+        }
+
+        // Source type features (dimensions 70-79)
+        const sourceHash = event.source.split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        for (let i = 70; i < 80; i++) {
+          embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
+        }
+
+        // STM/LTM specific features (dimensions 80-89)
+        if (event.source === "stm" || event.source === "ltm") {
+          const content = event.content || "";
+          const contentHash = content.split("").reduce((a, b) => {
+            a = (a << 5) - a + b.charCodeAt(0);
+            return a & a;
+          }, 0);
+          for (let i = 80; i < 90; i++) {
+            embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
+          }
+        }
+
+        // Temporal features (dimensions 90-99)
+        const timeHash = event.ts
+          .toString()
+          .split("")
+          .reduce((a, b) => {
+            a = (a << 5) - a + parseInt(b);
+            return a & a;
+          }, 0);
+        for (let i = 90; i < 100; i++) {
+          embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
+        }
+
+        // Add some noise to make the embedding more realistic (dimensions 100-127)
+        for (let i = 100; i < 128; i++) {
+          embedding[i] = Math.random() * 0.1 - 0.05;
+        }
+      }
+
+      embeddings.push({
+        id: `embedding-${index}`,
+        embedding: embedding,
+        source: event.source,
+        facets: event.facets,
+        confidence: Number(event.facets.confidence) || 0.5,
+      });
     }
 
     return embeddings;
@@ -155,9 +248,7 @@ export default function RealLatentSpace3D({
         const newPoints: Point3D[] = reducedEmbeddings.map(
           (coords: number[], index: number) => {
             const embedding = embeddings[index];
-            const event = memoryEvents.find(
-              (e) => e.embedding_id === embedding.id
-            )!;
+            const event = memoryEvents[index];
 
             // Scale coordinates for better visualization
             const scale = 100;
@@ -165,22 +256,12 @@ export default function RealLatentSpace3D({
             const y = coords[1] * scale;
             const z = coords[2] * scale;
 
-            // Color based on source and confidence
+            // Color based on data source type
             let color = "#3B82F6"; // Default blue
             if (event.source === "vision") {
-              // Use confidence for brightness, affect for hue
-              const confidence = embedding.confidence;
-              const valence = Number(event.facets["affect.valence"]) || 0.5;
-              const arousal = Number(event.facets["affect.arousal"]) || 0.5;
-
-              // HSV color based on valence, brightness based on confidence
-              const hue = valence * 120; // 0-120 (red to green)
-              const saturation = arousal * 100;
-              const value = confidence * 100;
-
-              color = `hsl(${hue}, ${saturation}%, ${value}%)`;
+              color = "#00E0BE"; // Cyan for vision
             } else if (event.source === "speech") {
-              color = "#10B981"; // Green for speech
+              color = "#1BB4F2"; // Teal for speech
             } else if (event.source === "stm") {
               color = "#FFB020"; // Amber for STM
             } else if (event.source === "ltm") {
@@ -406,7 +487,7 @@ export default function RealLatentSpace3D({
       const sphere = new THREE.Mesh(
         sphereGeometry,
         new THREE.MeshStandardMaterial({
-          color: "#00E0BE", // Match LatentScatter color
+          color: point.color, // Use the calculated color for each data type
           transparent: true,
           opacity: 0.8,
           roughness: 0.2,
@@ -672,8 +753,11 @@ export default function RealLatentSpace3D({
       />
 
       {isLoading && (
-        <div className="absolute top-4 left-4 bg-black/50 text-white px-3 py-2 rounded">
-          Computing embeddings...
+        <div className="h-full flex items-center justify-center">
+          <div className="text-center text-ui-dim">
+            <div className="animate-spin w-8 h-8 border-2 border-ui-accent border-t-transparent rounded-full mx-auto mb-2"></div>
+            <div>Computing 3D latent space...</div>
+          </div>
         </div>
       )}
 
@@ -720,6 +804,45 @@ export default function RealLatentSpace3D({
                   <span>{String(value)}</span>
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      {points.length > 0 && (
+        <div className="absolute bottom-4 right-4 glass flat p-3 rounded">
+          <div className="text-xs font-medium text-ui-text mb-2">
+            Data Types
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#00E0BE" }}
+              ></div>
+              <span className="text-ui-dim">Vision</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#1BB4F2" }}
+              ></div>
+              <span className="text-ui-dim">Speech</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#FFB020" }}
+              ></div>
+              <span className="text-ui-dim">STM</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#8B5CF6" }}
+              ></div>
+              <span className="text-ui-dim">LTM</span>
+            </div>
           </div>
         </div>
       )}

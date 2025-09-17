@@ -446,7 +446,7 @@ export default function LatentSpaceView({
         .append("circle")
         .attr("cx", 0)
         .attr("cy", 80)
-        .attr("r", 6)
+        .attr("r", 4)
         .attr("fill", "#9CA3AF");
       legend
         .append("text")
@@ -481,9 +481,9 @@ export default function LatentSpaceView({
       <div className="flex-1 p-4 min-h-0 overflow-hidden">
         {isComputing ? (
           <div className="h-full flex items-center justify-center">
-            <div className="text-center text-gray-400">
-              <div className="animate-spin w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full mx-auto mb-2"></div>
-              <div>Computing latent space...</div>
+            <div className="text-center text-ui-dim">
+              <div className="animate-spin w-8 h-8 border-2 border-ui-accent border-t-transparent rounded-full mx-auto mb-2"></div>
+              <div>Computing 2D latent space...</div>
             </div>
           </div>
         ) : points.length === 0 ? (

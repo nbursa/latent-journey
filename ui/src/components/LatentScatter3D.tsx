@@ -1,4 +1,4 @@
-import { useRef, useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -8,7 +8,10 @@ interface LatentScatterProps {
   memoryEvents: MemoryEvent[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
-  onHoverEvent: (event: MemoryEvent | null) => void;
+  onHoverEvent: (
+    event: MemoryEvent | null,
+    mousePos?: { x: number; y: number }
+  ) => void;
   className?: string;
   cameraPreset?: "top" | "isometric" | "free";
 }
@@ -184,90 +187,6 @@ const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
   });
 };
 
-// Instanced Points Component
-function InstancedPoints({
-  points,
-  onSelectEvent,
-  onHoverEvent,
-}: {
-  points: Point3D[];
-  selectedEvent: MemoryEvent | null;
-  onSelectEvent: (event: MemoryEvent) => void;
-  onHoverEvent: (
-    event: MemoryEvent | null,
-    mousePos?: { x: number; y: number }
-  ) => void;
-}) {
-  const meshRef = useRef<THREE.InstancedMesh>(null);
-  const [, setHoveredId] = useState<number | null>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-
-  // Update instance matrices
-  useEffect(() => {
-    if (!meshRef.current || points.length === 0) return;
-
-    points.forEach((point, i) => {
-      dummy.position.set(point.x, point.y, point.z);
-      dummy.scale.setScalar(point.size);
-      dummy.updateMatrix();
-      meshRef.current!.setMatrixAt(i, dummy.matrix);
-    });
-
-    meshRef.current.instanceMatrix.needsUpdate = true;
-  }, [points, dummy]);
-
-  // Handle clicks
-  const handleClick = (event: any) => {
-    if (event.intersections && event.intersections.length > 0) {
-      const instanceId = event.intersections[0].instanceId;
-      if (instanceId !== undefined && points[instanceId]) {
-        onSelectEvent(points[instanceId].event);
-      }
-    }
-  };
-
-  // Handle hover
-  const handlePointerOver = (event: any) => {
-    if (event.intersections && event.intersections.length > 0) {
-      const instanceId = event.intersections[0].instanceId;
-      if (instanceId !== undefined && points[instanceId]) {
-        setHoveredId(instanceId);
-        // Get mouse position relative to the container
-        const rect = event.nativeEvent.target.getBoundingClientRect();
-        const mousePos = {
-          x: event.nativeEvent.clientX - rect.left,
-          y: event.nativeEvent.clientY - rect.top,
-        };
-        onHoverEvent(points[instanceId].event, mousePos);
-      }
-    }
-  };
-
-  const handlePointerOut = () => {
-    setHoveredId(null);
-    onHoverEvent(null);
-  };
-
-  return (
-    <instancedMesh
-      ref={meshRef}
-      args={[undefined, undefined, points.length]}
-      onClick={handleClick}
-      onPointerOver={handlePointerOver}
-      onPointerOut={handlePointerOut}
-    >
-      <sphereGeometry args={[1, 16, 16]} />
-      <meshStandardMaterial
-        color="#00E0BE"
-        transparent
-        opacity={0.8}
-        roughness={0.2}
-        metalness={0.8}
-      />
-    </instancedMesh>
-  );
-}
-
 // Journey Lines Component
 function JourneyLines({ points }: { points: Point3D[] }) {
   const lineGeometry = useMemo(() => {
@@ -295,7 +214,6 @@ function JourneyLines({ points }: { points: Point3D[] }) {
 // Main Scene Component
 function Scene3D({
   points,
-  selectedEvent,
   onSelectEvent,
   onHoverEvent,
   onFocus: _onFocus,
@@ -305,9 +223,11 @@ function Scene3D({
   cameraPreset = "free",
 }: {
   points: Point3D[];
-  selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
-  onHoverEvent: (event: MemoryEvent | null) => void;
+  onHoverEvent: (
+    event: MemoryEvent | null,
+    mousePos?: { x: number; y: number }
+  ) => void;
   onFocus: (x: number, y: number) => void;
   setCameraPosition: (pos: { x: number; y: number; z: number }) => void;
   focusTarget: { x: number; y: number; z: number } | null;
@@ -426,13 +346,40 @@ function Scene3D({
       {/* Journey lines */}
       {points.length > 1 && <JourneyLines points={points} />}
 
-      {/* Instanced points */}
-      <InstancedPoints
-        points={points}
-        selectedEvent={selectedEvent}
-        onSelectEvent={onSelectEvent}
-        onHoverEvent={onHoverEvent}
-      />
+      {/* Individual points */}
+      {points.map((point, index) => (
+        <mesh
+          key={`${point.event.ts}-${index}`}
+          position={[point.x, point.y, point.z]}
+          scale={[point.size, point.size, point.size]}
+          userData={{ event: point.event, index }}
+          onClick={(event) => {
+            event.stopPropagation();
+            onSelectEvent(point.event);
+          }}
+          onPointerOver={(event) => {
+            const target = event.nativeEvent.target as HTMLElement;
+            if (target) {
+              const rect = target.getBoundingClientRect();
+              const mousePos = {
+                x: event.nativeEvent.clientX - rect.left,
+                y: event.nativeEvent.clientY - rect.top,
+              };
+              onHoverEvent(point.event, mousePos);
+            }
+          }}
+          onPointerOut={() => onHoverEvent(null)}
+        >
+          <sphereGeometry args={[1, 16, 16]} />
+          <meshStandardMaterial
+            color={point.color}
+            transparent
+            opacity={0.8}
+            roughness={0.2}
+            metalness={0.8}
+          />
+        </mesh>
+      ))}
     </>
   );
 }
@@ -584,7 +531,6 @@ export default function LatentScatter({
           >
             <Scene3D
               points={points}
-              selectedEvent={selectedEvent}
               onSelectEvent={onSelectEvent}
               onHoverEvent={handleHover}
               onFocus={handleFocus}
@@ -645,6 +591,45 @@ export default function LatentScatter({
                   <span>{String(value)}</span>
                 </div>
               ))}
+          </div>
+        </div>
+      )}
+
+      {/* Legend */}
+      {points.length > 0 && (
+        <div className="absolute bottom-4 right-4 glass flat p-3 rounded">
+          <div className="text-xs font-medium text-ui-text mb-2">
+            Data Types
+          </div>
+          <div className="space-y-1">
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#00E0BE" }}
+              ></div>
+              <span className="text-ui-dim">Vision</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#1BB4F2" }}
+              ></div>
+              <span className="text-ui-dim">Speech</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#FFB020" }}
+              ></div>
+              <span className="text-ui-dim">STM</span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <div
+                className="w-3 h-3 rounded-full"
+                style={{ backgroundColor: "#8B5CF6" }}
+              ></div>
+              <span className="text-ui-dim">LTM</span>
+            </div>
           </div>
         </div>
       )}

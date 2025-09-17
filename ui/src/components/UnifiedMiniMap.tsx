@@ -86,7 +86,7 @@ export default function UnifiedMiniMap({
   return (
     <div
       className={`absolute bottom-4 right-4 glass flat border border-ui-border overflow-visible z-10 transition-all duration-200 ${
-        isMinimized ? "w-32 h-9" : "w-60 h-50"
+        isMinimized ? "w-32 h-8" : "w-60 h-50"
       } ${className}`}
     >
       {/* Header with controls */}
@@ -151,39 +151,44 @@ export default function UnifiedMiniMap({
           )}
 
           {/* Points */}
-          {filteredPoints.map((point, index) => (
-            <div
-              key={index}
-              className={`absolute w-3 h-3 rounded-full transition-all duration-200 cursor-pointer ${
-                selectedEvent?.ts === point.event.ts
-                  ? "ring-2 ring-ui-accent ring-offset-1 ring-offset-ui-bg scale-125"
-                  : "hover:scale-150"
-              }`}
-              style={{
-                left: `${Math.max(
-                  0,
-                  Math.min(
-                    100,
-                    ((point.x - centerX + rangeX / 2) / rangeX) * 100
-                  )
-                )}%`,
-                top: `${Math.max(
-                  0,
-                  Math.min(
-                    100,
-                    ((point.y - centerY + rangeY / 2) / rangeY) * 100
-                  )
-                )}%`,
-                backgroundColor: point.color,
-                transform: "translate(-50%, -50%)",
-                zIndex: selectedEvent?.ts === point.event.ts ? 10 : 1,
-              }}
-              onClick={(e) => handlePointClick(point, e)}
-              title={`${point.event.source} - ${new Date(
-                point.event.ts * 1000
-              ).toLocaleTimeString()}`}
-            />
-          ))}
+          {filteredPoints.map((point, index) => {
+            // Use the same comparison logic as miniMapPoints
+            const isSelected = selectedEvent?.ts === point.event.ts;
+
+            return (
+              <div
+                key={index}
+                className={`absolute w-3 h-3 rounded-full transition-all duration-200 cursor-pointer ${
+                  isSelected
+                    ? "ring-2 ring-ui-accent ring-offset-1 ring-offset-ui-bg scale-150 z-10"
+                    : "hover:scale-125"
+                }`}
+                style={{
+                  left: `${Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      ((point.x - centerX + rangeX / 2) / rangeX) * 100
+                    )
+                  )}%`,
+                  top: `${Math.max(
+                    0,
+                    Math.min(
+                      100,
+                      ((point.y - centerY + rangeY / 2) / rangeY) * 100
+                    )
+                  )}%`,
+                  backgroundColor: point.color,
+                  transform: "translate(-50%, -50%)",
+                  zIndex: isSelected ? 10 : 1,
+                }}
+                onClick={(e) => handlePointClick(point, e)}
+                title={`${point.event.source} - ${new Date(
+                  point.event.ts * 1000
+                ).toLocaleTimeString()}`}
+              />
+            );
+          })}
 
           {/* Camera viewport indicator (for 3D views) */}
           {cameraPosition && (

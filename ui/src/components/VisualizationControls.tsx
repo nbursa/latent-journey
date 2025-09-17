@@ -38,7 +38,9 @@ export default function VisualizationControls({
   return (
     <div className={`absolute top-4 left-4 z-20 ${className}`}>
       <button
-        onClick={() => setIsExpanded(!isExpanded)}
+        onClick={() => {
+          setIsExpanded(!isExpanded);
+        }}
         className="flex items-center gap-2 glass flat p-2 rounded-lg hover:bg-ui-accent/10 transition-colors"
         title="Visualization Controls"
       >
@@ -71,7 +73,9 @@ export default function VisualizationControls({
               {["all", "vision", "speech", "stm", "ltm"].map((type) => (
                 <button
                   key={type}
-                  onClick={() => onFilterChange(type as any)}
+                  onClick={() => {
+                    onFilterChange(type as any);
+                  }}
                   className={`px-2 py-1 text-xs rounded transition-colors ${
                     currentFilter === type ? "btn-primary" : "btn-secondary"
                   }`}

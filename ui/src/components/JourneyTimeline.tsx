@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { MemoryEvent } from "../types";
 import { Clock, Play, Pause, RotateCcw } from "lucide-react";
 
@@ -89,7 +89,7 @@ export default function JourneyTimeline({
   }, [isPlaying, playbackSpeed]);
 
   // Select current event when it changes
-  useMemo(() => {
+  useEffect(() => {
     if (currentEvent && currentEvent !== selectedEvent) {
       onSelectEvent(currentEvent);
     }
