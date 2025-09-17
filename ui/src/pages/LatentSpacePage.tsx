@@ -49,11 +49,11 @@ export default function LatentSpacePage() {
         ...item,
         source: "stm",
         type: "short_term",
-        ts: new Date(item.timestamp).getTime() / 1000, // Convert timestamp to seconds
+        ts: item.ts || Date.now() / 1000, // Use existing ts field
         content: item.content,
         facets: item.facets || {},
         tags: item.tags || [],
-        embedding_id: item.id,
+        embedding_id: item.embedding_id,
       })),
       // LTM data - consolidated experiences
       ...ltmData.map((item) => ({
@@ -67,10 +67,12 @@ export default function LatentSpacePage() {
           "affect.arousal": item.importance || 0,
           "consolidation.themes": item.themes || [],
           "consolidation.consolidated_from": item.consolidated_from || [],
+          "consolidation.title": item.title || "",
         },
         tags: item.tags || [],
         title: item.title,
         summary: item.summary,
+        embedding_id: item.id,
       })),
       // Events data - perception events (vision, speech)
       ...eventsData.map((item) => ({

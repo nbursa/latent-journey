@@ -297,7 +297,11 @@ export default function LatentSpaceView({
         .attr("fill", (d) => {
           if (d.isSelected) return "#00E0BE";
           if (d.isWaypoint) return "#FFB020";
-          return d.event.source === "vision" ? "#00E0BE" : "#1BB4F2";
+          if (d.event.source === "vision") return "#00E0BE";
+          if (d.event.source === "speech") return "#1BB4F2";
+          if (d.event.source === "stm") return "#FFB020";
+          if (d.event.source === "ltm") return "#8B5CF6";
+          return "#3B82F6"; // Default blue
         })
         .attr("stroke", (d) => (d.isSelected ? "#FFFFFF" : "none"))
         .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
@@ -361,7 +365,7 @@ export default function LatentSpaceView({
         .append("g")
         .attr(
           "transform",
-          `translate(${innerWidth - 80}, ${innerHeight - 60})`
+          `translate(${innerWidth + 20}, ${innerHeight - 240})`
         );
 
       legend
@@ -369,7 +373,7 @@ export default function LatentSpaceView({
         .attr("x", -10)
         .attr("y", -10)
         .attr("width", 100)
-        .attr("height", 60)
+        .attr("height", 100)
         .attr("fill", "rgba(0, 0, 0, 0.25)")
         .attr("rx", 4);
 
@@ -405,12 +409,40 @@ export default function LatentSpaceView({
         .append("circle")
         .attr("cx", 0)
         .attr("cy", 40)
-        .attr("r", 6)
+        .attr("r", 4)
         .attr("fill", "#FFB020");
       legend
         .append("text")
         .attr("x", 12)
         .attr("y", 44)
+        .text("STM")
+        .style("font-size", "12px")
+        .style("fill", "#9CA3AF");
+
+      legend
+        .append("circle")
+        .attr("cx", 0)
+        .attr("cy", 60)
+        .attr("r", 4)
+        .attr("fill", "#8B5CF6");
+      legend
+        .append("text")
+        .attr("x", 12)
+        .attr("y", 64)
+        .text("LTM")
+        .style("font-size", "12px")
+        .style("fill", "#9CA3AF");
+
+      legend
+        .append("circle")
+        .attr("cx", 0)
+        .attr("cy", 80)
+        .attr("r", 6)
+        .attr("fill", "#FFB020");
+      legend
+        .append("text")
+        .attr("x", 12)
+        .attr("y", 84)
         .text("Waypoint")
         .style("font-size", "12px")
         .style("fill", "#9CA3AF");
