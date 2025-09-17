@@ -27,11 +27,9 @@ export default function LatentSpaceView({
   const [points, setPoints] = useState<Point2D[]>([]);
   const [isComputing, setIsComputing] = useState(false);
 
-  // Get waypoints from store
   const waypoints = useWaypoints();
   const { toggleWaypoint, clearWaypoints } = useWaypointActions();
 
-  // Simple 2D projection using PCA-like approach
   const projectTo2D = (embeddings: number[][]) => {
     if (embeddings.length === 0) return [];
 
@@ -114,7 +112,19 @@ export default function LatentSpaceView({
         embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
       }
 
-      // Temporal features (dimensions 80-89)
+      // STM/LTM specific features (dimensions 90-99)
+      if (event.source === "stm" || event.source === "ltm") {
+        const content = event.content || "";
+        const contentHash = content.split("").reduce((a, b) => {
+          a = (a << 5) - a + b.charCodeAt(0);
+          return a & a;
+        }, 0);
+        for (let i = 90; i < 100; i++) {
+          embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
+        }
+      }
+
+      // Temporal features (dimensions 100-109)
       const timeHash = event.ts
         .toString()
         .split("")
@@ -122,12 +132,11 @@ export default function LatentSpaceView({
           a = (a << 5) - a + parseInt(b);
           return a & a;
         }, 0);
-      for (let i = 80; i < 90; i++) {
+      for (let i = 100; i < 110; i++) {
         embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
       }
 
-      // Add some noise to make the embedding more realistic
-      for (let i = 90; i < 128; i++) {
+      for (let i = 110; i < 128; i++) {
         embedding[i] = Math.random() * 0.1 - 0.05;
       }
 
@@ -144,7 +153,6 @@ export default function LatentSpaceView({
 
     setIsComputing(true);
 
-    // Simulate computation delay
     setTimeout(() => {
       const embeddings = extractEmbeddings();
       const projectedPoints = projectTo2D(embeddings);
@@ -259,17 +267,17 @@ export default function LatentSpaceView({
         // Add temporal markers along the trajectory
         sortedPoints.forEach((point, index) => {
           if (index > 0) {
-            // const progress = index / (sortedPoints.length - 1);
+            const progress = index / (sortedPoints.length - 1);
             const x = xScale(point.x);
             const y = yScale(point.y);
 
-            // Add small temporal marker
+            // Add small temporal marker with progress-based opacity
             g.append("circle")
               .attr("cx", x)
               .attr("cy", y)
               .attr("r", 2)
               .attr("fill", "#00E0BE")
-              .attr("opacity", 0.6)
+              .attr("opacity", 0.3 + progress * 0.7) // Fade in over time
               .attr("stroke", "white")
               .attr("stroke-width", 1);
           }
@@ -394,10 +402,8 @@ export default function LatentSpaceView({
         .style("fill", "#9CA3AF");
     };
 
-    // Initial render
     renderVisualization();
 
-    // Add resize observer for responsive updates
     const resizeObserver = new ResizeObserver(() => {
       renderVisualization();
     });

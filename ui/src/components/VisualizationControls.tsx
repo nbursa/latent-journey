@@ -9,13 +9,13 @@ import {
 } from "lucide-react";
 
 interface VisualizationControlsProps {
-  onFilterChange: (filter: "all" | "vision" | "speech") => void;
+  onFilterChange: (filter: "all" | "vision" | "speech" | "stm" | "ltm") => void;
   onCameraPresetChange: (preset: "top" | "isometric" | "free") => void;
   onToggleTrajectory: () => void;
   onResetView: () => void;
   onFitAll: () => void;
   showTrajectory: boolean;
-  currentFilter: "all" | "vision" | "speech";
+  currentFilter: "all" | "vision" | "speech" | "stm" | "ltm";
   currentPreset: "top" | "isometric" | "free";
   pointCount: number;
   className?: string;
@@ -37,7 +37,6 @@ export default function VisualizationControls({
 
   return (
     <div className={`absolute top-4 left-4 z-20 ${className}`}>
-      {/* Main control button */}
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         className="glass flat p-2 rounded-lg hover:bg-ui-accent/10 transition-colors"
@@ -46,7 +45,6 @@ export default function VisualizationControls({
         <Filter className="w-4 h-4" />
       </button>
 
-      {/* Expanded controls panel */}
       {isExpanded && (
         <div className="glass flat p-4 rounded-lg mt-2 min-w-64 space-y-4">
           {/* Header */}
@@ -60,19 +58,17 @@ export default function VisualizationControls({
             </button>
           </div>
 
-          {/* Data info */}
           <div className="text-xs text-ui-dim">
             <div>Points: {pointCount}</div>
             <div>Trajectory: {showTrajectory ? "On" : "Off"}</div>
           </div>
 
-          {/* Filter controls */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-ui-text">
               Filter by Source
             </label>
             <div className="flex gap-1 flex-wrap">
-              {["all", "vision", "speech"].map((type) => (
+              {["all", "vision", "speech", "stm", "ltm"].map((type) => (
                 <button
                   key={type}
                   onClick={() => onFilterChange(type as any)}
@@ -88,7 +84,6 @@ export default function VisualizationControls({
             </div>
           </div>
 
-          {/* Camera presets (for 3D views) */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-ui-text">
               Camera Preset
@@ -110,7 +105,6 @@ export default function VisualizationControls({
             </div>
           </div>
 
-          {/* Display options */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-ui-text">Display</label>
             <div className="flex gap-2">
@@ -132,7 +126,6 @@ export default function VisualizationControls({
             </div>
           </div>
 
-          {/* View controls */}
           <div className="space-y-2">
             <label className="text-xs font-medium text-ui-text">View</label>
             <div className="flex gap-2">

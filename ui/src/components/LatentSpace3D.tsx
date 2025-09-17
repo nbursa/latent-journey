@@ -117,7 +117,6 @@ export default function RealLatentSpace3D({
       }
 
       const result = await response.json();
-      // console.log("ML Service response:", result);
 
       if (result.error) {
         throw new Error(result.error);
@@ -144,8 +143,6 @@ export default function RealLatentSpace3D({
 
       try {
         const embeddings = await extractEmbeddings();
-        // console.log("Extracted embeddings:", embeddings.length, embeddings);
-        // console.log("Embedding lengths:", embeddings.map((e) => e.embedding.length));
 
         if (embeddings.length === 0) {
           setError("No embeddings found in memory events");
@@ -154,8 +151,6 @@ export default function RealLatentSpace3D({
         }
 
         const reducedEmbeddings = await reduceDimensions(embeddings);
-        // console.log("Reduced embeddings:", reducedEmbeddings);
-        // console.log("Points to create:", reducedEmbeddings.length);
 
         const newPoints: Point3D[] = reducedEmbeddings.map(
           (coords: number[], index: number) => {
@@ -186,6 +181,10 @@ export default function RealLatentSpace3D({
               color = `hsl(${hue}, ${saturation}%, ${value}%)`;
             } else if (event.source === "speech") {
               color = "#10B981"; // Green for speech
+            } else if (event.source === "stm") {
+              color = "#FFB020"; // Amber for STM
+            } else if (event.source === "ltm") {
+              color = "#8B5CF6"; // Purple for LTM
             }
 
             // Size based on confidence and recency
@@ -207,7 +206,6 @@ export default function RealLatentSpace3D({
           }
         );
 
-        // console.log("Created points:", newPoints.length, newPoints);
         setPoints(newPoints);
       } catch (err) {
         console.error("Visualization update failed:", err);
@@ -282,7 +280,7 @@ export default function RealLatentSpace3D({
     controls.dampingFactor = 0.05;
     controlsRef.current = controls;
 
-    // Add modern flat lighting setup
+    // Add flat lighting setup
     const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
     scene.add(ambientLight);
 
@@ -319,26 +317,7 @@ export default function RealLatentSpace3D({
     };
     animate();
 
-    // Test if the canvas is actually visible and has content
-    console.log("Canvas after setup:", {
-      canvas: renderer.domElement,
-      parentElement: renderer.domElement.parentElement,
-      style: renderer.domElement.style.cssText,
-      width: renderer.domElement.width,
-      height: renderer.domElement.height,
-      offsetWidth: renderer.domElement.offsetWidth,
-      offsetHeight: renderer.domElement.offsetHeight,
-    });
-
     // Try a simple test - draw a colored rectangle directly to canvas
-    const ctx = renderer.domElement.getContext("2d");
-    if (ctx) {
-      ctx.fillStyle = "red";
-      ctx.fillRect(0, 0, 100, 100);
-      console.log("Drew red rectangle to canvas");
-    } else {
-      console.log("No 2D context available");
-    }
 
     const handleResize = () => {
       if (!mountRef.current) return;
@@ -415,10 +394,7 @@ export default function RealLatentSpace3D({
       }
     });
 
-    // console.log("Rendering 3D points:", points.length, points);
-
     if (points.length === 0) {
-      // console.log("No points to render");
       return;
     }
 
@@ -426,9 +402,7 @@ export default function RealLatentSpace3D({
     const sphereGeometry = new THREE.SphereGeometry(2, 16, 16); // Appropriately sized spheres
 
     // Create individual spheres for each point
-    // console.log("Creating spheres for points...");
     points.forEach((point, index) => {
-      // console.log(`Creating sphere ${index}:`, point);
       const sphere = new THREE.Mesh(
         sphereGeometry,
         new THREE.MeshStandardMaterial({
@@ -442,12 +416,6 @@ export default function RealLatentSpace3D({
       sphere.position.set(point.x, point.y, point.z);
       sphere.userData = { event: point.event, index };
       scene.add(sphere);
-      // console.log(
-      //   `Added sphere ${index} to scene at position:`,
-      //   point.x,
-      //   point.y,
-      //   point.z
-      // );
     });
 
     // console.log("Total objects in scene:", scene.children.length);
@@ -522,28 +490,6 @@ export default function RealLatentSpace3D({
       const cameraX = centerX + distance * 0.5;
       const cameraY = centerY + distance * 0.5;
       const cameraZ = centerZ + distance * 0.5;
-
-      console.log("Camera positioning:", {
-        bounds: {
-          minX: bounds.minX,
-          maxX: bounds.maxX,
-          minY: bounds.minY,
-          maxY: bounds.maxY,
-          minZ: bounds.minZ,
-          maxZ: bounds.maxZ,
-        },
-        center: { centerX, centerY, centerZ },
-        maxSize,
-        distance,
-        cameraPosition: { cameraX, cameraY, cameraZ },
-        lookAt: { centerX, centerY, centerZ },
-      });
-
-      console.log("Final camera position:", camera.position);
-      console.log(
-        "Camera target:",
-        camera.getWorldDirection(new THREE.Vector3())
-      );
 
       camera.position.set(cameraX, cameraY, cameraZ);
       camera.lookAt(centerX, centerY, centerZ);
@@ -708,7 +654,7 @@ export default function RealLatentSpace3D({
 
     controls.target.set(centerX, centerY, centerZ);
     controls.update();
-  }, [cameraPreset]); // Removed points dependency to prevent race condition
+  }, [cameraPreset]);
 
   return (
     <div className="relative w-full h-full">
@@ -716,12 +662,12 @@ export default function RealLatentSpace3D({
         ref={mountRef}
         className="w-full h-full"
         style={{
-          minHeight: "400px", // Ensure minimum height
+          minHeight: "400px",
           width: "100%",
           height: "100%",
           position: "relative",
           overflow: "hidden",
-          background: "transparent", // Transparent like LatentScatter
+          background: "transparent",
         }}
       />
 
@@ -777,19 +723,6 @@ export default function RealLatentSpace3D({
           </div>
         </div>
       )}
-
-      {/* Debug: Show hoveredEvent state */}
-      {/* <div className="absolute top-4 right-4 bg-blue-500 text-white p-2 z-50">
-        Hovered: {hoveredEvent ? "YES" : "NO"}
-      </div> */}
-
-      {/* Test tooltip - always visible */}
-      {/* <div
-        className="absolute top-20 left-4 bg-green-500 text-white p-2 rounded"
-        style={{ zIndex: 9999 }}
-      >
-        TEST TOOLTIP - Always visible
-      </div> */}
     </div>
   );
 }

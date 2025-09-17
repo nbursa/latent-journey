@@ -22,7 +22,7 @@ interface Point3D {
   isWaypoint: boolean;
   color: string;
   size: number;
-  modality: "vision" | "speech" | "text";
+  modality: "vision" | "speech" | "stm" | "ltm";
   arousal: number;
   valence: number;
 }
@@ -45,7 +45,8 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
 
     const isVision = event.source === "vision";
     const isSpeech = event.source === "speech";
-    const isText = event.source === "text";
+    const isSTM = event.source === "stm";
+    const isLTM = event.source === "ltm";
 
     // Color based on modality
     let color = "#3B82F6"; // Default blue
@@ -53,8 +54,10 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
       color = "#00E0BE"; // Cyan for vision
     } else if (isSpeech) {
       color = "#1BB4F2"; // Teal for speech
-    } else if (isText) {
-      color = "#FFB020"; // Amber for text
+    } else if (isSTM) {
+      color = "#FFB020"; // Amber for STM
+    } else if (isLTM) {
+      color = "#8B5CF6"; // Purple for LTM
     }
 
     // Size based on importance/confidence
@@ -70,10 +73,13 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
       isWaypoint: false,
       color,
       size,
-      modality: (isVision ? "vision" : isSpeech ? "speech" : "text") as
-        | "vision"
-        | "speech"
-        | "text",
+      modality: (isVision
+        ? "vision"
+        : isSpeech
+        ? "speech"
+        : isSTM
+        ? "stm"
+        : "ltm") as "vision" | "speech" | "stm" | "ltm",
       arousal,
       valence,
     };
@@ -146,7 +152,19 @@ const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
       embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
     }
 
-    // Temporal features (dimensions 80-89)
+    // STM/LTM specific features (dimensions 80-89)
+    if (event.source === "stm" || event.source === "ltm") {
+      const content = event.content || "";
+      const contentHash = content.split("").reduce((a, b) => {
+        a = (a << 5) - a + b.charCodeAt(0);
+        return a & a;
+      }, 0);
+      for (let i = 80; i < 90; i++) {
+        embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
+      }
+    }
+
+    // Temporal features (dimensions 90-99)
     const timeHash = event.ts
       .toString()
       .split("")
@@ -154,12 +172,11 @@ const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
         a = (a << 5) - a + parseInt(b);
         return a & a;
       }, 0);
-    for (let i = 80; i < 90; i++) {
+    for (let i = 90; i < 100; i++) {
       embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
     }
 
-    // Add some noise to make the embedding more realistic
-    for (let i = 90; i < 128; i++) {
+    for (let i = 100; i < 128; i++) {
       embedding[i] = Math.random() * 0.1 - 0.05;
     }
 
@@ -433,7 +450,6 @@ export default function LatentScatter({
   // Camera position setter for Scene3D
   const setCameraPosition = (_pos: { x: number; y: number; z: number }) => {
     // This is used by Scene3D to update camera position
-    // We don't need to store it in state since we're not using it
   };
 
   // Update visualization when memory events change

@@ -14,12 +14,10 @@ import ProgressiveDisclosure, {
 } from "../components/ProgressiveDisclosure";
 import { Cluster, SemanticGroup } from "../utils/clustering";
 import { MemoryEvent } from "../types";
-import { useMemoryEventsRealtime } from "../hooks/useMemoryEventsRealtime";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Map, Eye, Brain, Layers, Search } from "lucide-react";
 
 export default function LatentSpacePage() {
-  const memoryEvents = useAppStore((state) => state.memoryEvents);
   const selectedMemoryEvent = useAppStore((state) => state.selectedMemoryEvent);
   const setSelectedMemoryEvent = useAppStore(
     (state) => state.setSelectedMemoryEvent
@@ -29,27 +27,118 @@ export default function LatentSpacePage() {
   const [cameraPreset, setCameraPreset] = useState<
     "top" | "isometric" | "free"
   >("free");
-  const [filter, setFilter] = useState<"all" | "vision" | "speech">("all");
+  const [filter, setFilter] = useState<
+    "all" | "vision" | "speech" | "stm" | "ltm"
+  >("all");
   const [showTrajectory, setShowTrajectory] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCluster, setSelectedCluster] = useState<Cluster | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<SemanticGroup | null>(
     null
   );
+  const [stmData, setStmData] = useState<any[]>([]);
+  const [ltmData, setLtmData] = useState<any[]>([]);
+  const [eventsData, setEventsData] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Load memory events on mount
-  useMemoryEventsRealtime();
+  // Combine all memory data into a unified timeline
+  const allMemoryEvents = useMemo(() => {
+    const events = [
+      // STM data - text-based thoughts with facets
+      ...stmData.map((item) => ({
+        ...item,
+        source: "stm",
+        type: "short_term",
+        ts: new Date(item.timestamp).getTime() / 1000, // Convert timestamp to seconds
+        content: item.content,
+        facets: item.facets || {},
+        tags: item.tags || [],
+        embedding_id: item.id,
+      })),
+      // LTM data - consolidated experiences
+      ...ltmData.map((item) => ({
+        ...item,
+        source: "ltm",
+        type: "long_term",
+        ts: new Date(item.created_at).getTime() / 1000,
+        content: item.summary,
+        facets: {
+          "affect.valence": item.emotional_tone || 0,
+          "affect.arousal": item.importance || 0,
+          "consolidation.themes": item.themes || [],
+          "consolidation.consolidated_from": item.consolidated_from || [],
+        },
+        tags: item.tags || [],
+        title: item.title,
+        summary: item.summary,
+      })),
+      // Events data - perception events (vision, speech)
+      ...eventsData.map((item) => ({
+        ...item,
+        source: item.source || "event",
+        type: "perception",
+        ts: item.ts || Date.now() / 1000,
+        facets: item.facets || {},
+        embedding_id: item.embedding_id,
+      })),
+    ];
 
-  // Filter memory events based on current filter and search
+    const sortedEvents = events.sort((a, b) => a.ts - b.ts);
+    console.log("Combined memory events for latent space:", sortedEvents);
+    return sortedEvents;
+  }, [stmData, ltmData, eventsData]);
+
+  // Load data
+  useEffect(() => {
+    const loadMemoryData = async () => {
+      setIsLoading(true);
+      try {
+        // Load STM data from API
+        const stmResponse = await fetch("/api/ego/memories");
+        if (stmResponse.ok) {
+          const stmResult = await stmResponse.json();
+          const stmData = stmResult.data || [];
+          console.log("Loaded STM data for latent space:", stmData);
+          setStmData(stmData);
+        }
+
+        // Load LTM data from API
+        const ltmResponse = await fetch("/api/ego/experiences");
+        if (ltmResponse.ok) {
+          const ltmResult = await ltmResponse.json();
+          const ltmData = ltmResult.data || [];
+          console.log("Loaded LTM data for latent space:", ltmData);
+          setLtmData(ltmData);
+        }
+
+        // Load events data from API
+        const eventsResponse = await fetch("/api/memory");
+        if (eventsResponse.ok) {
+          const eventsData = await eventsResponse.json();
+          console.log("Loaded Events data for latent space:", eventsData);
+          setEventsData(eventsData);
+        }
+      } catch (error) {
+        console.error("Error loading memory data for latent space:", error);
+        // Fallback to empty arrays if API calls fail
+        setStmData([]);
+        setLtmData([]);
+        setEventsData([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadMemoryData();
+  }, []);
+
   const filteredMemoryEvents = useMemo(() => {
-    let filtered = memoryEvents;
+    let filtered = allMemoryEvents;
 
-    // Apply source filter
     if (filter !== "all") {
       filtered = filtered.filter((event) => event.source === filter);
     }
 
-    // Apply search filter
     if (searchQuery) {
       filtered = filtered.filter((event) => {
         const searchLower = searchQuery.toLowerCase();
@@ -62,7 +151,6 @@ export default function LatentSpacePage() {
       });
     }
 
-    // Apply cluster/group selection
     if (selectedCluster) {
       filtered = filtered.filter((event) =>
         selectedCluster.points.some((point) => point.ts === event.ts)
@@ -74,12 +162,11 @@ export default function LatentSpacePage() {
     }
 
     return filtered;
-  }, [memoryEvents, filter, searchQuery, selectedCluster, selectedGroup]);
+  }, [allMemoryEvents, filter, searchQuery, selectedCluster, selectedGroup]);
 
   // Convert memory events to 2D points for mini-map
   const miniMapPoints = useMemo(() => {
     return filteredMemoryEvents.map((event, index) => {
-      // Simple 2D projection for mini-map
       const x = (index % 10) * 20 - 100; // Spread horizontally
       const y = Math.floor(index / 10) * 20 - 100; // Spread vertically
 
@@ -88,7 +175,7 @@ export default function LatentSpacePage() {
         y,
         event,
         isSelected: selectedMemoryEvent?.ts === event.ts,
-        isWaypoint: false, // Could add waypoint logic here
+        isWaypoint: false,
         color: event.source === "vision" ? "#00E0BE" : "#1BB4F2",
         source: event.source,
       };
@@ -96,33 +183,29 @@ export default function LatentSpacePage() {
   }, [filteredMemoryEvents, selectedMemoryEvent]);
 
   const handleFocus = (x: number, y: number) => {
-    // This would be implemented by each visualization component
     console.log("Focus on:", x, y);
   };
 
   const handleResetView = () => {
-    // Reset camera/view to default position
     console.log("Reset view");
   };
 
   const handleFitAll = () => {
-    // Fit all points in view
     console.log("Fit all points");
   };
 
   const handleExplorationFilterChange = (events: MemoryEvent[]) => {
-    // This could be used to update the visualization with filtered events
     console.log("Exploration filter changed:", events.length, "events");
   };
 
   const handleClusterSelect = (cluster: Cluster | null) => {
     setSelectedCluster(cluster);
-    setSelectedGroup(null); // Clear group selection
+    setSelectedGroup(null);
   };
 
   const handleGroupSelect = (group: SemanticGroup | null) => {
     setSelectedGroup(group);
-    setSelectedCluster(null); // Clear cluster selection
+    setSelectedCluster(null);
   };
 
   return (
@@ -136,7 +219,9 @@ export default function LatentSpacePage() {
               Latent Space Laboratory
             </h1>
             <div className="btn-secondary px-2 py-1 text-xs">
-              {filteredMemoryEvents.length} / {memoryEvents.length} points
+              {isLoading
+                ? "Loading..."
+                : `${filteredMemoryEvents.length} / ${allMemoryEvents.length} points`}
             </div>
             {searchQuery && (
               <div className="btn-accent px-2 py-1 text-xs">
@@ -208,54 +293,66 @@ export default function LatentSpacePage() {
 
         {/* Visualization Area */}
         <div className="flex-1 min-h-0 overflow-hidden glass relative">
-          {/* Unified Controls */}
-          <VisualizationControls
-            onFilterChange={setFilter}
-            onCameraPresetChange={setCameraPreset}
-            onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
-            onResetView={handleResetView}
-            onFitAll={handleFitAll}
-            showTrajectory={showTrajectory}
-            currentFilter={filter}
-            currentPreset={cameraPreset}
-            pointCount={filteredMemoryEvents.length}
-          />
-
-          {/* Unified Mini Map */}
-          <UnifiedMiniMap
-            points={miniMapPoints}
-            onFocus={handleFocus}
-            onSelectEvent={setSelectedMemoryEvent}
-            selectedEvent={selectedMemoryEvent}
-            showTrajectory={showTrajectory}
-            onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
-          />
-
-          {/* Visualization Components */}
-          {viewMode === "2d" ? (
-            <LatentSpaceView
-              memoryEvents={filteredMemoryEvents}
-              selectedEvent={selectedMemoryEvent}
-              onSelectEvent={setSelectedMemoryEvent}
-            />
-          ) : viewMode === "3d" ? (
-            <LatentSpace3D
-              key="latent-space-3d"
-              memoryEvents={filteredMemoryEvents}
-              selectedEvent={selectedMemoryEvent}
-              onSelectEvent={setSelectedMemoryEvent}
-              cameraPreset={cameraPreset}
-              selectedCluster={selectedCluster}
-              selectedGroup={selectedGroup}
-            />
+          {isLoading ? (
+            <div className="h-full flex items-center justify-center text-ui-dim">
+              <div className="text-center">
+                <Brain className="w-12 h-12 mx-auto mb-4 opacity-50 animate-pulse" />
+                <div className="text-lg mb-2">Loading Latent Space Data...</div>
+                <div className="text-sm">Fetching STM, LTM, and Events</div>
+              </div>
+            </div>
           ) : (
-            <LatentScatter
-              memoryEvents={filteredMemoryEvents}
-              selectedEvent={selectedMemoryEvent}
-              onSelectEvent={setSelectedMemoryEvent}
-              onHoverEvent={() => {}}
-              cameraPreset={cameraPreset}
-            />
+            <>
+              {/* Unified Controls */}
+              <VisualizationControls
+                onFilterChange={setFilter}
+                onCameraPresetChange={setCameraPreset}
+                onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
+                onResetView={handleResetView}
+                onFitAll={handleFitAll}
+                showTrajectory={showTrajectory}
+                currentFilter={filter}
+                currentPreset={cameraPreset}
+                pointCount={filteredMemoryEvents.length}
+              />
+
+              {/* Unified Mini Map */}
+              <UnifiedMiniMap
+                points={miniMapPoints}
+                onFocus={handleFocus}
+                onSelectEvent={setSelectedMemoryEvent}
+                selectedEvent={selectedMemoryEvent}
+                showTrajectory={showTrajectory}
+                onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
+              />
+
+              {/* Visualization Components */}
+              {viewMode === "2d" ? (
+                <LatentSpaceView
+                  memoryEvents={filteredMemoryEvents}
+                  selectedEvent={selectedMemoryEvent}
+                  onSelectEvent={setSelectedMemoryEvent}
+                />
+              ) : viewMode === "3d" ? (
+                <LatentSpace3D
+                  key="latent-space-3d"
+                  memoryEvents={filteredMemoryEvents}
+                  selectedEvent={selectedMemoryEvent}
+                  onSelectEvent={setSelectedMemoryEvent}
+                  cameraPreset={cameraPreset}
+                  selectedCluster={selectedCluster}
+                  selectedGroup={selectedGroup}
+                />
+              ) : (
+                <LatentScatter
+                  memoryEvents={filteredMemoryEvents}
+                  selectedEvent={selectedMemoryEvent}
+                  onSelectEvent={setSelectedMemoryEvent}
+                  onHoverEvent={() => {}}
+                  cameraPreset={cameraPreset}
+                />
+              )}
+            </>
           )}
         </div>
       </div>
@@ -264,7 +361,7 @@ export default function LatentSpacePage() {
       <div className="w-96 flex flex-col min-h-0 max-h-fit overflow-y-auto gap-4">
         {/* Exploration Panel */}
         <ExplorationPanel
-          memoryEvents={memoryEvents}
+          memoryEvents={allMemoryEvents}
           onFilterChange={handleExplorationFilterChange}
           onClusterSelect={handleClusterSelect}
           onGroupSelect={handleGroupSelect}
@@ -355,7 +452,7 @@ export default function LatentSpacePage() {
 
         {/* Journey Timeline */}
         <JourneyTimeline
-          memoryEvents={memoryEvents}
+          memoryEvents={allMemoryEvents}
           selectedEvent={selectedMemoryEvent}
           onSelectEvent={setSelectedMemoryEvent}
         />
