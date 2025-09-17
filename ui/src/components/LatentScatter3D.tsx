@@ -204,10 +204,6 @@ function IndividualPoints({
   const maxPoints = 1000;
   const limitedPoints = points.slice(0, maxPoints);
 
-  console.log(
-    `IndividualPoints: Rendering ${limitedPoints.length} points out of ${points.length} total`
-  );
-
   if (limitedPoints.length === 0) {
     return null;
   }
