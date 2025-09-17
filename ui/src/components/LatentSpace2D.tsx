@@ -304,7 +304,7 @@ export default function LatentSpaceView({
         .attr("r", (d) => (d.isSelected ? 8 : d.isWaypoint ? 6 : 4))
         .attr("fill", (d) => {
           if (d.isSelected) return "#00E0BE";
-          if (d.isWaypoint) return "#FFB020";
+          if (d.isWaypoint) return "#9CA3AF";
           if (d.event.source === "vision") return "#00E0BE";
           if (d.event.source === "speech") return "#1BB4F2";
           if (d.event.source === "stm") return "#FFB020";
@@ -334,11 +334,11 @@ export default function LatentSpaceView({
             .style("background", "rgba(0,0,0,0.9)")
             .style("color", "white")
             .style("padding", "12px")
-            .style("border-radius", "8px")
+            .style("border-radius", "0")
             .style("font-size", "12px")
             .style("pointer-events", "none")
             .style("z-index", "1000")
-            .style("border", "1px solid #00E0BE")
+            .style("border", "none")
             .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)")
             .style("max-width", "300px");
 
@@ -374,14 +374,14 @@ export default function LatentSpaceView({
         .append("g")
         .attr(
           "transform",
-          `translate(${innerWidth + 20}, ${innerHeight - 240})`
+          `translate(${innerWidth + 80}, ${innerHeight - 240})`
         );
 
       legend
         .append("rect")
         .attr("x", -10)
         .attr("y", -10)
-        .attr("width", 100)
+        .attr("width", 70)
         .attr("height", 100)
         .attr("fill", "rgba(0, 0, 0, 0.25)")
         .attr("rx", 4);
@@ -397,7 +397,7 @@ export default function LatentSpaceView({
         .attr("x", 12)
         .attr("y", 4)
         .text("Vision")
-        .style("font-size", "12px")
+        .style("font-size", "8px")
         .style("fill", "#9CA3AF");
 
       legend
@@ -411,7 +411,7 @@ export default function LatentSpaceView({
         .attr("x", 12)
         .attr("y", 24)
         .text("Speech")
-        .style("font-size", "12px")
+        .style("font-size", "8px")
         .style("fill", "#9CA3AF");
 
       legend
@@ -425,7 +425,7 @@ export default function LatentSpaceView({
         .attr("x", 12)
         .attr("y", 44)
         .text("STM")
-        .style("font-size", "12px")
+        .style("font-size", "8px")
         .style("fill", "#9CA3AF");
 
       legend
@@ -439,7 +439,7 @@ export default function LatentSpaceView({
         .attr("x", 12)
         .attr("y", 64)
         .text("LTM")
-        .style("font-size", "12px")
+        .style("font-size", "8px")
         .style("fill", "#9CA3AF");
 
       legend
@@ -447,13 +447,13 @@ export default function LatentSpaceView({
         .attr("cx", 0)
         .attr("cy", 80)
         .attr("r", 6)
-        .attr("fill", "#FFB020");
+        .attr("fill", "#9CA3AF");
       legend
         .append("text")
         .attr("x", 12)
         .attr("y", 84)
         .text("Waypoint")
-        .style("font-size", "12px")
+        .style("font-size", "8px")
         .style("fill", "#9CA3AF");
     };
 
