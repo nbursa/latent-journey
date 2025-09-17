@@ -329,9 +329,11 @@ function Scene3D({
     }
   }, [focusTarget, camera, setFocusTarget]);
 
-  // Initialize camera position based on preset
+  // Initialize camera position based on preset - only run when cameraPreset changes or points are first loaded
+  const [hasInitialized, setHasInitialized] = useState(false);
+
   useEffect(() => {
-    if (points.length > 0) {
+    if (points.length > 0 && !hasInitialized) {
       // Calculate bounds of all points
       const bounds = points.reduce(
         (acc, point) => ({
@@ -386,13 +388,12 @@ function Scene3D({
           setCameraPosition({ x: freeX, y: freeY, z: freeZ });
           break;
       }
-    } else {
-      // Default position when no points
-      camera.position.set(150, 150, 150);
-      camera.lookAt(0, 0, 0);
-      setCameraPosition({ x: 150, y: 150, z: 150 });
+      setHasInitialized(true);
+    } else if (points.length === 0) {
+      // Reset initialization flag when no points
+      setHasInitialized(false);
     }
-  }, [camera, setCameraPosition, points, cameraPreset]);
+  }, [camera, setCameraPosition, points, cameraPreset, hasInitialized]);
 
   return (
     <>
