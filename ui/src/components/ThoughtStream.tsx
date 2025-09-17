@@ -273,38 +273,42 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
 
         {/* Ollama Status */}
         {!ollamaAvailable && ollamaStatus && (
-          <div className="m-3 p-3 bg-yellow-500/20 text-yellow-300 text-sm">
-            <div className="font-semibold mb-2 flex items-center gap-2">
-              <AlertCircle className="w-4 h-4" />
-              Ollama Not Available
+          <div className="m-1 sm:m-3 p-2 sm:p-3 bg-yellow-500/20 text-yellow-300 text-xs sm:text-sm">
+            <div className="font-semibold mb-1 sm:mb-2 flex items-center gap-2">
+              <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
+              <span className="hidden sm:inline">Ollama Not Available</span>
+              <span className="sm:hidden">Ollama Missing</span>
             </div>
-            <div className="space-y-2 text-xs">
-              <p>
+            <div className="space-y-1 sm:space-y-2 text-xs">
+              <p className="hidden sm:block">
                 To enable AI thought generation, you need to install and run
                 Ollama:
               </p>
-              <div className="bg-black/20 p-2 font-mono text-xs">
-                <div>
+              <p className="sm:hidden">Install Ollama to enable AI features:</p>
+              <div className="bg-black/20 p-1 sm:p-2 font-mono text-xs">
+                <div className="hidden sm:block">
                   <strong>Install:</strong>
                 </div>
-                <div>
+                <div className="text-xs">
                   • macOS: <code>brew install ollama</code>
                 </div>
-                <div>
+                <div className="text-xs">
                   • Linux:{" "}
                   <code>curl -fsSL https://ollama.ai/install.sh | sh</code>
                 </div>
-                <div>• Windows: Download from https://ollama.ai/download</div>
-                <div className="mt-2">
+                <div className="text-xs">
+                  • Windows: Download from https://ollama.ai/download
+                </div>
+                <div className="mt-1 sm:mt-2 hidden sm:block">
                   <strong>Run:</strong>
                 </div>
-                <div>
+                <div className="text-xs">
                   • <code>ollama serve</code>
                 </div>
-                <div className="mt-2">
+                <div className="mt-1 sm:mt-2 hidden sm:block">
                   <strong>Pull Model:</strong>
                 </div>
-                <div>
+                <div className="text-xs">
                   •{" "}
                   <code>
                     ollama pull{" "}

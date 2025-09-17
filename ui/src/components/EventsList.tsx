@@ -8,10 +8,10 @@ interface EventsListProps {
 
 export default function EventsList({ events, isProcessing }: EventsListProps) {
   return (
-    <div className="flex-1 flex flex-col min-h-0 max-h-full">
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Activity className="w-5 h-5" />
+        <h2 className="text-sm sm:text-lg font-semibold flex items-center gap-2">
+          <Activity className="w-4 h-4 sm:w-5 sm:h-5" />
           Events
         </h2>
         {isProcessing && (
@@ -21,7 +21,7 @@ export default function EventsList({ events, isProcessing }: EventsListProps) {
           </div>
         )}
       </div>
-      <div className="glass flat p-3 flex-1 overflow-y-auto min-h-0 max-h-full">
+      <div className="glass flat p-2 sm:p-3 flex-1 overflow-y-auto min-h-0">
         {events.length === 0 ? (
           <div className="text-gray-400 text-sm">No events yet...</div>
         ) : (

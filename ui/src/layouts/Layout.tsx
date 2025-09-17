@@ -16,14 +16,16 @@ export default function Layout({ children }: LayoutProps) {
   useMediaRecording();
 
   return (
-    <div className="h-screen w-screen flex flex-col text-white">
+    <div className="h-screen w-screen flex flex-col text-white overflow-hidden">
       <Header
         servicesStatus={servicesStatus}
         captures={captures}
         onRefresh={triggerStatusCheck}
       />
 
-      <div className="flex-1 min-h-0">{children}</div>
+      <div className="flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
+        {children}
+      </div>
     </div>
   );
 }

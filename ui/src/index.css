@@ -102,18 +102,56 @@ html::before {
 
 /* Typography */
 .text-responsive {
-  @apply text-sm sm:text-base md:text-lg;
+  @apply text-xs sm:text-sm md:text-base lg:text-lg;
   font-family: "JetBrains Mono", monospace;
 }
 
 .text-responsive-lg {
-  @apply text-base sm:text-lg md:text-xl;
+  @apply text-sm sm:text-base md:text-lg lg:text-xl;
   font-family: "JetBrains Mono", monospace;
 }
 
 .text-responsive-xl {
-  @apply text-lg sm:text-xl md:text-2xl;
+  @apply text-base sm:text-lg md:text-xl lg:text-2xl;
   font-family: "JetBrains Mono", monospace;
+}
+
+.text-responsive-2xl {
+  @apply text-lg sm:text-xl md:text-2xl lg:text-3xl;
+  font-family: "JetBrains Mono", monospace;
+}
+
+/* Responsive spacing utilities */
+.space-responsive {
+  @apply space-y-1 sm:space-y-2 md:space-y-4;
+}
+
+.gap-responsive {
+  @apply gap-1 sm:gap-2 md:gap-4;
+}
+
+.p-responsive {
+  @apply p-2 sm:p-4 md:p-6;
+}
+
+.px-responsive {
+  @apply px-2 sm:px-4 md:px-6;
+}
+
+.py-responsive {
+  @apply py-2 sm:py-4 md:py-6;
+}
+
+.m-responsive {
+  @apply m-2 sm:m-4 md:m-6;
+}
+
+.mx-responsive {
+  @apply mx-2 sm:mx-4 md:mx-6;
+}
+
+.my-responsive {
+  @apply my-2 sm:my-4 md:my-6;
 }
 
 .glass {
@@ -595,4 +633,62 @@ button:disabled:hover,
 .three-tooltip * {
   transform: none !important;
   scale: 1 !important;
+}
+
+/* Mobile-specific improvements */
+@media (max-width: 640px) {
+  /* Reduce button padding on mobile */
+  .btn {
+    @apply px-3 py-2 text-xs;
+  }
+
+  /* Make cards more compact on mobile */
+  .card {
+    @apply p-2;
+  }
+
+  /* Reduce glass effect intensity on mobile for better performance */
+  .glass {
+    backdrop-filter: blur(10px);
+  }
+
+  .glass-intense {
+    backdrop-filter: blur(15px);
+  }
+
+  /* Improve touch targets */
+  button,
+  .btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Better mobile scrolling */
+  .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Tablet-specific improvements */
+@media (min-width: 641px) and (max-width: 1024px) {
+  /* Medium spacing for tablets */
+  .card {
+    @apply p-3;
+  }
+
+  .btn {
+    @apply px-4 py-2 text-sm;
+  }
+}
+
+/* Desktop-specific improvements */
+@media (min-width: 1025px) {
+  /* Full spacing and effects for desktop */
+  .card {
+    @apply p-4;
+  }
+
+  .btn {
+    @apply px-6 py-3 text-base;
+  }
 }

@@ -12,7 +12,7 @@ export default function LatentInsight({
   lastSentienceToken,
 }: LatentInsightProps) {
   return (
-    <div className="flex flex-col min-h-0 max-h-full">
+    <div className="flex flex-col h-full">
       <div className="glass flat p-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin">
         {selectedMemoryEvent ? (
           <div className="space-y-2">

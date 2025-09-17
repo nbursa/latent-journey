@@ -33,10 +33,10 @@ export default function MemoryTimeline({
   ];
 
   return (
-    <div className="flex-1 flex flex-col min-h-0 max-h-full">
+    <div className="flex flex-col h-full">
       <div className="flex items-center justify-between mb-2 flex-shrink-0">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <HardDrive className="w-5 h-5" />
+        <h2 className="text-sm sm:text-lg font-semibold flex items-center gap-2">
+          <HardDrive className="w-4 h-4 sm:w-5 sm:h-5" />
           Memory
         </h2>
         <div className="flex gap-1">
@@ -44,17 +44,17 @@ export default function MemoryTimeline({
             <button
               key={key}
               onClick={() => onSetMemoryFilter(key)}
-              className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
+              className={`px-1 sm:px-2 py-1 text-xs flat flex items-center gap-1 ${
                 memoryFilter === key ? "btn-primary" : "btn-secondary"
               }`}
             >
               <Icon className="w-3 h-3" />
-              {label}
+              <span className="hidden sm:inline">{label}</span>
             </button>
           ))}
         </div>
       </div>
-      <div className="glass flat p-3 flex-1 overflow-y-auto min-h-0 max-h-full">
+      <div className="glass flat p-2 sm:p-3 flex-1 overflow-y-auto min-h-0">
         {memoryEvents.length === 0 ? (
           <div className="text-gray-400 text-sm">No memory events yet...</div>
         ) : (

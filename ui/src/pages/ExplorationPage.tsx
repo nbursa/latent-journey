@@ -148,33 +148,27 @@ export default function ExplorationPage() {
   ]);
 
   return (
-    <div className="flex-1 grid grid-cols-4 p-4 gap-4 min-h-0 h-full">
-      {/* Left Column: Camera + Latent Insight */}
-      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
-        <div className="flex-shrink-0">
-          <CameraSection
-            videoRef={mediaRefs.videoRef}
-            canvasRef={mediaRefs.canvasRef}
-            audioLevels={audioLevels}
-            isRecording={isRecording}
-            isProcessing={isProcessing}
-            onSnapAndSend={handleSnapAndSend}
-            onStartRecording={handleStartRecording}
-            onStopRecording={handleStopRecording}
-          />
-        </div>
+    <>
+      {/* Mobile Layout - Stacked Components */}
+      <div className="flex-1 flex flex-col gap-4 p-2 sm:p-4 lg:hidden">
+        <CameraSection
+          videoRef={mediaRefs.videoRef}
+          canvasRef={mediaRefs.canvasRef}
+          audioLevels={audioLevels}
+          isRecording={isRecording}
+          isProcessing={isProcessing}
+          onSnapAndSend={handleSnapAndSend}
+          onStartRecording={handleStartRecording}
+          onStopRecording={handleStopRecording}
+        />
 
-        <div className="flex-1 min-h-0">
-          <LatentInsight
-            selectedMemoryEvent={selectedMemoryEvent}
-            lastSentienceToken={lastSentienceToken}
-          />
-        </div>
-      </div>
+        <LatentInsight
+          selectedMemoryEvent={selectedMemoryEvent}
+          lastSentienceToken={lastSentienceToken}
+        />
 
-      {/* Second Column: Events */}
-      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
         <EventsList events={events} isProcessing={isProcessing} />
+
         <MemoryTimeline
           memoryEvents={memoryEvents}
           memoryFilter={memoryFilter}
@@ -182,26 +176,67 @@ export default function ExplorationPage() {
           onSetMemoryFilter={setMemoryFilter}
           onSelectMemoryEvent={setSelectedMemoryEvent}
         />
-      </div>
 
-      {/* Third Column: Memory */}
-      <div className="flex-1 flex flex-col min-h-0 max-h-full gap-4">
-        {/* <EventsList events={events} isProcessing={isProcessing} /> */}
-        {/* <MemoryTimeline
-          memoryEvents={memoryEvents}
-          memoryFilter={memoryFilter}
-          selectedMemoryEvent={selectedMemoryEvent}
-          onSetMemoryFilter={setMemoryFilter}
-          onSelectMemoryEvent={setSelectedMemoryEvent}
-        /> */}
         <ThoughtStream memories={memories} />
-      </div>
 
-      {/* Right Column: Thought Stream Only */}
-      <div className="flex-1 flex flex-col min-h-0 max-h-full">
-        {/* <ThoughtStream memories={memories} /> */}
         <LTMExperiences />
       </div>
-    </div>
+
+      {/* Desktop Layout - Original 4-Column Grid */}
+      <div className="hidden lg:grid flex-1 grid-cols-4 p-4 gap-4 min-h-0 h-full overflow-hidden">
+        {/* Left Column: Camera + Latent Insight */}
+        <div className="flex flex-col min-h-0 max-h-full gap-4">
+          <div className="flex-shrink-0">
+            <CameraSection
+              videoRef={mediaRefs.videoRef}
+              canvasRef={mediaRefs.canvasRef}
+              audioLevels={audioLevels}
+              isRecording={isRecording}
+              isProcessing={isProcessing}
+              onSnapAndSend={handleSnapAndSend}
+              onStartRecording={handleStartRecording}
+              onStopRecording={handleStopRecording}
+            />
+          </div>
+
+          <div className="flex-1 min-h-0">
+            <LatentInsight
+              selectedMemoryEvent={selectedMemoryEvent}
+              lastSentienceToken={lastSentienceToken}
+            />
+          </div>
+        </div>
+
+        {/* Second Column: Events */}
+        <div className="flex flex-col min-h-0 max-h-full gap-4">
+          <div className="flex-1 min-h-0">
+            <EventsList events={events} isProcessing={isProcessing} />
+          </div>
+          <div className="flex-1 min-h-0">
+            <MemoryTimeline
+              memoryEvents={memoryEvents}
+              memoryFilter={memoryFilter}
+              selectedMemoryEvent={selectedMemoryEvent}
+              onSetMemoryFilter={setMemoryFilter}
+              onSelectMemoryEvent={setSelectedMemoryEvent}
+            />
+          </div>
+        </div>
+
+        {/* Third Column: Memory */}
+        <div className="flex flex-col min-h-0 max-h-full gap-4">
+          <div className="flex-1 min-h-0">
+            <ThoughtStream memories={memories} />
+          </div>
+        </div>
+
+        {/* Right Column: Thought Stream Only */}
+        <div className="flex flex-col min-h-0 max-h-full gap-4">
+          <div className="flex-1 min-h-0">
+            <LTMExperiences />
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
