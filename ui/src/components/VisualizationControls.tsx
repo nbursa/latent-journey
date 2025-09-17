@@ -76,8 +76,10 @@ export default function VisualizationControls({
                   onClick={() => {
                     onFilterChange(type as any);
                   }}
-                  className={`px-2 py-1 text-xs rounded transition-colors ${
-                    currentFilter === type ? "btn-primary" : "btn-secondary"
+                  className={`px-2 py-1 text-xs transition-colors ${
+                    currentFilter === type
+                      ? "btn-primary nav-active"
+                      : "btn-primary"
                   }`}
                 >
                   {type}
@@ -96,7 +98,9 @@ export default function VisualizationControls({
                   key={preset}
                   onClick={() => onCameraPresetChange(preset as any)}
                   className={`px-2 py-1 text-xs rounded transition-colors ${
-                    currentPreset === preset ? "btn-primary" : "btn-secondary"
+                    currentPreset === preset
+                      ? "btn-primary nav-active"
+                      : "btn-primary"
                   }`}
                 >
                   {preset}
@@ -111,7 +115,7 @@ export default function VisualizationControls({
               <button
                 onClick={onToggleTrajectory}
                 className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                  showTrajectory ? "btn-primary" : "btn-secondary"
+                  showTrajectory ? "btn-primary nav-active" : "btn-primary"
                 }`}
               >
                 {showTrajectory ? (

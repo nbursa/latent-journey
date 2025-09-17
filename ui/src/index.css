@@ -415,6 +415,11 @@ html::before {
 
 .btn-primary:active {
   transform: translateY(0);
+  border: 1px solid var(--ui-accent);
+}
+
+.btn-primary.active {
+  border: 1px solid var(--ui-accent);
 }
 
 .btn-primary:disabled {
