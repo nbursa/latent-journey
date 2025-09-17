@@ -1,7 +1,7 @@
 import { useAppStore } from "../stores/appStore";
-import LatentSpaceView from "../components/LatentSpaceView";
+import LatentSpaceView from "../components/LatentSpace2D";
 import LatentSpace3D from "../components/LatentSpace3D";
-import LatentScatter from "../components/LatentScatter";
+import LatentScatter from "../components/LatentScatter3D";
 import WaypointComparison from "../components/WaypointComparison";
 import VisualizationControls from "../components/VisualizationControls";
 import UnifiedMiniMap from "../components/UnifiedMiniMap";

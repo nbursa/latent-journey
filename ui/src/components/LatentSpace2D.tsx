@@ -287,10 +287,18 @@ export default function LatentSpaceView({
       }
 
       // Draw points
-      g.selectAll("circle")
-        .data(points)
-        .enter()
-        .append("circle")
+      const circles = g
+        .selectAll<SVGCircleElement, Point2D>("circle")
+        .data(points);
+
+      circles.exit().remove();
+
+      const circlesEnter = circles.enter().append("circle");
+
+      // Merge enter and update selections
+      const circlesMerged = circlesEnter.merge(circles);
+
+      circlesMerged
         .attr("cx", (d) => xScale(d.x))
         .attr("cy", (d) => yScale(d.y))
         .attr("r", (d) => (d.isSelected ? 8 : d.isWaypoint ? 6 : 4))
