@@ -38,6 +38,100 @@
   --status-unknown: #f59e0b; /* yellow */
 }
 
+/* UI Utility Classes */
+.bg-ui-bg {
+  background-color: var(--ui-bg);
+}
+.bg-ui-surface {
+  background-color: var(--ui-surface);
+}
+.bg-ui-card {
+  background-color: var(--ui-card);
+}
+.bg-ui-accent {
+  background-color: var(--ui-accent);
+}
+.bg-ui-accent-2 {
+  background-color: var(--ui-accent-2);
+}
+.bg-ui-warn {
+  background-color: var(--ui-warn);
+}
+
+.text-ui-text {
+  color: var(--ui-text);
+}
+.text-ui-dim {
+  color: var(--ui-dim);
+}
+.text-ui-accent {
+  color: var(--ui-accent);
+}
+.text-ui-accent-2 {
+  color: var(--ui-accent-2);
+}
+.text-ui-warn {
+  color: var(--ui-warn);
+}
+
+.border-ui-border {
+  border-color: var(--ui-border);
+}
+.border-ui-accent {
+  border-color: var(--ui-accent);
+}
+.border-ui-accent-2 {
+  border-color: var(--ui-accent-2);
+}
+.border-ui-warn {
+  border-color: var(--ui-warn);
+}
+
+.ring-ui-accent {
+  --tw-ring-color: var(--ui-accent);
+}
+.ring-ui-accent-2 {
+  --tw-ring-color: var(--ui-accent-2);
+}
+.ring-ui-warn {
+  --tw-ring-color: var(--ui-warn);
+}
+
+/* UI Surface with opacity */
+.bg-ui-surface\/50 {
+  background-color: rgba(20, 25, 34, 0.5);
+}
+.bg-ui-surface\/30 {
+  background-color: rgba(20, 25, 34, 0.3);
+}
+.bg-ui-surface\/80 {
+  background-color: rgba(20, 25, 34, 0.8);
+}
+
+/* UI Accent with opacity */
+.bg-ui-accent\/20 {
+  background-color: rgba(0, 224, 190, 0.2);
+}
+.bg-ui-accent\/50 {
+  background-color: rgba(0, 224, 190, 0.5);
+}
+
+/* UI Text with opacity */
+.text-ui-text\/50 {
+  color: rgba(217, 225, 238, 0.5);
+}
+.text-ui-text\/70 {
+  color: rgba(217, 225, 238, 0.7);
+}
+
+/* UI Dim with opacity */
+.text-ui-dim\/50 {
+  color: rgba(159, 178, 199, 0.5);
+}
+.text-ui-dim\/70 {
+  color: rgba(159, 178, 199, 0.7);
+}
+
 /* Base Styles */
 html,
 body,
