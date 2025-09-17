@@ -193,7 +193,10 @@ function InstancedPoints({
   points: Point3D[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
-  onHoverEvent: (event: MemoryEvent | null) => void;
+  onHoverEvent: (
+    event: MemoryEvent | null,
+    mousePos?: { x: number; y: number }
+  ) => void;
 }) {
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const [, setHoveredId] = useState<number | null>(null);
@@ -229,7 +232,13 @@ function InstancedPoints({
       const instanceId = event.intersections[0].instanceId;
       if (instanceId !== undefined && points[instanceId]) {
         setHoveredId(instanceId);
-        onHoverEvent(points[instanceId].event);
+        // Get mouse position relative to the container
+        const rect = event.nativeEvent.target.getBoundingClientRect();
+        const mousePos = {
+          x: event.nativeEvent.clientX - rect.left,
+          y: event.nativeEvent.clientY - rect.top,
+        };
+        onHoverEvent(points[instanceId].event, mousePos);
       }
     }
   };
@@ -440,6 +449,7 @@ export default function LatentScatter({
   const [isComputing, setIsComputing] = useState(false);
   const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
   const [webglError, setWebglError] = useState(false);
+  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
   const [focusTarget, setFocusTarget] = useState<{
     x: number;
     y: number;
@@ -481,8 +491,14 @@ export default function LatentScatter({
     setFocusTarget({ x: worldX, y: worldY, z: 200 });
   };
 
-  const handleHover = (event: MemoryEvent | null) => {
+  const handleHover = (
+    event: MemoryEvent | null,
+    mousePos?: { x: number; y: number }
+  ) => {
     setHoveredEvent(event);
+    if (mousePos) {
+      setMousePosition(mousePos);
+    }
     onHoverEvent(event);
   };
 
@@ -594,11 +610,28 @@ export default function LatentScatter({
 
       {/* Hover tooltip */}
       {hoveredEvent && (
-        <div className="absolute top-4 left-4 card p-3 max-w-xs">
-          <div className="text-sm font-medium text-ui-accent mb-1">
+        <div
+          className="absolute p-3 max-w-xs text-white rounded shadow-lg"
+          style={{
+            zIndex: 9999,
+            position: "absolute",
+            top: `${mousePosition.y + 10}px`,
+            left: `${mousePosition.x + 10}px`,
+            backgroundColor: "rgba(0,0,0,0.9)",
+            color: "white",
+            padding: "12px",
+            borderRadius: "8px",
+            border: "1px solid #00E0BE",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+            maxWidth: "300px",
+            fontSize: "12px",
+            pointerEvents: "none", // Prevent tooltip from interfering with mouse events
+          }}
+        >
+          <div className="text-sm font-bold mb-1" style={{ color: "#00E0BE" }}>
             {hoveredEvent.source.toUpperCase()}
           </div>
-          <div className="text-xs text-ui-dim mb-2">
+          <div className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
             {new Date(hoveredEvent.ts * 1000).toLocaleTimeString()}
           </div>
           <div className="space-y-1">
@@ -606,8 +639,10 @@ export default function LatentScatter({
               .slice(0, 3)
               .map(([key, value]) => (
                 <div key={key} className="text-xs">
-                  <span className="text-ui-dim">{key}:</span>{" "}
-                  <span className="text-ui-text">{String(value)}</span>
+                  <span className="font-semibold" style={{ color: "#00E0BE" }}>
+                    {key}:
+                  </span>{" "}
+                  <span>{String(value)}</span>
                 </div>
               ))}
           </div>
