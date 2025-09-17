@@ -29,22 +29,39 @@ export default function CameraSection({
         <span className="hidden sm:inline">Live Camera</span>
         <span className="sm:hidden">Camera</span>
       </h2>
-      <div className="flex-1 flex flex-col min-h-0">
-        <div className="relative w-full flat glass-border flex-shrink-0 min-h-0 aspect-video sm:aspect-auto">
+      <div className="flex flex-col min-h-0">
+        <div
+          className="relative w-full flat glass-border flex-shrink-0"
+          style={{
+            aspectRatio: "16/9",
+          }}
+        >
           <video
             ref={videoRef}
             autoPlay
             playsInline
-            className="w-full h-full object-cover"
+            muted
+            className="w-full h-full object-contain"
+            style={{
+              backgroundColor: "#000",
+            }}
+            onLoadedMetadata={(e) => {
+              console.log(
+                "Video loaded on mobile:",
+                e.currentTarget.videoWidth,
+                e.currentTarget.videoHeight
+              );
+            }}
+            onError={(e) => {
+              console.error("Video error on mobile:", e);
+            }}
           />
-          <div className="absolute inset-0 p-1 sm:p-2 flex items-end justify-start bg-gray-900/50">
-            <div className="text-left">
-              <div className="text-xs sm:text-sm text-gray-300 mb-1 sm:mb-2">
-                Camera Ready
-              </div>
-              <div className="text-xs text-gray-400 hidden sm:block">
-                Click "Capture & Analyze" to take photos
-              </div>
+          <div className="absolute inset-0 flex items-end justify-start">
+            <div className="text-left bg-gray-900/50 p-1 sm:p-2">
+              <div className="text-[10px] text-gray-300">Camera Ready</div>
+              {/* <div className="text-[10px] text-gray-400 hidden sm:block">
+                Camera Ready. Click "Capture & Analyze" to take photos
+              </div> */}
             </div>
           </div>
         </div>

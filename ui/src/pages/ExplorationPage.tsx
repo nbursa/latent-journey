@@ -117,11 +117,49 @@ export default function ExplorationPage() {
 
   useEffect(() => {
     // Initialize camera
-    (async () => {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      if (mediaRefs.videoRef.current)
-        mediaRefs.videoRef.current.srcObject = stream;
-    })();
+    const initCamera = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            width: { ideal: 1280 },
+            height: { ideal: 720 },
+            facingMode: "user",
+          },
+        });
+        console.log("Camera stream obtained:", stream);
+
+        if (mediaRefs.videoRef.current) {
+          mediaRefs.videoRef.current.srcObject = stream;
+          console.log("Video element updated with stream");
+
+          // Force video to load and play
+          mediaRefs.videoRef.current.load();
+          await mediaRefs.videoRef.current.play();
+          console.log("Video playing successfully");
+        }
+      } catch (error) {
+        console.error("Camera initialization error:", error);
+
+        // Retry with simpler constraints for mobile
+        try {
+          const fallbackStream = await navigator.mediaDevices.getUserMedia({
+            video: true,
+          });
+          console.log("Fallback camera stream obtained:", fallbackStream);
+
+          if (mediaRefs.videoRef.current) {
+            mediaRefs.videoRef.current.srcObject = fallbackStream;
+            mediaRefs.videoRef.current.load();
+            await mediaRefs.videoRef.current.play();
+            console.log("Fallback video playing successfully");
+          }
+        } catch (fallbackError) {
+          console.error("Fallback camera initialization error:", fallbackError);
+        }
+      }
+    };
+
+    initCamera();
 
     // Initialize audio visualization with dummy data
     initializeIdleVisualization();
@@ -138,6 +176,13 @@ export default function ExplorationPage() {
       if (audioRefs.animationFrameRef.current) {
         cancelAnimationFrame(audioRefs.animationFrameRef.current);
       }
+
+      // Stop camera stream
+      if (mediaRefs.videoRef.current && mediaRefs.videoRef.current.srcObject) {
+        const stream = mediaRefs.videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach((track) => track.stop());
+        mediaRefs.videoRef.current.srcObject = null;
+      }
     };
   }, [
     handleEventMessage,
@@ -150,7 +195,7 @@ export default function ExplorationPage() {
   return (
     <>
       {/* Mobile Layout - Stacked Components */}
-      <div className="flex-1 flex flex-col gap-4 p-2 sm:p-4 lg:hidden">
+      <div className="flex-1 flex flex-col gap-4 p-2 sm:p-4 lg:hidden min-h-0 overflow-y-auto">
         <CameraSection
           videoRef={mediaRefs.videoRef}
           canvasRef={mediaRefs.canvasRef}
@@ -182,7 +227,7 @@ export default function ExplorationPage() {
         <LTMExperiences />
       </div>
 
-      {/* Desktop Layout - Original 4-Column Grid */}
+      {/* Desktop Layout - 4-Column Grid */}
       <div className="hidden lg:grid flex-1 grid-cols-4 p-4 gap-4 min-h-0 h-full overflow-hidden">
         {/* Left Column: Camera + Latent Insight */}
         <div className="flex flex-col min-h-0 max-h-full gap-4">
