@@ -323,7 +323,6 @@ export default function LatentSpacePage() {
                 onSelectEvent={setSelectedMemoryEvent}
                 selectedEvent={selectedMemoryEvent}
                 showTrajectory={showTrajectory}
-                onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
               />
 
               {/* Visualization Components */}
@@ -332,6 +331,7 @@ export default function LatentSpacePage() {
                   memoryEvents={filteredMemoryEvents}
                   selectedEvent={selectedMemoryEvent}
                   onSelectEvent={setSelectedMemoryEvent}
+                  showTrajectory={showTrajectory}
                 />
               ) : viewMode === "3d" ? (
                 <LatentSpace3D

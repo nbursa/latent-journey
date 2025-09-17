@@ -144,7 +144,9 @@ export default function JourneyTimeline({
 
               return (
                 <button
-                  key={event.ts}
+                  key={`${event.ts}-${
+                    event.embedding_id || sortedEvents.indexOf(event)
+                  }`}
                   onClick={() => handleSeek(position)}
                   className={`absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full transition-all ${
                     isSelected
@@ -221,14 +223,14 @@ export default function JourneyTimeline({
       </div>
 
       {/* Event list */}
-      <div className="max-h-32 overflow-y-auto space-y-1">
-        {sortedEvents.slice(0, 10).map((event) => {
+      <div className="space-y-1">
+        {sortedEvents.slice(0, 10).map((event, index) => {
           const isSelected = selectedEvent?.ts === event.ts;
           const position = (event.ts - timeRange.start) / timeRange.duration;
 
           return (
             <button
-              key={event.ts}
+              key={`${event.ts}-${event.embedding_id}-${index}`}
               onClick={() => {
                 handleSeek(position);
                 onSelectEvent(event);

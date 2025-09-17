@@ -39,17 +39,17 @@ export default function VisualizationControls({
     <div className={`absolute top-4 left-4 z-20 ${className}`}>
       <button
         onClick={() => setIsExpanded(!isExpanded)}
-        className="glass flat p-2 rounded-lg hover:bg-ui-accent/10 transition-colors"
+        className="flex items-center gap-2 glass flat p-2 rounded-lg hover:bg-ui-accent/10 transition-colors"
         title="Visualization Controls"
       >
         <Filter className="w-4 h-4" />
+        <h3 className="text-sm font-medium">Controls</h3>
       </button>
 
       {isExpanded && (
         <div className="glass flat p-4 rounded-lg mt-2 min-w-64 space-y-4">
           {/* Header */}
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-ui-accent">Controls</h3>
             <button
               onClick={() => setIsExpanded(false)}
               className="text-ui-dim hover:text-ui-text transition-colors"
@@ -73,9 +73,7 @@ export default function VisualizationControls({
                   key={type}
                   onClick={() => onFilterChange(type as any)}
                   className={`px-2 py-1 text-xs rounded transition-colors ${
-                    currentFilter === type
-                      ? "bg-ui-accent text-ui-bg"
-                      : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                    currentFilter === type ? "btn-primary" : "btn-secondary"
                   }`}
                 >
                   {type}
@@ -94,9 +92,7 @@ export default function VisualizationControls({
                   key={preset}
                   onClick={() => onCameraPresetChange(preset as any)}
                   className={`px-2 py-1 text-xs rounded transition-colors ${
-                    currentPreset === preset
-                      ? "bg-ui-accent text-ui-bg"
-                      : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                    currentPreset === preset ? "btn-primary" : "btn-secondary"
                   }`}
                 >
                   {preset}
@@ -111,9 +107,7 @@ export default function VisualizationControls({
               <button
                 onClick={onToggleTrajectory}
                 className={`px-2 py-1 text-xs rounded transition-colors flex items-center gap-1 ${
-                  showTrajectory
-                    ? "bg-ui-accent text-ui-bg"
-                    : "bg-ui-surface hover:bg-ui-surface-2 text-ui-text"
+                  showTrajectory ? "btn-primary" : "btn-secondary"
                 }`}
               >
                 {showTrajectory ? (
@@ -131,14 +125,14 @@ export default function VisualizationControls({
             <div className="flex gap-2">
               <button
                 onClick={onResetView}
-                className="px-2 py-1 text-xs rounded transition-colors bg-ui-surface hover:bg-ui-surface-2 text-ui-text flex items-center gap-1"
+                className="px-2 py-1 text-xs rounded transition-colors btn-secondary flex items-center gap-1"
               >
                 <RotateCcw className="w-3 h-3" />
                 Reset
               </button>
               <button
                 onClick={onFitAll}
-                className="px-2 py-1 text-xs rounded transition-colors bg-ui-surface hover:bg-ui-surface-2 text-ui-text flex items-center gap-1"
+                className="px-2 py-1 text-xs rounded transition-colors btn-secondary flex items-center gap-1"
               >
                 <Maximize2 className="w-3 h-3" />
                 Fit All

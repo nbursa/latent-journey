@@ -1,13 +1,14 @@
 import { MemoryEvent } from "../types";
 import { useEffect, useRef, useState } from "react";
 import * as d3 from "d3";
-import { Map, RotateCcw } from "lucide-react";
+import { Map } from "lucide-react";
 import { useWaypoints, useWaypointActions } from "../stores/appStore";
 
 interface LatentSpaceViewProps {
   memoryEvents: MemoryEvent[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
+  showTrajectory?: boolean;
 }
 
 interface Point2D {
@@ -22,13 +23,14 @@ export default function LatentSpaceView({
   memoryEvents,
   selectedEvent,
   onSelectEvent,
+  showTrajectory = true,
 }: LatentSpaceViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [points, setPoints] = useState<Point2D[]>([]);
   const [isComputing, setIsComputing] = useState(false);
 
   const waypoints = useWaypoints();
-  const { toggleWaypoint, clearWaypoints } = useWaypointActions();
+  const { toggleWaypoint } = useWaypointActions();
 
   const projectTo2D = (embeddings: number[][]) => {
     if (embeddings.length === 0) return [];
@@ -218,7 +220,7 @@ export default function LatentSpaceView({
         .style("fill", "#9CA3AF");
 
       // Draw trajectory lines with temporal progression
-      if (points.length > 1) {
+      if (showTrajectory && points.length > 1) {
         // Sort points by timestamp for proper temporal ordering
         const sortedPoints = [...points].sort(
           (a, b) => a.event.ts - b.event.ts
@@ -423,23 +425,6 @@ export default function LatentSpaceView({
 
   return (
     <div className="h-full flex flex-col min-h-0 p-2">
-      <div className="flex items-center justify-between mb-4 flex-shrink-0">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Map className="w-5 h-5" />
-          Latent Space Map
-        </h2>
-        <div className="flex gap-2">
-          <button
-            onClick={clearWaypoints}
-            className="px-2 py-1 text-xs btn-secondary flex items-center gap-1"
-            disabled={waypoints.size === 0}
-          >
-            <RotateCcw className="w-3 h-3" />
-            Clear
-          </button>
-        </div>
-      </div>
-
       <div className="flex-1 p-4 min-h-0 overflow-hidden">
         {isComputing ? (
           <div className="h-full flex items-center justify-center">

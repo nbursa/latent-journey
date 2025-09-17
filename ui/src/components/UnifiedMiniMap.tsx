@@ -1,5 +1,4 @@
-import { useState } from "react";
-import { Map, Eye, EyeOff } from "lucide-react";
+import { Map } from "lucide-react";
 
 interface Point2D {
   x: number;
@@ -18,7 +17,6 @@ interface UnifiedMiniMapProps {
   selectedEvent: any;
   cameraPosition?: { x: number; y: number; z: number };
   showTrajectory?: boolean;
-  onToggleTrajectory?: () => void;
   className?: string;
 }
 
@@ -29,14 +27,9 @@ export default function UnifiedMiniMap({
   selectedEvent,
   cameraPosition,
   showTrajectory = true,
-  onToggleTrajectory,
   className = "",
 }: UnifiedMiniMapProps) {
-  const [filter, setFilter] = useState<"all" | "vision" | "speech">("all");
-
-  const filteredPoints = points.filter(
-    (point) => filter === "all" || point.source === filter
-  );
+  const filteredPoints = points;
 
   // Calculate bounds for better mapping
   const bounds = filteredPoints.reduce(
@@ -90,7 +83,7 @@ export default function UnifiedMiniMap({
 
   return (
     <div
-      className={`absolute top-4 right-4 w-60 h-72 glass flat border border-ui-border overflow-visible z-10 ${className}`}
+      className={`absolute top-4 right-4 w-60 h-50 glass flat border border-ui-border overflow-visible z-10 ${className}`}
     >
       {/* Header with controls */}
       <div className="p-2 text-xs text-ui-dim border-b border-ui-border flex items-center justify-between">
@@ -98,38 +91,6 @@ export default function UnifiedMiniMap({
           <Map className="w-3 h-3" />
           Mini Map
         </span>
-        <div className="flex gap-1">
-          {onToggleTrajectory && (
-            <button
-              onClick={onToggleTrajectory}
-              className={`px-1 py-0.5 text-xs rounded transition-colors ${
-                showTrajectory ? "btn-primary" : "btn-secondary"
-              }`}
-              title="Toggle trajectory"
-            >
-              {showTrajectory ? (
-                <Eye className="w-3 h-3" />
-              ) : (
-                <EyeOff className="w-3 h-3" />
-              )}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Filter buttons */}
-      <div className="p-2 flex gap-1 flex-wrap">
-        {["all", "vision", "speech"].map((type) => (
-          <button
-            key={type}
-            onClick={() => setFilter(type as any)}
-            className={`px-2 py-1 text-xs rounded transition-colors ${
-              filter === type ? "btn-primary" : "btn-secondary"
-            }`}
-          >
-            {type}
-          </button>
-        ))}
       </div>
 
       {/* Map area */}
@@ -220,28 +181,6 @@ export default function UnifiedMiniMap({
           <div className="w-full h-px bg-ui-accent opacity-30"></div>
           <div className="w-px h-full bg-ui-accent opacity-30"></div>
         </div>
-      </div>
-
-      {/* Quick controls */}
-      <div className="p-2 flex gap-1 flex-wrap">
-        <button
-          onClick={() => onFocus(0, 0)}
-          className="px-2 py-1 text-xs btn-secondary"
-          title="Center view"
-        >
-          Center
-        </button>
-        <button
-          onClick={() => {
-            const centerX = (bounds.minX + bounds.maxX) / 2;
-            const centerY = (bounds.minY + bounds.maxY) / 2;
-            onFocus(centerX, centerY);
-          }}
-          className="px-2 py-1 text-xs btn-secondary"
-          title="Fit all points"
-        >
-          Fit All
-        </button>
       </div>
     </div>
   );
