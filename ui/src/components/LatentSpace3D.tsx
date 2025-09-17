@@ -565,7 +565,7 @@ export default function RealLatentSpace3D({
       );
 
       // Set camera distance to encompass all points with appropriate padding
-      const distance = Math.max(maxSize * 2, 10);
+      const distance = Math.max(maxSize * 1, 10);
 
       // Position camera at a good viewing angle
       const cameraX = centerX + distance * 0.5;
