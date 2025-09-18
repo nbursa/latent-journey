@@ -126,16 +126,13 @@ export default function ExplorationPage() {
             facingMode: "user",
           },
         });
-        console.log("Camera stream obtained:", stream);
 
         if (mediaRefs.videoRef.current) {
           mediaRefs.videoRef.current.srcObject = stream;
-          console.log("Video element updated with stream");
 
           // Force video to load and play
           mediaRefs.videoRef.current.load();
           await mediaRefs.videoRef.current.play();
-          console.log("Video playing successfully");
         }
       } catch (error) {
         console.error("Camera initialization error:", error);
@@ -145,13 +142,11 @@ export default function ExplorationPage() {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({
             video: true,
           });
-          console.log("Fallback camera stream obtained:", fallbackStream);
 
           if (mediaRefs.videoRef.current) {
             mediaRefs.videoRef.current.srcObject = fallbackStream;
             mediaRefs.videoRef.current.load();
             await mediaRefs.videoRef.current.play();
-            console.log("Fallback video playing successfully");
           }
         } catch (fallbackError) {
           console.error("Fallback camera initialization error:", fallbackError);
