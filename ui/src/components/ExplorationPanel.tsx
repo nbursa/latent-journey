@@ -127,42 +127,18 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
     );
 
     const handleClusterClick = (cluster: Cluster) => {
-      console.log("🔍 ExplorationPanel - Cluster clicked:", {
-        clusterId: cluster.id,
-        clusterLabel: cluster.label,
-        pointsCount: cluster.points.length,
-        points: cluster.points.map((p) => ({ ts: p.ts, source: p.source })),
-        isCurrentlySelected: selectedCluster?.id === cluster.id,
-      });
-
       if (selectedCluster?.id === cluster.id) {
-        console.log("🔍 ExplorationPanel - Deselecting cluster");
         onClusterSelect(null);
       } else {
-        console.log(
-          "🔍 ExplorationPanel - Selecting cluster, calling onClusterSelect"
-        );
         onClusterSelect(cluster);
         onGroupSelect(null); // Clear group selection
       }
     };
 
     const handleGroupClick = (group: SemanticGroup) => {
-      console.log("🔍 ExplorationPanel - Group clicked:", {
-        groupId: group.id,
-        groupName: group.name,
-        eventsCount: group.events.length,
-        events: group.events.map((e) => ({ ts: e.ts, source: e.source })),
-        isCurrentlySelected: selectedGroup?.id === group.id,
-      });
-
       if (selectedGroup?.id === group.id) {
-        console.log("🔍 ExplorationPanel - Deselecting group");
         onGroupSelect(null);
       } else {
-        console.log(
-          "🔍 ExplorationPanel - Selecting group, calling onGroupSelect"
-        );
         onGroupSelect(group);
         // Note: onGroupSelect should handle clearing cluster selection internally
       }
@@ -298,7 +274,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
                   <button
                     key={cluster.id}
                     onClick={() => {
-                      console.log("🔍 Button clicked for cluster:", cluster.id);
                       handleClusterClick(cluster);
                     }}
                     className={`w-full text-left p-2 flat ${
@@ -353,7 +328,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
                   <button
                     key={group.id}
                     onClick={() => {
-                      console.log("🔍 Button clicked for group:", group.id);
                       handleGroupClick(group);
                     }}
                     className={`w-full text-left p-2 flat ${
