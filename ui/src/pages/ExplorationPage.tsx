@@ -161,7 +161,7 @@ export default function ExplorationPage() {
 
     initCamera();
 
-    // Initialize audio visualization with dummy data
+    // Initialize audio visualization
     initializeIdleVisualization();
 
     // SSE

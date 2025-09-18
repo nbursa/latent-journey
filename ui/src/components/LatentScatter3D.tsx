@@ -180,7 +180,7 @@ const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
     }
 
     for (let i = 100; i < 128; i++) {
-      embedding[i] = Math.random() * 0.1 - 0.05;
+      embedding[i] = 0;
     }
 
     return embedding;
@@ -201,7 +201,7 @@ function IndividualPoints({
   ) => void;
 }) {
   // Limit points for display to prevent performance issues
-  const maxPoints = 1000;
+  const maxPoints = 500; // Reduced to prevent WebGL context loss
   const limitedPoints = points.slice(0, maxPoints);
 
   if (limitedPoints.length === 0) {
@@ -302,13 +302,15 @@ const StableCanvas = memo(
           const handleContextRestored = () => {
             console.log("WebGL context restored");
             onWebglError?.(false);
-            // Force a re-render
-            try {
-              gl.resetState();
-              gl.render(scene, camera);
-            } catch (e) {
-              console.warn("Could not reset WebGL state:", e);
-            }
+            // Force a re-render after a short delay
+            setTimeout(() => {
+              try {
+                gl.resetState();
+                gl.render(scene, camera);
+              } catch (e) {
+                console.warn("Could not reset WebGL state:", e);
+              }
+            }, 100);
           };
 
           gl.domElement.addEventListener("webglcontextlost", handleContextLost);

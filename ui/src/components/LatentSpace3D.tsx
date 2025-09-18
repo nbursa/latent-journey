@@ -170,9 +170,9 @@ export default function RealLatentSpace3D({
           embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
         }
 
-        // Add some noise to make the embedding more realistic (dimensions 100-127)
+        // Fill remaining dimensions with zeros (dimensions 100-127)
         for (let i = 100; i < 128; i++) {
-          embedding[i] = Math.random() * 0.1 - 0.05;
+          embedding[i] = 0;
         }
       }
 

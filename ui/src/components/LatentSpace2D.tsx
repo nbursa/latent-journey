@@ -37,8 +37,8 @@ export default function LatentSpaceView({
 
     // Simple 2D projection: use first two dimensions
     return embeddings.map((embedding, index) => ({
-      x: (embedding[0] || 0) * 100 + Math.random() * 20 - 10, // Add some noise
-      y: (embedding[1] || 0) * 100 + Math.random() * 20 - 10,
+      x: (embedding[0] || 0) * 100,
+      y: (embedding[1] || 0) * 100,
       event: memoryEvents[index],
       isSelected: false,
       isWaypoint: waypoints.has(memoryEvents[index].ts),
@@ -139,7 +139,7 @@ export default function LatentSpaceView({
       }
 
       for (let i = 110; i < 128; i++) {
-        embedding[i] = Math.random() * 0.1 - 0.05;
+        embedding[i] = 0;
       }
 
       return embedding;

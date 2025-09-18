@@ -59,12 +59,7 @@ export const useAudioVisualization = () => {
   }, []);
 
   const initializeIdleVisualization = useCallback(() => {
-    const animateIdle = () => {
-      const dummyLevels = Array.from({ length: 32 }, () => Math.random() * 0.1);
-      setAudioLevels(dummyLevels);
-      animationFrameRef.current = requestAnimationFrame(animateIdle);
-    };
-    animateIdle();
+    setAudioLevels([]);
   }, []);
 
   const refs: AudioVisualizationRefs = {

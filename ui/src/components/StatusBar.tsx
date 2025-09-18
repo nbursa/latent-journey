@@ -1,5 +1,5 @@
 import { useAppStore } from "../stores/appStore";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Activity, Cpu, Database, Wifi } from "lucide-react";
 
 interface StatusBarProps {
@@ -9,25 +9,27 @@ interface StatusBarProps {
 export default function StatusBar({ className = "" }: StatusBarProps) {
   const events = useAppStore((state) => state.events);
   const memoryEvents = useAppStore((state) => state.memoryEvents);
-  // const servicesStatus = useAppStore((state) => state.servicesStatus);
 
-  const [fps, setFps] = useState(60);
+  const [fps, setFps] = useState(0);
   const [gpuInfo, setGpuInfo] = useState<string>("Unknown");
+  const [ramUsage, setRamUsage] = useState<string>("Unknown");
   const [isStreaming, setIsStreaming] = useState(false);
+  const frameCountRef = useRef(0);
+  const lastTimeRef = useRef(performance.now());
 
-  // Simulate FPS monitoring
+  // FPS monitoring using requestAnimationFrame
   useEffect(() => {
-    let frameCount = 0;
-    let lastTime = performance.now();
-
     const updateFPS = () => {
-      frameCount++;
+      frameCountRef.current++;
       const currentTime = performance.now();
 
-      if (currentTime - lastTime >= 1000) {
-        setFps(Math.round((frameCount * 1000) / (currentTime - lastTime)));
-        frameCount = 0;
-        lastTime = currentTime;
+      if (currentTime - lastTimeRef.current >= 1000) {
+        const actualFps = Math.round(
+          (frameCountRef.current * 1000) / (currentTime - lastTimeRef.current)
+        );
+        setFps(actualFps);
+        frameCountRef.current = 0;
+        lastTimeRef.current = currentTime;
       }
 
       requestAnimationFrame(updateFPS);
@@ -36,30 +38,23 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
     requestAnimationFrame(updateFPS);
   }, []);
 
-  // Simulate GPU detection
+  // GPU detection
   useEffect(() => {
     const canvas = document.createElement("canvas");
     const gl =
       canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
 
-    if (gl && "getExtension" in gl) {
-      // Try the new RENDERER parameter first, fallback to deprecated method
+    if (gl && "getParameter" in gl) {
       try {
-        const renderer = (gl as WebGLRenderingContext).getParameter(
-          37445 // RENDERER constant
-        );
+        // Try WebGL2 RENDERER constant first
+        const renderer = (gl as WebGLRenderingContext).getParameter(37445);
         setGpuInfo(renderer.split(" ")[0] || "WebGL");
       } catch (error) {
-        // Fallback to deprecated method for older browsers
-        const debugInfo = (gl as WebGLRenderingContext).getExtension(
-          "WEBGL_debug_renderer_info"
-        );
-        if (debugInfo) {
-          const renderer = (gl as WebGLRenderingContext).getParameter(
-            debugInfo.UNMASKED_RENDERER_WEBGL
-          );
+        try {
+          // Fallback to WebGL1 RENDERER constant
+          const renderer = (gl as WebGLRenderingContext).getParameter(0x1f01);
           setGpuInfo(renderer.split(" ")[0] || "WebGL");
-        } else {
+        } catch (error2) {
           setGpuInfo("WebGL");
         }
       }
@@ -68,22 +63,53 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
     }
   }, []);
 
-  // Monitor streaming state
+  // RAM usage monitoring
+  useEffect(() => {
+    const updateRAMUsage = () => {
+      try {
+        if ("memory" in performance) {
+          // Use Performance.memory API if available (Chrome/Edge)
+          const memory = (performance as any).memory;
+          if (memory && memory.usedJSHeapSize > 0) {
+            const usedMB = Math.round(memory.usedJSHeapSize / 1024 / 1024);
+            const totalMB = Math.round(memory.totalJSHeapSize / 1024 / 1024);
+            setRamUsage(`${usedMB}MB / ${totalMB}MB`);
+            return;
+          }
+        }
+
+        if ("deviceMemory" in navigator) {
+          // Use Navigator.deviceMemory API if available
+          const deviceMemory = (navigator as any).deviceMemory;
+          if (deviceMemory && deviceMemory > 0) {
+            setRamUsage(`${deviceMemory}GB`);
+            return;
+          }
+        }
+
+        // Fallback: estimate based on memory events and other factors
+        const timeBasedMB = Math.round(performance.now() / 1000 / 60); // Minutes since page load
+        const eventBasedMB = Math.round(memoryEvents.length * 0.5); // Based on events
+        const baseMB = Math.max(10, timeBasedMB, eventBasedMB); // Minimum 10MB
+        setRamUsage(`~${baseMB}MB`);
+      } catch (error) {
+        // Final fallback
+        setRamUsage("Unknown");
+      }
+    };
+
+    updateRAMUsage();
+    const interval = setInterval(updateRAMUsage, 2000); // Update every 2 seconds
+    return () => clearInterval(interval);
+  }, [memoryEvents.length]);
+
+  // Monitor streaming state based on events
   useEffect(() => {
     const hasRecentEvents = events.some(
       (event) => event.ts && Date.now() / 1000 - event.ts < 5
     );
     setIsStreaming(hasRecentEvents);
   }, [events]);
-
-  // const getServiceStatus = (service: string) => {
-  //   const status = servicesStatus[service as keyof typeof servicesStatus];
-  //   return status === "online"
-  //     ? "online"
-  //     : status === "offline"
-  //     ? "offline"
-  //     : "unknown";
-  // };
 
   return (
     <div className={`w-fit flex items-center gap-3 ${className}`}>
@@ -93,13 +119,13 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
         <span className="font-mono text-xs">{fps} FPS</span>
       </div>
 
-      {/* Points Counter */}
+      {/* RAM Usage */}
       <div className="glass flat p-2 flex items-center gap-2">
         <Database className="w-3 h-3" />
-        <span className="font-mono text-xs">{memoryEvents.length} points</span>
+        <span className="font-mono text-xs">{ramUsage}</span>
       </div>
 
-      {/* GPU/CPU Info */}
+      {/* GPU Info */}
       <div className="glass flat p-2 flex items-center gap-2">
         <Cpu className="w-3 h-3" />
         <span className="font-mono text-xs">{gpuInfo}</span>
@@ -116,17 +142,6 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
           {isStreaming ? "LIVE" : "IDLE"}
         </span>
       </div>
-
-      {/* Service Status Dots */}
-      {/* <div className="card p-2 flex items-center gap-1">
-        {Object.entries(servicesStatus).map(([service, status]) => (
-          <div
-            key={service}
-            className={`status-dot ${getServiceStatus(service)}`}
-            title={`${service}: ${status}`}
-          />
-        ))}
-      </div> */}
     </div>
   );
 }
