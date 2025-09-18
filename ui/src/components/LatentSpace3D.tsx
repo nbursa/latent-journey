@@ -3,7 +3,12 @@ import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { MemoryEvent } from "../types";
 import { getEmbeddingForEvent, reduceDimensions } from "../utils/embeddings";
-import { useWaypoints } from "../stores/appStore";
+import {
+  useWaypoints,
+  useWaypointA,
+  useWaypointB,
+  useWaypointActions,
+} from "../stores/appStore";
 import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface Point3D {
@@ -18,6 +23,8 @@ interface Point3D {
   confidence: number;
   source: string;
   isHighlighted: boolean;
+  isWaypointA: boolean;
+  isWaypointB: boolean;
 }
 
 interface RealLatentSpace3DProps {
@@ -134,6 +141,9 @@ export default function RealLatentSpace3D({
   selectedGroup = null,
 }: RealLatentSpace3DProps) {
   const waypoints = useWaypoints();
+  const waypointA = useWaypointA();
+  const waypointB = useWaypointB();
+  const { setWaypointA, setWaypointB } = useWaypointActions();
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -265,6 +275,11 @@ export default function RealLatentSpace3D({
               );
             }
 
+            // Check if this event is waypoint A or B
+            const isWaypointA = waypointA?.ts === event.ts;
+            const isWaypointB = waypointB?.ts === event.ts;
+            const isWaypointAB = isWaypointA || isWaypointB;
+
             return {
               x,
               y,
@@ -272,11 +287,13 @@ export default function RealLatentSpace3D({
               event,
               isSelected: selectedEvent?.ts === event.ts,
               isWaypoint: waypoints.has(event.ts),
-              color: color,
+              color: isWaypointAB ? "#FFFFFF" : color, // White for waypoint A/B
               size: waypoints.has(event.ts) ? baseSize * 1.5 : baseSize, // Make waypoints bigger
               confidence: embedding.confidence,
               source: event.source,
               isHighlighted,
+              isWaypointA,
+              isWaypointB,
             };
           }
         );
@@ -296,6 +313,8 @@ export default function RealLatentSpace3D({
     reduceDimensionsCallback,
     selectedCluster,
     selectedGroup,
+    waypointA,
+    waypointB,
   ]);
 
   // Update selection and waypoints without recomputing embeddings
@@ -390,6 +409,7 @@ export default function RealLatentSpace3D({
     renderer.domElement.style.left = "0";
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
+    renderer.domElement.style.cursor = "pointer";
 
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -471,16 +491,20 @@ export default function RealLatentSpace3D({
     const camera = cameraRef.current;
     const controls = controlsRef.current;
 
-    // Clear existing meshes
+    // Clear existing meshes and sprites
     const existingMeshes = scene.children.filter(
-      (child) => child instanceof THREE.Mesh
+      (child) => child instanceof THREE.Mesh || child instanceof THREE.Sprite
     );
-    existingMeshes.forEach((mesh) => {
-      scene.remove(mesh);
-      if (mesh instanceof THREE.Mesh) {
-        mesh.geometry.dispose();
-        if (mesh.material instanceof THREE.Material) {
-          mesh.material.dispose();
+    existingMeshes.forEach((object) => {
+      scene.remove(object);
+      if (object instanceof THREE.Mesh) {
+        object.geometry.dispose();
+        if (object.material instanceof THREE.Material) {
+          object.material.dispose();
+        }
+      } else if (object instanceof THREE.Sprite) {
+        if (object.material instanceof THREE.Material) {
+          object.material.dispose();
         }
       }
     });
@@ -519,6 +543,35 @@ export default function RealLatentSpace3D({
       sphere.scale.setScalar(point.size);
       sphere.userData = { event: point.event, index };
       scene.add(sphere);
+
+      // Add A/B letter labels for waypoints
+      if (point.isWaypointA || point.isWaypointB) {
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        if (context) {
+          canvas.width = 64;
+          canvas.height = 64;
+          context.fillStyle = "#000000";
+          context.fillRect(0, 0, 64, 64);
+          context.fillStyle = "#FFFFFF";
+          context.font = "bold 32px Arial";
+          context.textAlign = "center";
+          context.textBaseline = "middle";
+          context.fillText(point.isWaypointA ? "A" : "B", 32, 32);
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        const spriteMaterial = new THREE.SpriteMaterial({
+          map: texture,
+          transparent: true,
+          opacity: 0.9,
+        });
+        const sprite = new THREE.Sprite(spriteMaterial);
+        sprite.position.set(point.x, point.y + point.size * 2, point.z);
+        sprite.scale.set(8, 8, 1);
+        sprite.userData = { event: point.event, index, isLabel: true };
+        scene.add(sprite);
+      }
     });
 
     // Add journey lines connecting the points
@@ -603,7 +656,28 @@ export default function RealLatentSpace3D({
       if (intersects.length > 0) {
         const intersected = intersects[0].object;
         if (intersected.userData && intersected.userData.event) {
-          onSelectEvent(intersected.userData.event);
+          const clickedEvent = intersected.userData.event;
+
+          // Set as waypoint A or B
+          if (waypointA?.ts === clickedEvent.ts) {
+            // If clicking on waypoint A, clear it
+            setWaypointA(null);
+          } else if (waypointB?.ts === clickedEvent.ts) {
+            // If clicking on waypoint B, clear it
+            setWaypointB(null);
+          } else if (!waypointA) {
+            // If no waypoint A, set as A
+            setWaypointA(clickedEvent);
+          } else if (!waypointB) {
+            // If no waypoint B, set as B
+            setWaypointB(clickedEvent);
+          } else {
+            // If both A and B are set, replace A
+            setWaypointA(clickedEvent);
+          }
+
+          // Also select the event for other UI updates
+          onSelectEvent(clickedEvent);
         }
       }
     };

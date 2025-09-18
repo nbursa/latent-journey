@@ -11,7 +11,12 @@ import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { MemoryEvent } from "../types";
 import { getEmbeddingForEvent } from "../utils/embeddings";
-import { useWaypoints } from "../stores/appStore";
+import {
+  useWaypoints,
+  useWaypointA,
+  useWaypointB,
+  useWaypointActions,
+} from "../stores/appStore";
 import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface LatentScatterProps {
@@ -42,6 +47,8 @@ interface Point3D {
   arousal: number;
   valence: number;
   isHighlighted: boolean;
+  isWaypointA: boolean;
+  isWaypointB: boolean;
 }
 
 // Enhanced 3D projection with semantic height
@@ -50,7 +57,9 @@ const projectTo3D = (
   memoryEvents: MemoryEvent[],
   waypoints: Set<number>,
   selectedCluster?: Cluster | null,
-  selectedGroup?: SemanticGroup | null
+  selectedGroup?: SemanticGroup | null,
+  waypointA?: MemoryEvent | null,
+  waypointB?: MemoryEvent | null
 ) => {
   if (embeddings.length === 0) return [];
 
@@ -95,6 +104,11 @@ const projectTo3D = (
       isHighlighted = selectedGroup.events.some((e) => e.ts === event.ts);
     }
 
+    // Check if this event is waypoint A or B
+    const isWaypointA = waypointA?.ts === event.ts;
+    const isWaypointB = waypointB?.ts === event.ts;
+    const isWaypointAB = isWaypointA || isWaypointB;
+
     return {
       x,
       y,
@@ -102,7 +116,7 @@ const projectTo3D = (
       event,
       isSelected: false,
       isWaypoint: waypoints.has(event.ts),
-      color: color,
+      color: isWaypointAB ? "#FFFFFF" : color, // White for waypoint A/B
       size: waypoints.has(event.ts) ? size * 1.5 : size, // Make waypoints bigger
       modality: (isVision
         ? "vision"
@@ -114,6 +128,8 @@ const projectTo3D = (
       arousal,
       valence,
       isHighlighted,
+      isWaypointA,
+      isWaypointB,
     };
   });
 };
@@ -132,15 +148,15 @@ const extractEmbeddings = async (memoryEvents: MemoryEvent[]) => {
 // Individual Points Component (restored with proper performance)
 function IndividualPoints({
   points,
-  onSelectEvent,
   onHoverEvent,
+  onWaypointClick,
 }: {
   points: Point3D[];
-  onSelectEvent: (event: MemoryEvent) => void;
   onHoverEvent: (
     event: MemoryEvent | null,
     mousePos?: { x: number; y: number }
   ) => void;
+  onWaypointClick: (event: MemoryEvent) => void;
 }) {
   // Limit points for display to prevent performance issues
   const maxPoints = 500;
@@ -153,36 +169,65 @@ function IndividualPoints({
   return (
     <>
       {limitedPoints.map((point, index) => (
-        <mesh
-          key={`point-${point.event.ts}-${index}`}
-          position={[point.x, point.y, point.z]}
-          scale={[point.size, point.size, point.size]}
-          onClick={() => onSelectEvent(point.event)}
-          onPointerOver={(event) => {
-            // Throttle hover events to reduce parent state updates
-            requestAnimationFrame(() => {
-              const target = event.nativeEvent.target as HTMLElement;
-              if (target) {
-                const rect = target.getBoundingClientRect();
-                const mousePos = {
-                  x: event.nativeEvent.clientX - rect.left,
-                  y: event.nativeEvent.clientY - rect.top,
-                };
-                onHoverEvent(point.event, mousePos);
-              }
-            });
-          }}
-          onPointerOut={() => onHoverEvent(null)}
-        >
-          <sphereGeometry args={[1, 16, 16]} />
-          <meshStandardMaterial
-            color={point.color}
-            transparent
-            opacity={0.8}
-            roughness={0.2}
-            metalness={0.8}
-          />
-        </mesh>
+        <group key={`point-${point.event.ts}-${index}`}>
+          <mesh
+            position={[point.x, point.y, point.z]}
+            scale={[point.size, point.size, point.size]}
+            onClick={() => onWaypointClick(point.event)}
+            onPointerOver={(event) => {
+              // Throttle hover events to reduce parent state updates
+              requestAnimationFrame(() => {
+                const target = event.nativeEvent.target as HTMLElement;
+                if (target) {
+                  const rect = target.getBoundingClientRect();
+                  const mousePos = {
+                    x: event.nativeEvent.clientX - rect.left,
+                    y: event.nativeEvent.clientY - rect.top,
+                  };
+                  onHoverEvent(point.event, mousePos);
+                }
+              });
+            }}
+            onPointerOut={() => onHoverEvent(null)}
+          >
+            <sphereGeometry args={[1, 16, 16]} />
+            <meshStandardMaterial
+              color={point.color}
+              transparent
+              opacity={0.8}
+              roughness={0.2}
+              metalness={0.8}
+            />
+          </mesh>
+
+          {/* A/B letter labels for waypoints */}
+          {(point.isWaypointA || point.isWaypointB) && (
+            <mesh position={[point.x, point.y + point.size * 2, point.z]}>
+              <planeGeometry args={[4, 4]} />
+              <meshBasicMaterial
+                color="#000000"
+                transparent
+                opacity={0.9}
+                map={(() => {
+                  const canvas = document.createElement("canvas");
+                  const context = canvas.getContext("2d");
+                  if (context) {
+                    canvas.width = 64;
+                    canvas.height = 64;
+                    context.fillStyle = "#000000";
+                    context.fillRect(0, 0, 64, 64);
+                    context.fillStyle = "#FFFFFF";
+                    context.font = "bold 32px Arial";
+                    context.textAlign = "center";
+                    context.textBaseline = "middle";
+                    context.fillText(point.isWaypointA ? "A" : "B", 32, 32);
+                  }
+                  return new THREE.CanvasTexture(canvas);
+                })()}
+              />
+            </mesh>
+          )}
+        </group>
       ))}
     </>
   );
@@ -288,8 +333,8 @@ const StableCanvas = memo(
 const Scene3D = React.memo(
   function Scene3D({
     points,
-    onSelectEvent,
     onHoverEvent,
+    onWaypointClick,
     onFocus: _onFocus,
     setCameraPosition,
     focusTarget,
@@ -299,11 +344,11 @@ const Scene3D = React.memo(
     onCameraChange,
   }: {
     points: Point3D[];
-    onSelectEvent: (event: MemoryEvent) => void;
     onHoverEvent: (
       event: MemoryEvent | null,
       mousePos?: { x: number; y: number }
     ) => void;
+    onWaypointClick: (event: MemoryEvent) => void;
     onFocus: (x: number, y: number) => void;
     setCameraPosition: (pos: { x: number; y: number; z: number }) => void;
     focusTarget: { x: number; y: number; z: number } | null;
@@ -561,8 +606,8 @@ const Scene3D = React.memo(
         {/* Individual points with proper colors and tooltips */}
         <IndividualPoints
           points={currentPoints}
-          onSelectEvent={onSelectEvent}
           onHoverEvent={onHoverEvent}
+          onWaypointClick={onWaypointClick}
         />
 
         {/* OrbitControls */}
@@ -585,8 +630,8 @@ const Scene3D = React.memo(
   (prevProps, nextProps) => {
     // Custom comparison - ignore points changes to prevent WebGL context loss
     return (
-      prevProps.onSelectEvent === nextProps.onSelectEvent &&
       prevProps.onHoverEvent === nextProps.onHoverEvent &&
+      prevProps.onWaypointClick === nextProps.onWaypointClick &&
       prevProps.focusTarget === nextProps.focusTarget &&
       prevProps.cameraPreset === nextProps.cameraPreset &&
       prevProps.showTrajectory === nextProps.showTrajectory
@@ -608,6 +653,9 @@ const LatentScatter3D = memo(
     selectedGroup = null,
   }: LatentScatterProps) {
     const waypoints = useWaypoints();
+    const waypointA = useWaypointA();
+    const waypointB = useWaypointB();
+    const { setWaypointA, setWaypointB } = useWaypointActions();
     const [points, setPoints] = useState<Point3D[]>([]);
     const [isComputing, setIsComputing] = useState(false);
     const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
@@ -650,7 +698,9 @@ const LatentScatter3D = memo(
             memoryEvents,
             waypoints,
             selectedCluster,
-            selectedGroup
+            selectedGroup,
+            waypointA,
+            waypointB
           );
 
           // Update selected state
@@ -678,6 +728,8 @@ const LatentScatter3D = memo(
       waypoints,
       selectedCluster,
       selectedGroup,
+      waypointA,
+      waypointB,
     ]);
 
     // Update selection without recomputing embeddings
@@ -706,12 +758,38 @@ const LatentScatter3D = memo(
       [onHoverEvent]
     );
 
+    const handleWaypointClick = useCallback(
+      (event: MemoryEvent) => {
+        // Set as waypoint A or B
+        if (waypointA?.ts === event.ts) {
+          // If clicking on waypoint A, clear it
+          setWaypointA(null);
+        } else if (waypointB?.ts === event.ts) {
+          // If clicking on waypoint B, clear it
+          setWaypointB(null);
+        } else if (!waypointA) {
+          // If no waypoint A, set as A
+          setWaypointA(event);
+        } else if (!waypointB) {
+          // If no waypoint B, set as B
+          setWaypointB(event);
+        } else {
+          // If both A and B are set, replace A
+          setWaypointA(event);
+        }
+
+        // Also select the event for other UI updates
+        onSelectEvent(event);
+      },
+      [waypointA, waypointB, setWaypointA, setWaypointB, onSelectEvent]
+    );
+
     // Create a stable Scene3D component that doesn't remount
     const sceneNode = (
       <Scene3D
         points={points}
-        onSelectEvent={onSelectEvent}
         onHoverEvent={handleHover}
+        onWaypointClick={handleWaypointClick}
         onFocus={handleFocus}
         setCameraPosition={setCameraPosition}
         focusTarget={focusTarget}

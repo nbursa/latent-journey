@@ -2,7 +2,12 @@ import { MemoryEvent } from "../types";
 import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { Map } from "lucide-react";
-import { useWaypoints, useWaypointActions } from "../stores/appStore";
+import {
+  useWaypoints,
+  useWaypointActions,
+  useWaypointA,
+  useWaypointB,
+} from "../stores/appStore";
 import { getEmbeddingsForEvents, reduceDimensions } from "../utils/embeddings";
 import { Cluster, SemanticGroup } from "../utils/clustering";
 
@@ -22,6 +27,8 @@ interface Point2D {
   isSelected: boolean;
   isWaypoint: boolean;
   isHighlighted: boolean;
+  isWaypointA: boolean;
+  isWaypointB: boolean;
 }
 
 // Constants - single source of truth
@@ -57,7 +64,9 @@ const projectTo2D = (
   memoryEvents: MemoryEvent[],
   waypoints: Set<number>,
   selectedCluster?: Cluster | null,
-  selectedGroup?: SemanticGroup | null
+  selectedGroup?: SemanticGroup | null,
+  waypointA?: MemoryEvent | null,
+  waypointB?: MemoryEvent | null
 ): Point2D[] => {
   if (embeddings.length === 0) return [];
 
@@ -72,6 +81,10 @@ const projectTo2D = (
       isHighlighted = selectedGroup.events.some((e) => e.ts === event.ts);
     }
 
+    // Check if this event is waypoint A or B
+    const isWaypointA = waypointA?.ts === event.ts;
+    const isWaypointB = waypointB?.ts === event.ts;
+
     return {
       x: (embedding[0] || 0) * VISUALIZATION_CONFIG.projectionScale,
       y: (embedding[1] || 0) * VISUALIZATION_CONFIG.projectionScale,
@@ -79,11 +92,20 @@ const projectTo2D = (
       isSelected: false,
       isWaypoint: waypoints.has(event.ts),
       isHighlighted,
+      isWaypointA,
+      isWaypointB,
     };
   });
 };
 
-const getPointColor = (source: string): string => {
+const getPointColor = (
+  source: string,
+  isWaypointA: boolean,
+  isWaypointB: boolean
+): string => {
+  if (isWaypointA || isWaypointB) {
+    return "#FFFFFF"; // White for waypoint A/B
+  }
   return COLORS[source as keyof typeof COLORS] || COLORS.default;
 };
 
@@ -111,7 +133,9 @@ export default function LatentSpaceView({
   const [isComputing, setIsComputing] = useState(false);
 
   const waypoints = useWaypoints();
-  const { toggleWaypoint } = useWaypointActions();
+  const waypointA = useWaypointA();
+  const waypointB = useWaypointB();
+  const { toggleWaypoint, setWaypointA, setWaypointB } = useWaypointActions();
 
   // Memoized embedding extraction - only recalculates when memoryEvents change
   const extractEmbeddings = useCallback(async () => {
@@ -150,7 +174,9 @@ export default function LatentSpaceView({
           memoryEvents,
           waypoints,
           selectedCluster,
-          selectedGroup
+          selectedGroup,
+          waypointA,
+          waypointB
         );
 
         setPoints(projectedPoints);
@@ -163,7 +189,14 @@ export default function LatentSpaceView({
     };
 
     processEmbeddings();
-  }, [memoryEvents, extractEmbeddings, selectedCluster, selectedGroup]);
+  }, [
+    memoryEvents,
+    extractEmbeddings,
+    selectedCluster,
+    selectedGroup,
+    waypointA,
+    waypointB,
+  ]);
 
   // Light updates: selection and waypoint states (no recomputation)
   useEffect(() => {
@@ -296,8 +329,15 @@ export default function LatentSpaceView({
       .selectAll("circle")
       .data(points, (d: any) => d.event.ts); // Key function for stable updates
 
-    // Remove old points
+    // Update A/B labels
+    const labels = pointGroup.selectAll("text").data(
+      points.filter((d) => d.isWaypointA || d.isWaypointB),
+      (d: any) => d.event.ts
+    );
+
+    // Remove old points and labels
     circles.exit().remove();
+    labels.exit().remove();
 
     // Add new points
     const newCircles = circles
@@ -306,6 +346,26 @@ export default function LatentSpaceView({
       .style("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
+
+        // Set as waypoint A or B
+        if (waypointA?.ts === d.event.ts) {
+          // If clicking on waypoint A, clear it
+          setWaypointA(null);
+        } else if (waypointB?.ts === d.event.ts) {
+          // If clicking on waypoint B, clear it
+          setWaypointB(null);
+        } else if (!waypointA) {
+          // If no waypoint A, set as A
+          setWaypointA(d.event);
+        } else if (!waypointB) {
+          // If no waypoint B, set as B
+          setWaypointB(d.event);
+        } else {
+          // If both A and B are set, replace A
+          setWaypointA(d.event);
+        }
+
+        // Also select the event for other UI updates
         onSelectEvent(d.event);
       })
       .on("dblclick", (event, d) => {
@@ -319,10 +379,33 @@ export default function LatentSpaceView({
       .attr("cx", (d) => xScale(d.x))
       .attr("cy", (d) => yScale(d.y))
       .attr("r", getPointRadius)
-      .attr("fill", (d) => getPointColor(d.event.source))
+      .attr("fill", (d) =>
+        getPointColor(d.event.source, d.isWaypointA, d.isWaypointB)
+      )
       .attr("opacity", getPointOpacity)
       .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
       .attr("stroke-width", (d) => (d.isSelected ? 2 : 0));
+
+    // Add new labels
+    const newLabels = labels
+      .enter()
+      .append("text")
+      .text((d) => (d.isWaypointA ? "A" : "B"))
+      .attr("x", (d) => xScale(d.x))
+      .attr("y", (d) => yScale(d.y) - 8)
+      .attr("text-anchor", "middle")
+      .attr("font-size", "12px")
+      .attr("font-weight", "bold")
+      .attr("fill", "#000000")
+      .attr("stroke", "#ffffff")
+      .attr("stroke-width", "2px")
+      .style("pointer-events", "none");
+
+    // Update all labels
+    labels
+      .merge(newLabels as any)
+      .attr("x", (d) => xScale(d.x))
+      .attr("y", (d) => yScale(d.y) - 8);
 
     // Update axes
     const xAxis = d3
