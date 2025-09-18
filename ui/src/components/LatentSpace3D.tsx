@@ -340,9 +340,17 @@ export default function RealLatentSpace3D({
     );
   }, [selectedEvent, waypoints]);
 
-  // Update camera position when preset changes
+  // Initial camera setup - only runs once when cameraData is first available
+  const [cameraInitialized, setCameraInitialized] = useState(false);
+
   useEffect(() => {
-    if (!cameraRef.current || !controlsRef.current || !cameraData) return;
+    if (
+      !cameraRef.current ||
+      !controlsRef.current ||
+      !cameraData ||
+      cameraInitialized
+    )
+      return;
 
     const camera = cameraRef.current;
     const controls = controlsRef.current;
@@ -359,7 +367,35 @@ export default function RealLatentSpace3D({
       cameraData.center.z
     );
     controls.update();
-  }, [cameraPreset, cameraData]);
+    setCameraInitialized(true);
+  }, [cameraData, cameraPreset, cameraInitialized]);
+
+  // Update camera position when preset changes (but not on every click)
+  useEffect(() => {
+    if (
+      !cameraRef.current ||
+      !controlsRef.current ||
+      !cameraData ||
+      !cameraInitialized
+    )
+      return;
+
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    positionCamera(
+      camera,
+      cameraData.center,
+      cameraData.distance,
+      cameraPreset
+    );
+    controls.target.set(
+      cameraData.center.x,
+      cameraData.center.y,
+      cameraData.center.z
+    );
+    controls.update();
+  }, [cameraPreset]); // Only depend on cameraPreset, not cameraData
 
   // Initialize Three.js scene - only once
   useEffect(() => {
@@ -414,7 +450,7 @@ export default function RealLatentSpace3D({
     renderer.domElement.style.left = "0";
     renderer.domElement.style.width = "100%";
     renderer.domElement.style.height = "100%";
-    renderer.domElement.style.cursor = "pointer";
+    // renderer.domElement.style.cursor = "pointer";
 
     mountRef.current.appendChild(renderer.domElement);
     rendererRef.current = renderer;
@@ -494,7 +530,6 @@ export default function RealLatentSpace3D({
     const scene = sceneRef.current;
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
-    const controls = controlsRef.current;
 
     // Clear existing meshes and sprites
     const existingMeshes = scene.children.filter(
@@ -619,27 +654,7 @@ export default function RealLatentSpace3D({
       gridHelper.position.y = avgZ;
     }
 
-    // Position camera
-    if (cameraData) {
-      positionCamera(
-        camera,
-        cameraData.center,
-        cameraData.distance,
-        cameraPreset
-      );
-      controls.target.set(
-        cameraData.center.x,
-        cameraData.center.y,
-        cameraData.center.z
-      );
-      controls.update();
-    } else {
-      // Default camera position when no points
-      camera.position.set(100, 100, 100);
-      camera.lookAt(0, 0, 0);
-      controls.target.set(0, 0, 0);
-      controls.update();
-    }
+    // Camera positioning removed to prevent resets on click
 
     // Add click handling
     const raycaster = new THREE.Raycaster();
