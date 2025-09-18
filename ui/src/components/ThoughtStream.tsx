@@ -2,7 +2,6 @@ import React, { useState, useEffect } from "react";
 import {
   Brain,
   RefreshCw,
-  Trash2,
   Layers,
   AlertCircle,
   Play,
@@ -46,7 +45,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [metrics, setMetrics] = useState<ConsciousnessMetrics | null>(null);
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
-  const { servicesStatus, triggerStatusCheck } = useServicesStatus();
+  const { servicesStatus } = useServicesStatus();
 
   const {
     currentThought,
@@ -70,7 +69,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     thoughts: stmThoughts,
     loading: stmLoading,
     error: stmError,
-    refetch: refetchSTM,
   } = useSTMData();
 
   // Convert STM data to thoughts format - USE ACTUAL DATA
@@ -108,11 +106,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       setThoughts([]);
     }
   }, [stmThoughts]);
-
-  // Handle STM refresh - just refetch, the effect will handle it
-  const handleSTMRefresh = () => {
-    refetchSTM();
-  };
 
   // Clear thoughts when memories array becomes empty (indicating data was cleared)
   useEffect(() => {
@@ -236,33 +229,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
               className={`w-3 h-3 ${isGenerating ? "animate-spin" : ""}`}
             />
             Manual
-          </button>
-
-          <button
-            onClick={handleSTMRefresh}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Refresh STM data"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Refresh
-          </button>
-
-          <button
-            onClick={triggerStatusCheck}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Refresh service status"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Status
-          </button>
-
-          <button
-            onClick={clearHistory}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Clear history"
-          >
-            <Trash2 className="w-3 h-3" />
-            Clear
           </button>
         </div>
       </div>

@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Layers,
-  RefreshCw,
-  Trash2,
-  AlertCircle,
-  Play,
-  Pause,
-} from "lucide-react";
+import { Layers, RefreshCw, AlertCircle, Play, Pause } from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
 import { useServicesStatus } from "../hooks/useServicesStatus";
 import { Memory } from "../types/memory";
@@ -38,7 +31,7 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
   const [isConsolidating, setIsConsolidating] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { servicesStatus, triggerStatusCheck } = useServicesStatus();
+  const { servicesStatus } = useServicesStatus();
 
   // Use the simplified ego service
   const { totalMemories } = useEgo({
@@ -133,44 +126,6 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
     }
   };
 
-  // Clear experiences
-  const clearExperiences = async () => {
-    if (!confirm("Are you sure you want to clear all experiences?")) {
-      return;
-    }
-
-    setError(null);
-    try {
-      console.log("Clearing LTM experiences");
-      const response = await fetch("/api/ego/clear-ltm", {
-        method: "POST",
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error("HTTP error response:", errorText);
-        throw new Error(
-          `HTTP error! status: ${response.status}, body: ${errorText}`
-        );
-      }
-
-      const data = await response.json();
-      console.log("Clear LTM response:", data);
-
-      if (data.success) {
-        setExperiences([]);
-        console.log("LTM experiences cleared successfully");
-      } else {
-        throw new Error(data.error || "Failed to clear experiences");
-      }
-    } catch (err) {
-      console.error("Failed to clear experiences:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to clear experiences"
-      );
-    }
-  };
-
   // Load experiences on mount
   useEffect(() => {
     loadExperiences();
@@ -249,33 +204,6 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
               className={`w-3 h-3 ${isConsolidating ? "animate-spin" : ""}`}
             />
             Consolidate
-          </button>
-
-          <button
-            onClick={loadExperiences}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Refresh LTM data"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Refresh
-          </button>
-
-          <button
-            onClick={triggerStatusCheck}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Refresh service status"
-          >
-            <RefreshCw className="w-3 h-3" />
-            Status
-          </button>
-
-          <button
-            onClick={clearExperiences}
-            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
-            title="Clear experiences"
-          >
-            <Trash2 className="w-3 h-3" />
-            Clear
           </button>
         </div>
       </div>
