@@ -205,7 +205,6 @@ Respond in a thoughtful, introspective manner. Be genuine and reflective.
             response = requests.post(
                 f"{OLLAMA_BASE_URL}/api/generate",
                 json={"model": OLLAMA_MODEL, "prompt": prompt, "stream": False},
-                timeout=30,
             )
             response.raise_for_status()
             return response.json()["response"]
