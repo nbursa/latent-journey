@@ -1,12 +1,15 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { MemoryEvent } from "../types";
 import { Clock, Play, Pause, RotateCcw } from "lucide-react";
+import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface JourneyTimelineProps {
   memoryEvents: MemoryEvent[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
   className?: string;
+  selectedCluster?: Cluster | null;
+  selectedGroup?: SemanticGroup | null;
 }
 
 export default function JourneyTimeline({
@@ -14,11 +17,25 @@ export default function JourneyTimeline({
   selectedEvent,
   onSelectEvent,
   className = "",
+  selectedCluster = null,
+  selectedGroup = null,
 }: JourneyTimelineProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
   const isSyncingRef = useRef(false);
+
+  // Ensure component updates when cluster/group selection changes
+  useEffect(() => {
+    // This effect ensures the component re-renders when selections change
+    // The actual filtering is handled by finalEvents from the parent
+  }, [selectedCluster, selectedGroup]);
+
+  // Reset timeline when events change (e.g., when filtering is applied)
+  useEffect(() => {
+    setCurrentTime(0);
+    setIsPlaying(false);
+  }, [memoryEvents.length]);
 
   // Sort events by timestamp
   const sortedEvents = useMemo(() => {
@@ -62,6 +79,7 @@ export default function JourneyTimeline({
 
   // Playback controls
   const handlePlayPause = () => {
+    if (sortedEvents.length === 0) return;
     setIsPlaying(!isPlaying);
   };
 
@@ -76,7 +94,7 @@ export default function JourneyTimeline({
 
   // Auto-play functionality
   useEffect(() => {
-    if (!isPlaying) return;
+    if (!isPlaying || sortedEvents.length === 0) return;
 
     const interval = setInterval(() => {
       setCurrentTime((prev) => {
@@ -90,7 +108,7 @@ export default function JourneyTimeline({
     }, 100);
 
     return () => clearInterval(interval);
-  }, [isPlaying, playbackSpeed]);
+  }, [isPlaying, playbackSpeed, sortedEvents.length]);
 
   // Select current event when it changes
   useEffect(() => {

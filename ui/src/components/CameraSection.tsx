@@ -45,23 +45,13 @@ export default function CameraSection({
             style={{
               backgroundColor: "#000",
             }}
-            onLoadedMetadata={(e) => {
-              console.log(
-                "Video loaded on mobile:",
-                e.currentTarget.videoWidth,
-                e.currentTarget.videoHeight
-              );
-            }}
             onError={(e) => {
-              console.error("Video error on mobile:", e);
+              console.error("Video error:", e);
             }}
           />
           <div className="absolute inset-0 flex items-end justify-start">
             <div className="text-left bg-gray-900/50 p-1 sm:p-2">
               <div className="text-[10px] text-gray-300">Camera Ready</div>
-              {/* <div className="text-[10px] text-gray-400 hidden sm:block">
-                Camera Ready. Click "Capture & Analyze" to take photos
-              </div> */}
             </div>
           </div>
         </div>

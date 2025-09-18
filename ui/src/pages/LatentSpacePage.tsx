@@ -7,7 +7,6 @@ import VisualizationControls from "../components/VisualizationControls";
 import ExplorationPanel, {
   ExplorationPanelRef,
 } from "../components/ExplorationPanel";
-import JourneyTimeline from "../components/JourneyTimeline";
 import ProgressiveDisclosure, {
   FacetDisplay,
   CLIPLogits,
@@ -414,13 +413,6 @@ export default function LatentSpacePage() {
             )}
           </div>
         </div>
-
-        {/* Journey Timeline */}
-        <JourneyTimeline
-          memoryEvents={finalEvents}
-          selectedEvent={selectedMemoryEvent}
-          onSelectEvent={setSelectedMemoryEvent}
-        />
 
         {/* Waypoints Panel */}
         <div className="flex-shrink-0">
