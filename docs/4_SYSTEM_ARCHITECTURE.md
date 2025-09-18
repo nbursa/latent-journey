@@ -1,6 +1,6 @@
 # 4_SYSTEM_ARCHITECTURE
 
-## High-level Diagram **IMPLEMENTED**
+## High-level Diagram
 
 ```mermaid
 graph TD
@@ -47,41 +47,44 @@ graph TD
 
 ## **IMPLEMENTED MODULES**
 
-### 1 **ML Service** (`services/ml-py`) - **COMPLETE**
+### 1 **ML Service** (`services/ml-py`)
 
 - **Vision:** Real-time CLIP processing → top‑k labels + embeddings + color/affect detection
 - **Performance:** <100ms processing time
 - **Features:** Real-time camera capture, CLIP integration, affect detection
 
-### 2 **Sentience Service** (`services/sentience-rs`) - **COMPLETE**
+### 2 **Sentience Service** (`services/sentience-rs`)
 
 - **Multi-modal Processing:** Vision + Speech tokenization
 - **Semantic Facets:** `vision.object`, `speech.intent`, `affect.valence`, `affect.arousal`
 - **Memory Integration:** Automatic memory event creation
 - **Performance:** <200ms speech processing
 
-### 3 **Ego Service** (`services/ego-rs`) - **COMPLETE**
+### 3 **Ego Service** (`services/ego-rs`)
 
 - **AI Reflection:** Real-time thought generation with Ollama integration
 - **Memory Consolidation:** AI suggests and consolidates memories into concepts
 - **Consciousness Metrics:** Attention, salience, coherence tracking
 - **LTM Persistence:** Separate LTM file for consolidated memories
 
-### 4 **Memory System** - **COMPLETE**
+### 4 **Memory System**
 
 - **STM:** `services/sentience-rs/data/memory.jsonl` (unconsolidated)
 - **LTM:** `services/ego-rs/data/memory.jsonl` (consolidated concepts)
 - **Features:** Memory consolidation, concept creation, temporal navigation
 
-### 5 **UI System** (`ui/`) - **COMPLETE**
+### 5 **UI System** (`ui/`)
 
 - **Panel A – Live Perception:** Camera feed, CLIP labels, audio visualization
 - **Panel B – Latent Insight:** Semantic facets, progress bars, nearest neighbors
 - **Panel C – Thought Stream:** AI reflections, consciousness metrics, auto/manual modes
 - **Panel D – Memory Timeline:** Event filtering, waypoint system, A/B comparison
+- **Panel E – Memory Analysis Page:** Complete memory timeline with playback, export, annotation
 - **3D Visualization:** Interactive latent space exploration with multiple view modes
+- **Service Status Monitoring:** Real-time health checks and user guidance
+- **Responsive Design:** Custom layouts for small screens and mobile devices
 
-### 6 **Gateway Service** (`cmd/gateway`) - **COMPLETE**
+### 6 **Gateway Service** (`cmd/gateway`)
 
 - **API Routes:** HTTP + SSE event streaming
 - **Service Orchestration:** Health checks, service discovery

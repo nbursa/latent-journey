@@ -95,11 +95,3 @@ If we are to collaborate meaningfully with AI, we must:
 This project is a step toward building such a bridge.
 
 ---
-
-## Latent Misalignment in Practice (Meta Reflection)
-
-During the documentation process, a small but meaningful example of misalignment occurred: a design document intended for an international audience was written in Serbian, reflecting the developer's local context rather than the target reviewers'.
-
-This linguistic mismatch mirrors the broader challenge this project addresses - when internal representations (latent states) are valid within a system, but fail to be appropriately translated for the receiver, it leads to misunderstanding or reduced trust.
-
-This real incident reinforces the importance of building bridges, not just between data and decision, but between internal model cognition and external human interpretation. It underscores the design rationale for `ai-ego` as a mediating agent.
