@@ -83,8 +83,7 @@ const projectTo2D = (
   });
 };
 
-const getPointColor = (source: string, isHighlighted: boolean): string => {
-  if (isHighlighted) return "#FFFFFF"; // White for highlighted points
+const getPointColor = (source: string): string => {
   return COLORS[source as keyof typeof COLORS] || COLORS.default;
 };
 
@@ -320,7 +319,7 @@ export default function LatentSpaceView({
       .attr("cx", (d) => xScale(d.x))
       .attr("cy", (d) => yScale(d.y))
       .attr("r", getPointRadius)
-      .attr("fill", (d) => getPointColor(d.event.source, d.isHighlighted))
+      .attr("fill", (d) => getPointColor(d.event.source))
       .attr("opacity", getPointOpacity)
       .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
       .attr("stroke-width", (d) => (d.isSelected ? 2 : 0));

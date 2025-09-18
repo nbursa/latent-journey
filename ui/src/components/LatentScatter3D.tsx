@@ -102,7 +102,7 @@ const projectTo3D = (
       event,
       isSelected: false,
       isWaypoint: waypoints.has(event.ts),
-      color: isHighlighted ? "#FFFFFF" : color, // White for highlighted points
+      color: color,
       size: waypoints.has(event.ts) ? size * 1.5 : size, // Make waypoints bigger
       modality: (isVision
         ? "vision"

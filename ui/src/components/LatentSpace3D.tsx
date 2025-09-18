@@ -272,7 +272,7 @@ export default function RealLatentSpace3D({
               event,
               isSelected: selectedEvent?.ts === event.ts,
               isWaypoint: waypoints.has(event.ts),
-              color: isHighlighted ? "#FFFFFF" : color, // White for highlighted points
+              color: color,
               size: waypoints.has(event.ts) ? baseSize * 1.5 : baseSize, // Make waypoints bigger
               confidence: embedding.confidence,
               source: event.source,
