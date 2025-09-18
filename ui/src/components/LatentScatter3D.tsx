@@ -395,10 +395,11 @@ const Scene3D = React.memo(
 
     // Initialize camera position based on preset - only run when cameraPreset changes or points are first loaded
     const [hasInitialized, setHasInitialized] = useState(false);
+    const [userHasInteracted, setUserHasInteracted] = useState(false);
 
     // Initial camera setup - only runs once when points are first loaded
     useEffect(() => {
-      if (currentPoints.length > 0 && !hasInitialized) {
+      if (currentPoints.length > 0 && !hasInitialized && !userHasInteracted) {
         // Calculate bounds of all points
         const bounds = currentPoints.reduce(
           (acc, point) => ({
@@ -461,132 +462,15 @@ const Scene3D = React.memo(
       } else if (currentPoints.length === 0) {
         // Reset initialization flag when no points
         setHasInitialized(false);
+        setUserHasInteracted(false);
       }
     }, [currentPoints, camera, setCameraPosition, hasInitialized]);
 
-    // Handle camera preset changes after initialization - separate effect
-    useEffect(() => {
-      if (!hasInitialized || currentPoints.length === 0) return;
+    // Camera preset changes disabled to prevent position resets on click
+    // Users can manually navigate the camera after initial setup
 
-      // Calculate bounds of all points
-      const bounds = currentPoints.reduce(
-        (acc, point) => ({
-          minX: Math.min(acc.minX, point.x),
-          maxX: Math.max(acc.maxX, point.x),
-          minY: Math.min(acc.minY, point.y),
-          maxY: Math.max(acc.maxY, point.y),
-          minZ: Math.min(acc.minZ, point.z),
-          maxZ: Math.max(acc.maxZ, point.z),
-        }),
-        {
-          minX: Infinity,
-          maxX: -Infinity,
-          minY: Infinity,
-          maxY: -Infinity,
-          minZ: Infinity,
-          maxZ: -Infinity,
-        }
-      );
-
-      const centerX = (bounds.minX + bounds.maxX) / 2;
-      const centerY = (bounds.minY + bounds.maxY) / 2;
-      const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-      const maxSize = Math.max(
-        bounds.maxX - bounds.minX,
-        bounds.maxY - bounds.minY,
-        bounds.maxZ - bounds.minZ
-      );
-      const distance = Math.max(maxSize * 2, 10);
-
-      switch (cameraPreset) {
-        case "top":
-          camera.position.set(centerX, centerY + distance, centerZ);
-          camera.lookAt(centerX, centerY, centerZ);
-          setCameraPosition({ x: centerX, y: centerY + distance, z: centerZ });
-          break;
-        case "isometric":
-          const isoX = centerX + distance * 0.5;
-          const isoY = centerY + distance * 0.5;
-          const isoZ = centerZ + distance * 0.5;
-          camera.position.set(isoX, isoY, isoZ);
-          camera.lookAt(centerX, centerY, centerZ);
-          setCameraPosition({ x: isoX, y: isoY, z: isoZ });
-          break;
-        case "free":
-        default:
-          const freeX = centerX + distance * 0.5;
-          const freeY = centerY + distance * 0.5;
-          const freeZ = centerZ + distance * 0.5;
-          camera.position.set(freeX, freeY, freeZ);
-          camera.lookAt(centerX, centerY, centerZ);
-          setCameraPosition({ x: freeX, y: freeY, z: freeZ });
-          break;
-      }
-    }, [
-      cameraPreset,
-      camera,
-      setCameraPosition,
-      currentPoints,
-      hasInitialized,
-    ]);
-
-    // Auto-fit camera when points change significantly (e.g., after filtering)
-    useEffect(() => {
-      if (!hasInitialized || currentPoints.length === 0) return;
-
-      // Only auto-fit if the point count changed significantly (e.g., after filtering)
-      const shouldAutoFit = currentPoints.length > 0;
-
-      if (shouldAutoFit) {
-        // Calculate bounds and center
-        const bounds = currentPoints.reduce(
-          (acc, point) => ({
-            minX: Math.min(acc.minX, point.x),
-            maxX: Math.max(acc.maxX, point.x),
-            minY: Math.min(acc.minY, point.y),
-            maxY: Math.max(acc.maxY, point.y),
-            minZ: Math.min(acc.minZ, point.z),
-            maxZ: Math.max(acc.maxZ, point.z),
-          }),
-          {
-            minX: Infinity,
-            maxX: -Infinity,
-            minY: Infinity,
-            maxY: -Infinity,
-            minZ: Infinity,
-            maxZ: -Infinity,
-          }
-        );
-
-        const centerX = (bounds.minX + bounds.maxX) / 2;
-        const centerY = (bounds.minY + bounds.maxY) / 2;
-        const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-        const maxSize = Math.max(
-          bounds.maxX - bounds.minX,
-          bounds.maxY - bounds.minY,
-          bounds.maxZ - bounds.minZ
-        );
-        const distance = Math.max(maxSize * 2, 10);
-
-        // Set the controls target to the center
-        if (controlsRef.current) {
-          controlsRef.current.target.set(centerX, centerY, centerZ);
-          controlsRef.current.update();
-        }
-
-        // Smoothly animate to the new center
-        camera.position.lerp(
-          new THREE.Vector3(
-            centerX + distance * 0.5,
-            centerY + distance * 0.5,
-            centerZ + distance * 0.5
-          ),
-          0.1
-        );
-        camera.lookAt(centerX, centerY, centerZ);
-        camera.updateProjectionMatrix();
-      }
-    }, [currentPoints, camera, hasInitialized]);
+    // Disabled auto-fit camera to prevent position resets on click
+    // Camera position is only set during initial setup and preset changes
 
     return (
       <>
@@ -627,7 +511,10 @@ const Scene3D = React.memo(
           panSpeed={0.8}
           minDistance={50}
           maxDistance={500}
-          onChange={onCameraChange}
+          onChange={() => {
+            setUserHasInteracted(true);
+            onCameraChange?.();
+          }}
         />
       </>
     );
@@ -733,9 +620,38 @@ const LatentScatter3D = memo(
       waypoints,
       selectedCluster,
       selectedGroup,
-      waypointA,
-      waypointB,
     ]);
+
+    // Update waypoint properties without recomputing entire visualization
+    useEffect(() => {
+      setPoints((prevPoints) =>
+        prevPoints.map((point) => {
+          const isWaypointA = !!(waypointA && waypointA === point.event);
+          const isWaypointB = !!(waypointB && waypointB === point.event);
+          const isWaypointAB = isWaypointA || isWaypointB;
+
+          // Get original color based on source
+          let originalColor = "#3B82F6"; // Default blue
+          if (point.event.source === "vision") {
+            originalColor = "#00E0BE"; // Cyan for vision
+          } else if (point.event.source === "speech") {
+            originalColor = "#1BB4F2"; // Teal for speech
+          } else if (point.event.source === "stm") {
+            originalColor = "#FFB020"; // Amber for STM
+          } else if (point.event.source === "ltm") {
+            originalColor = "#8B5CF6"; // Purple for LTM
+          }
+
+          return {
+            ...point,
+            isWaypointA,
+            isWaypointB,
+            color: isWaypointAB ? "#FFFFFF" : originalColor, // White for waypoint A/B
+            size: waypoints.has(point.event.ts) ? point.size * 1.5 : point.size, // Make waypoints bigger
+          };
+        })
+      );
+    }, [waypointA, waypointB, waypoints]);
 
     // Update selection without recomputing embeddings
     useEffect(() => {

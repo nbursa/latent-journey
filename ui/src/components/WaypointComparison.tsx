@@ -59,7 +59,7 @@ export default function WaypointComparison({
 
       {waypoint ? (
         <div
-          className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50 cursor-pointer hover:bg-gray-700/50 transition-colors flex-1 min-h-0 overflow-hidden`}
+          className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50 cursor-pointer hover:bg-gray-700/50 transition-colors`}
           onClick={() => onSelectEvent(waypoint)}
         >
           <div className="text-xs text-gray-400 mb-2 truncate">
@@ -68,7 +68,7 @@ export default function WaypointComparison({
           <div className="text-sm font-medium mb-2 capitalize truncate">
             {waypoint.source}
           </div>
-          <div className="space-y-1 overflow-y-auto max-h-48">
+          <div className="space-y-1">
             {Object.entries(waypoint.facets).map(([key, value]) => (
               <div key={key} className="text-xs break-words">
                 <span className="text-gray-400 break-all">{key}:</span>{" "}
@@ -78,7 +78,7 @@ export default function WaypointComparison({
           </div>
         </div>
       ) : (
-        <div className="p-3 rounded-lg border-2 border-dashed border-gray-600 bg-gray-800/30 flex-1 min-h-0 flex items-center justify-center">
+        <div className="p-3 rounded-lg border-2 border-dashed border-gray-600 bg-gray-800/30 flex items-center justify-center">
           <div className="text-center text-gray-400 text-sm break-words">
             Click a memory event to set as {label.toLowerCase()}
           </div>
@@ -88,14 +88,14 @@ export default function WaypointComparison({
   );
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="flex flex-col">
       <div className="flex items-center gap-2 mb-4 flex-shrink-0">
         <GitCompare className="w-5 h-5" />
         <h2 className="text-lg font-semibold">A/B Comparison</h2>
       </div>
 
-      <div className="glass flex-1 flat p-4 min-h-0 overflow-hidden">
-        <div className="flex gap-4 h-full min-h-0">
+      <div className="glass flat p-4">
+        <div className="flex gap-4">
           {renderWaypoint(
             waypointA,
             "Waypoint A",
@@ -116,11 +116,11 @@ export default function WaypointComparison({
         </div>
 
         {waypointA && waypointB && (
-          <div className="mt-4 p-3 bg-gray-800/50 rounded-lg flex-shrink-0 min-h-0 overflow-hidden">
+          <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
             <h4 className="text-sm font-medium text-gray-300 mb-2 truncate">
               Comparison
             </h4>
-            <div className="grid grid-cols-2 gap-4 text-xs min-h-0">
+            <div className="grid grid-cols-2 gap-4 text-xs">
               <div className="min-w-0">
                 <div className="text-gray-400 mb-1 truncate">
                   Time Difference
@@ -151,7 +151,7 @@ export default function WaypointComparison({
         )}
 
         {!waypointA && !waypointB && (
-          <div className="h-full flex items-center justify-center">
+          <div className="flex items-center justify-center py-8">
             <div className="text-center text-gray-400">
               <Bookmark className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <div className="text-lg mb-2">No waypoints selected</div>
