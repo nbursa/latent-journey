@@ -1,22 +1,32 @@
 import { useCallback } from "react";
 import { useAppStore } from "../stores/appStore";
+import { ServicesStatus } from "../types";
 
 export const useEventStream = () => {
   const addEvent = useAppStore((state) => state.addEvent);
   const setLastSentienceToken = useAppStore(
     (state) => state.setLastSentienceToken
   );
+  const updateServicesStatus = useAppStore(
+    (state) => state.updateServicesStatus
+  );
 
   const handleEventMessage = useCallback(
     (e: MessageEvent) => {
       try {
         const event = JSON.parse(e.data);
-        // Filter out system events
-        if (
-          event.type !== "connection" &&
-          event.type !== "ping" &&
-          event.type !== "service.status"
-        ) {
+
+        // Handle service status updates
+        if (event.type === "service.status") {
+          updateServicesStatus((prevStatus: ServicesStatus) => ({
+            ...prevStatus,
+            [event.service as keyof ServicesStatus]: event.status,
+          }));
+          return;
+        }
+
+        // Filter out other system events
+        if (event.type !== "connection" && event.type !== "ping") {
           addEvent(event);
 
           // Track last sentience token for Panel B
@@ -30,7 +40,7 @@ export const useEventStream = () => {
         console.error("Error parsing SSE event:", error, e.data);
       }
     },
-    [addEvent, setLastSentienceToken]
+    [addEvent, setLastSentienceToken, updateServicesStatus]
   );
 
   return {

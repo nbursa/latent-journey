@@ -35,7 +35,9 @@ interface AppState {
   setSelectedMemoryEvent: (event: MemoryEvent | null) => void;
   addCapture: (capture: string) => void;
   setCaptures: (captures: string[]) => void;
-  updateServicesStatus: (status: ServicesStatus) => void;
+  updateServicesStatus: (
+    status: ServicesStatus | ((prev: ServicesStatus) => ServicesStatus)
+  ) => void;
   setIsRecording: (recording: boolean) => void;
   setIsProcessing: (processing: boolean) => void;
 
@@ -126,8 +128,14 @@ export const useAppStore = create<AppState>()(
       },
 
       // Services status actions
-      updateServicesStatus: (status: ServicesStatus) => {
-        set({ servicesStatus: status });
+      updateServicesStatus: (
+        status: ServicesStatus | ((prev: ServicesStatus) => ServicesStatus)
+      ) => {
+        if (typeof status === "function") {
+          set((state) => ({ servicesStatus: status(state.servicesStatus) }));
+        } else {
+          set({ servicesStatus: status });
+        }
       },
 
       // UI state actions

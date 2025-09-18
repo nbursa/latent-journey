@@ -14,6 +14,9 @@ var hub = NewSSEHub()
 // Global flag to pause status monitoring during AI generation
 var isAIGenerating = false
 
+// Store last known LLM status to preserve during generation
+var lastKnownLLMStatus = "unknown"
+
 func RegisterRoutes(mux *http.ServeMux) {
 	mux.Handle("/events", hub)
 	mux.HandleFunc("/api/vision/frame", postVisionFrame)
@@ -730,28 +733,39 @@ func startServiceStatusMonitor() {
 	client := &http.Client{Timeout: 500 * time.Millisecond} // Ultra-fast timeout
 
 	for {
-		// Skip status checking if AI is generating
-		if isAIGenerating {
-			fmt.Println("Skipping status check - AI is generating")
-			time.Sleep(10 * time.Second) // Wait longer during generation
-			continue
-		}
-
 		for service, port := range servicePorts {
 			go func(serviceName string, servicePort int) {
+				// Skip LLM check during generation, use last known status
+				if isAIGenerating && serviceName == "llm" {
+					statusEvent := map[string]interface{}{
+						"type":      "service.status",
+						"service":   serviceName,
+						"status":    lastKnownLLMStatus,
+						"timestamp": time.Now().Unix(),
+					}
+					statusBytes, _ := json.Marshal(statusEvent)
+					hub.Broadcast(string(statusBytes))
+					return
+				}
+
 				// Check service health
 				online := checkServiceHealth(client, servicePort, serviceName)
+				status := map[bool]string{true: "online", false: "offline"}[online]
+
+				// Store LLM status for preservation during generation
+				if serviceName == "llm" {
+					lastKnownLLMStatus = status
+				}
 
 				// Broadcast status update
 				statusEvent := map[string]interface{}{
 					"type":      "service.status",
 					"service":   serviceName,
-					"status":    map[bool]string{true: "online", false: "offline"}[online],
+					"status":    status,
 					"timestamp": time.Now().Unix(),
 				}
 
 				statusBytes, _ := json.Marshal(statusEvent)
-				// fmt.Printf("Broadcasting status: %s = %s\n", serviceName, statusEvent["status"])
 				hub.Broadcast(string(statusBytes))
 			}(service, port)
 		}
