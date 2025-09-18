@@ -96,14 +96,19 @@ export const useServicesStatus = () => {
   }, []);
 
   useEffect(() => {
-    // Skip SSE entirely and just use HTTP polling
-    // This prevents all SSE-related warnings and errors
+    // Initial check
     const fallbackTimeout = setTimeout(() => {
       checkServices();
     }, 100);
 
+    // Set up periodic polling every 5 seconds
+    const pollingInterval = setInterval(() => {
+      checkServices();
+    }, 5000);
+
     return () => {
       clearTimeout(fallbackTimeout);
+      clearInterval(pollingInterval);
     };
   }, [checkServices]);
 

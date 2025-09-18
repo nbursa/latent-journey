@@ -11,6 +11,7 @@ import {
 import { useEgo } from "../hooks/useEgo";
 import { useSTMData } from "../hooks/useSTMData";
 import { Memory } from "../types/memory";
+import { useServicesStatus } from "../hooks/useServicesStatus";
 
 interface Thought {
   content: string;
@@ -45,14 +46,11 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   const [thoughts, setThoughts] = useState<Thought[]>([]);
   const [metrics, setMetrics] = useState<ConsciousnessMetrics | null>(null);
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
+  const { servicesStatus, triggerStatusCheck } = useServicesStatus();
 
-  // Use the simplified ego service
   const {
     currentThought,
     isGenerating,
-    isEgoAvailable,
-    ollamaAvailable,
-    ollamaStatus,
     error,
     generateThought,
     consolidateMemories,
@@ -63,6 +61,9 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     autoGenerate: isAutoGenerate,
     intervalMs: 30000, // 30 seconds
   });
+
+  const isEgoAvailable = servicesStatus.ego === "online";
+  const ollamaAvailable = servicesStatus.llm === "online";
 
   // Get STM data
   const {
@@ -235,6 +236,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           </button>
 
           <button
+            onClick={triggerStatusCheck}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
+            title="Refresh service status"
+          >
+            <RefreshCw className="w-3 h-3" />
+            Status
+          </button>
+
+          <button
             onClick={clearHistory}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary"
             title="Clear history"
@@ -272,7 +282,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
         )}
 
         {/* Ollama Status */}
-        {!ollamaAvailable && ollamaStatus && (
+        {!ollamaAvailable && (
           <div className="m-1 sm:m-3 p-2 sm:p-3 bg-yellow-500/20 text-yellow-300 text-xs sm:text-sm">
             <div className="font-semibold mb-1 sm:mb-2 flex items-center gap-2">
               <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
@@ -309,11 +319,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                   <strong>Pull Model:</strong>
                 </div>
                 <div className="text-xs">
-                  •{" "}
-                  <code>
-                    ollama pull{" "}
-                    {ollamaStatus.ollama?.model || "llama3.1:8b-instruct"}
-                  </code>
+                  • <code>ollama pull llama3.1:8b-instruct</code>
                 </div>
               </div>
             </div>
