@@ -4,6 +4,7 @@ import { OrbitControls } from "three-stdlib";
 import { MemoryEvent } from "../types";
 import { getEmbeddingForEvent, reduceDimensions } from "../utils/embeddings";
 import { useWaypoints } from "../stores/appStore";
+import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface Point3D {
   x: number;
@@ -16,6 +17,7 @@ interface Point3D {
   size: number;
   confidence: number;
   source: string;
+  isHighlighted: boolean;
 }
 
 interface RealLatentSpace3DProps {
@@ -25,6 +27,8 @@ interface RealLatentSpace3DProps {
   onHover?: (event: MemoryEvent | null) => void;
   cameraPreset?: "top" | "isometric" | "free";
   showTrajectory?: boolean;
+  selectedCluster?: Cluster | null;
+  selectedGroup?: SemanticGroup | null;
 }
 
 // Constants - single source of truth
@@ -126,6 +130,8 @@ export default function RealLatentSpace3D({
   onHover,
   cameraPreset = "free",
   showTrajectory = true,
+  selectedCluster = null,
+  selectedGroup = null,
 }: RealLatentSpace3DProps) {
   const waypoints = useWaypoints();
   const mountRef = useRef<HTMLDivElement>(null);
@@ -247,6 +253,18 @@ export default function RealLatentSpace3D({
             const confidence = Number(event.facets["confidence"]) || 0.5;
             const baseSize = Math.max(1, 3 + confidence * 4);
 
+            // Check if this event should be highlighted based on cluster or group selection
+            let isHighlighted = false;
+            if (selectedCluster) {
+              isHighlighted = selectedCluster.points.some(
+                (p) => p.ts === event.ts
+              );
+            } else if (selectedGroup) {
+              isHighlighted = selectedGroup.events.some(
+                (e) => e.ts === event.ts
+              );
+            }
+
             return {
               x,
               y,
@@ -254,10 +272,11 @@ export default function RealLatentSpace3D({
               event,
               isSelected: selectedEvent?.ts === event.ts,
               isWaypoint: waypoints.has(event.ts),
-              color,
+              color: isHighlighted ? "#FFFFFF" : color, // White for highlighted points
               size: waypoints.has(event.ts) ? baseSize * 1.5 : baseSize, // Make waypoints bigger
               confidence: embedding.confidence,
               source: event.source,
+              isHighlighted,
             };
           }
         );
@@ -271,7 +290,13 @@ export default function RealLatentSpace3D({
     };
 
     updateVisualization();
-  }, [memoryEvents, extractEmbeddings, reduceDimensionsCallback]);
+  }, [
+    memoryEvents,
+    extractEmbeddings,
+    reduceDimensionsCallback,
+    selectedCluster,
+    selectedGroup,
+  ]);
 
   // Update selection and waypoints without recomputing embeddings
   useEffect(() => {

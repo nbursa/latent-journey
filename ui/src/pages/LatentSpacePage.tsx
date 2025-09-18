@@ -315,6 +315,8 @@ export default function LatentSpacePage() {
                   selectedEvent={selectedMemoryEvent}
                   onSelectEvent={setSelectedMemoryEvent}
                   showTrajectory={showTrajectory}
+                  selectedCluster={selectedCluster}
+                  selectedGroup={selectedGroup}
                 />
               ) : viewMode === "3d" ? (
                 <LatentSpace3D
@@ -323,6 +325,8 @@ export default function LatentSpacePage() {
                   onSelectEvent={setSelectedMemoryEvent}
                   showTrajectory={showTrajectory}
                   cameraPreset={cameraPreset}
+                  selectedCluster={selectedCluster}
+                  selectedGroup={selectedGroup}
                 />
               ) : (
                 <LatentScatter3D
@@ -332,6 +336,8 @@ export default function LatentSpacePage() {
                   onHoverEvent={handleHoverEvent}
                   cameraPreset={cameraPreset}
                   showTrajectory={showTrajectory}
+                  selectedCluster={selectedCluster}
+                  selectedGroup={selectedGroup}
                 />
               )}
             </>

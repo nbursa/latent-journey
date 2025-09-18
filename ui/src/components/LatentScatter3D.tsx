@@ -12,6 +12,7 @@ import * as THREE from "three";
 import { MemoryEvent } from "../types";
 import { getEmbeddingForEvent } from "../utils/embeddings";
 import { useWaypoints } from "../stores/appStore";
+import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface LatentScatterProps {
   memoryEvents: MemoryEvent[];
@@ -24,6 +25,8 @@ interface LatentScatterProps {
   className?: string;
   cameraPreset?: "top" | "isometric" | "free";
   showTrajectory?: boolean;
+  selectedCluster?: Cluster | null;
+  selectedGroup?: SemanticGroup | null;
 }
 
 interface Point3D {
@@ -38,13 +41,16 @@ interface Point3D {
   modality: "vision" | "speech" | "stm" | "ltm";
   arousal: number;
   valence: number;
+  isHighlighted: boolean;
 }
 
 // Enhanced 3D projection with semantic height
 const projectTo3D = (
   embeddings: number[][],
   memoryEvents: MemoryEvent[],
-  waypoints: Set<number>
+  waypoints: Set<number>,
+  selectedCluster?: Cluster | null,
+  selectedGroup?: SemanticGroup | null
 ) => {
   if (embeddings.length === 0) return [];
 
@@ -81,6 +87,14 @@ const projectTo3D = (
     const confidence = Number(event.facets["confidence"]) || 0.5;
     const size = Math.max(1, 3 + confidence * 4);
 
+    // Check if this event should be highlighted based on cluster or group selection
+    let isHighlighted = false;
+    if (selectedCluster) {
+      isHighlighted = selectedCluster.points.some((p) => p.ts === event.ts);
+    } else if (selectedGroup) {
+      isHighlighted = selectedGroup.events.some((e) => e.ts === event.ts);
+    }
+
     return {
       x,
       y,
@@ -88,7 +102,7 @@ const projectTo3D = (
       event,
       isSelected: false,
       isWaypoint: waypoints.has(event.ts),
-      color,
+      color: isHighlighted ? "#FFFFFF" : color, // White for highlighted points
       size: waypoints.has(event.ts) ? size * 1.5 : size, // Make waypoints bigger
       modality: (isVision
         ? "vision"
@@ -99,6 +113,7 @@ const projectTo3D = (
         : "ltm") as "vision" | "speech" | "stm" | "ltm",
       arousal,
       valence,
+      isHighlighted,
     };
   });
 };
@@ -589,6 +604,8 @@ const LatentScatter3D = memo(
     className = "",
     cameraPreset = "free",
     showTrajectory = true,
+    selectedCluster = null,
+    selectedGroup = null,
   }: LatentScatterProps) {
     const waypoints = useWaypoints();
     const [points, setPoints] = useState<Point3D[]>([]);
@@ -631,7 +648,9 @@ const LatentScatter3D = memo(
           const projectedPoints = projectTo3D(
             embeddings,
             memoryEvents,
-            waypoints
+            waypoints,
+            selectedCluster,
+            selectedGroup
           );
 
           // Update selected state
@@ -653,7 +672,13 @@ const LatentScatter3D = memo(
       }, 100); // Further reduced delay
 
       return () => clearTimeout(timeoutId);
-    }, [memoryEvents, selectedEvent, waypoints]);
+    }, [
+      memoryEvents,
+      selectedEvent,
+      waypoints,
+      selectedCluster,
+      selectedGroup,
+    ]);
 
     // Update selection without recomputing embeddings
     useEffect(() => {
@@ -822,7 +847,9 @@ const LatentScatter3D = memo(
       ) &&
       prevProps.selectedEvent?.ts === nextProps.selectedEvent?.ts &&
       prevProps.cameraPreset === nextProps.cameraPreset &&
-      prevProps.className === nextProps.className
+      prevProps.className === nextProps.className &&
+      prevProps.selectedCluster?.id === nextProps.selectedCluster?.id &&
+      prevProps.selectedGroup?.id === nextProps.selectedGroup?.id
     );
   }
 );

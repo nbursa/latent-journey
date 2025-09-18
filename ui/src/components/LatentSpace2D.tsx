@@ -4,12 +4,15 @@ import * as d3 from "d3";
 import { Map } from "lucide-react";
 import { useWaypoints, useWaypointActions } from "../stores/appStore";
 import { getEmbeddingsForEvents, reduceDimensions } from "../utils/embeddings";
+import { Cluster, SemanticGroup } from "../utils/clustering";
 
 interface LatentSpaceViewProps {
   memoryEvents: MemoryEvent[];
   selectedEvent: MemoryEvent | null;
   onSelectEvent: (event: MemoryEvent) => void;
   showTrajectory?: boolean;
+  selectedCluster?: Cluster | null;
+  selectedGroup?: SemanticGroup | null;
 }
 
 interface Point2D {
@@ -18,6 +21,7 @@ interface Point2D {
   event: MemoryEvent;
   isSelected: boolean;
   isWaypoint: boolean;
+  isHighlighted: boolean;
 }
 
 // Constants - single source of truth
@@ -51,20 +55,36 @@ const COLORS = {
 const projectTo2D = (
   embeddings: number[][],
   memoryEvents: MemoryEvent[],
-  waypoints: Set<number>
+  waypoints: Set<number>,
+  selectedCluster?: Cluster | null,
+  selectedGroup?: SemanticGroup | null
 ): Point2D[] => {
   if (embeddings.length === 0) return [];
 
-  return embeddings.map((embedding, index) => ({
-    x: (embedding[0] || 0) * VISUALIZATION_CONFIG.projectionScale,
-    y: (embedding[1] || 0) * VISUALIZATION_CONFIG.projectionScale,
-    event: memoryEvents[index],
-    isSelected: false,
-    isWaypoint: waypoints.has(memoryEvents[index].ts),
-  }));
+  return embeddings.map((embedding, index) => {
+    const event = memoryEvents[index];
+
+    // Check if this event should be highlighted based on cluster or group selection
+    let isHighlighted = false;
+    if (selectedCluster) {
+      isHighlighted = selectedCluster.points.some((p) => p.ts === event.ts);
+    } else if (selectedGroup) {
+      isHighlighted = selectedGroup.events.some((e) => e.ts === event.ts);
+    }
+
+    return {
+      x: (embedding[0] || 0) * VISUALIZATION_CONFIG.projectionScale,
+      y: (embedding[1] || 0) * VISUALIZATION_CONFIG.projectionScale,
+      event,
+      isSelected: false,
+      isWaypoint: waypoints.has(event.ts),
+      isHighlighted,
+    };
+  });
 };
 
-const getPointColor = (source: string): string => {
+const getPointColor = (source: string, isHighlighted: boolean): string => {
+  if (isHighlighted) return "#FFFFFF"; // White for highlighted points
   return COLORS[source as keyof typeof COLORS] || COLORS.default;
 };
 
@@ -84,6 +104,8 @@ export default function LatentSpaceView({
   selectedEvent,
   onSelectEvent,
   showTrajectory = true,
+  selectedCluster = null,
+  selectedGroup = null,
 }: LatentSpaceViewProps) {
   const svgRef = useRef<SVGSVGElement>(null);
   const [points, setPoints] = useState<Point2D[]>([]);
@@ -127,7 +149,9 @@ export default function LatentSpaceView({
         const projectedPoints = projectTo2D(
           reducedEmbeddings,
           memoryEvents,
-          waypoints
+          waypoints,
+          selectedCluster,
+          selectedGroup
         );
 
         setPoints(projectedPoints);
@@ -140,7 +164,7 @@ export default function LatentSpaceView({
     };
 
     processEmbeddings();
-  }, [memoryEvents, extractEmbeddings]);
+  }, [memoryEvents, extractEmbeddings, selectedCluster, selectedGroup]);
 
   // Light updates: selection and waypoint states (no recomputation)
   useEffect(() => {
@@ -296,7 +320,7 @@ export default function LatentSpaceView({
       .attr("cx", (d) => xScale(d.x))
       .attr("cy", (d) => yScale(d.y))
       .attr("r", getPointRadius)
-      .attr("fill", (d) => getPointColor(d.event.source))
+      .attr("fill", (d) => getPointColor(d.event.source, d.isHighlighted))
       .attr("opacity", getPointOpacity)
       .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
       .attr("stroke-width", (d) => (d.isSelected ? 2 : 0));

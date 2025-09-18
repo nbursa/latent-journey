@@ -63,33 +63,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
     const [showGroups, setShowGroups] = useState(true);
     const [clusterCount, setClusterCount] = useState(5);
 
-    // Generate clusters and groups
-    const [clusters, setClusters] = useState<Cluster[]>([]);
-
-    useEffect(() => {
-      const generateClusters = async () => {
-        // Use memoryEvents for clustering to maintain consistency
-        const result = await clusterEmbeddings(memoryEvents, clusterCount);
-        setClusters(result);
-      };
-      generateClusters();
-    }, [memoryEvents, clusterCount]);
-
-    const semanticGroups = useMemo(() => {
-      const result = createSemanticGroups(memoryEvents);
-      console.log("🔍 ExplorationPanel - Groups generated:", {
-        memoryEventsCount: memoryEvents.length,
-        groupsGenerated: result.length,
-        groups: result.map((g) => ({
-          id: g.id,
-          name: g.name,
-          eventsCount: g.events.length,
-          events: g.events.map((e) => ({ ts: e.ts, source: e.source })),
-        })),
-      });
-      return result;
-    }, [memoryEvents]);
-
     // Apply filters and search
     const filteredEvents = useMemo(() => {
       let filtered = memoryEvents;
@@ -109,6 +82,34 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
 
       return filtered;
     }, [memoryEvents, sourceFilter, searchQuery, sortBy, sortOrder]);
+
+    // Generate clusters and groups from filtered data
+    const [clusters, setClusters] = useState<Cluster[]>([]);
+
+    useEffect(() => {
+      const generateClusters = async () => {
+        // Use filteredEvents for clustering to reflect current filters
+        const result = await clusterEmbeddings(filteredEvents, clusterCount);
+        setClusters(result);
+      };
+      generateClusters();
+    }, [filteredEvents, clusterCount]);
+
+    const semanticGroups = useMemo(() => {
+      const result = createSemanticGroups(filteredEvents);
+      console.log("🔍 ExplorationPanel - Groups generated:", {
+        memoryEventsCount: memoryEvents.length,
+        filteredEventsCount: filteredEvents.length,
+        groupsGenerated: result.length,
+        groups: result.map((g) => ({
+          id: g.id,
+          name: g.name,
+          eventsCount: g.events.length,
+          events: g.events.map((e) => ({ ts: e.ts, source: e.source })),
+        })),
+      });
+      return result;
+    }, [filteredEvents, memoryEvents.length]);
 
     // Update parent with filtered events
     useEffect(() => {
@@ -173,7 +174,7 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
           "🔍 ExplorationPanel - Selecting group, calling onGroupSelect"
         );
         onGroupSelect(group);
-        onClusterSelect(null); // Clear cluster selection
+        // Note: onGroupSelect should handle clearing cluster selection internally
       }
     };
 
