@@ -97,17 +97,7 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
 
     const semanticGroups = useMemo(() => {
       const result = createSemanticGroups(filteredEvents);
-      console.log("🔍 ExplorationPanel - Groups generated:", {
-        memoryEventsCount: memoryEvents.length,
-        filteredEventsCount: filteredEvents.length,
-        groupsGenerated: result.length,
-        groups: result.map((g) => ({
-          id: g.id,
-          name: g.name,
-          eventsCount: g.events.length,
-          events: g.events.map((e) => ({ ts: e.ts, source: e.source })),
-        })),
-      });
+
       return result;
     }, [filteredEvents, memoryEvents.length]);
 
@@ -304,7 +294,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
 
               {/* Cluster list */}
               {clusters.map((cluster) => {
-                console.log("🔍 Rendering cluster:", cluster.id, cluster.label);
                 return (
                   <button
                     key={cluster.id}
@@ -360,7 +349,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
           {showGroups && (
             <div className="space-y-1">
               {semanticGroups.map((group) => {
-                console.log("🔍 Rendering group:", group.id, group.name);
                 return (
                   <button
                     key={group.id}

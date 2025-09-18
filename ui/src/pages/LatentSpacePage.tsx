@@ -148,11 +148,6 @@ export default function LatentSpacePage() {
   // Apply cluster/group filtering to displayed events
   const finalEvents = useMemo(() => {
     let events = displayedEvents;
-    console.log("🔍 Computing finalEvents:", {
-      displayedEventsCount: displayedEvents.length,
-      selectedCluster: selectedCluster?.id,
-      selectedGroup: selectedGroup?.id,
-    });
 
     if (selectedCluster) {
       const clusterEventTimestamps = new Set(
@@ -186,7 +181,6 @@ export default function LatentSpacePage() {
       });
     }
 
-    console.log("🔍 Final events count:", events.length);
     return events;
   }, [displayedEvents, selectedCluster, selectedGroup]);
 
