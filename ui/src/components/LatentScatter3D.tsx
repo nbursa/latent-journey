@@ -49,6 +49,7 @@ interface Point3D {
   isHighlighted: boolean;
   isWaypointA: boolean;
   isWaypointB: boolean;
+  uniqueId: string;
 }
 
 // Enhanced 3D projection with semantic height
@@ -104,9 +105,12 @@ const projectTo3D = (
       isHighlighted = selectedGroup.events.some((e) => e.ts === event.ts);
     }
 
-    // Check if this event is waypoint A or B
-    const isWaypointA = waypointA?.ts === event.ts;
-    const isWaypointB = waypointB?.ts === event.ts;
+    // Create unique ID for this point using index (truly unique)
+    const uniqueId = `point-${index}`;
+
+    // Check if this event is waypoint A or B using object reference comparison
+    const isWaypointA = !!(waypointA && waypointA === event);
+    const isWaypointB = !!(waypointB && waypointB === event);
     const isWaypointAB = isWaypointA || isWaypointB;
 
     return {
@@ -130,6 +134,7 @@ const projectTo3D = (
       isHighlighted,
       isWaypointA,
       isWaypointB,
+      uniqueId,
     };
   });
 };
@@ -760,11 +765,14 @@ const LatentScatter3D = memo(
 
     const handleWaypointClick = useCallback(
       (event: MemoryEvent) => {
-        // Set as waypoint A or B
-        if (waypointA?.ts === event.ts) {
+        // Set as waypoint A or B using object reference comparison
+        const isCurrentWaypointA = waypointA && waypointA === event;
+        const isCurrentWaypointB = waypointB && waypointB === event;
+
+        if (isCurrentWaypointA) {
           // If clicking on waypoint A, clear it
           setWaypointA(null);
-        } else if (waypointB?.ts === event.ts) {
+        } else if (isCurrentWaypointB) {
           // If clicking on waypoint B, clear it
           setWaypointB(null);
         } else if (!waypointA) {

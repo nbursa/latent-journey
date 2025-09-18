@@ -44,13 +44,13 @@ export default function WaypointComparison({
     onClear: () => void,
     color: string
   ) => (
-    <div className="flex-1">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-sm font-medium text-gray-300">{label}</h3>
+    <div className="w-1/2 min-w-0 flex flex-col">
+      <div className="flex items-center justify-between mb-2 flex-shrink-0">
+        <h3 className="text-sm font-medium text-gray-300 truncate">{label}</h3>
         {waypoint && (
           <button
             onClick={onClear}
-            className="text-gray-400 hover:text-white transition-colors"
+            className="text-gray-400 hover:text-white transition-colors flex-shrink-0 ml-2"
           >
             <X className="w-4 h-4" />
           </button>
@@ -59,27 +59,27 @@ export default function WaypointComparison({
 
       {waypoint ? (
         <div
-          className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50 cursor-pointer hover:bg-gray-700/50 transition-colors`}
+          className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50 cursor-pointer hover:bg-gray-700/50 transition-colors flex-1 min-h-0 overflow-hidden`}
           onClick={() => onSelectEvent(waypoint)}
         >
-          <div className="text-xs text-gray-400 mb-2">
+          <div className="text-xs text-gray-400 mb-2 truncate">
             {new Date(waypoint.ts * 1000).toLocaleString()}
           </div>
-          <div className="text-sm font-medium mb-2 capitalize">
+          <div className="text-sm font-medium mb-2 capitalize truncate">
             {waypoint.source}
           </div>
-          <div className="space-y-1">
+          <div className="space-y-1 overflow-y-auto max-h-48">
             {Object.entries(waypoint.facets).map(([key, value]) => (
-              <div key={key} className="text-xs">
-                <span className="text-gray-400">{key}:</span>{" "}
-                <span className="text-white">{String(value)}</span>
+              <div key={key} className="text-xs break-words">
+                <span className="text-gray-400 break-all">{key}:</span>{" "}
+                <span className="text-white break-all">{String(value)}</span>
               </div>
             ))}
           </div>
         </div>
       ) : (
-        <div className="p-3 rounded-lg border-2 border-dashed border-gray-600 bg-gray-800/30">
-          <div className="text-center text-gray-400 text-sm">
+        <div className="p-3 rounded-lg border-2 border-dashed border-gray-600 bg-gray-800/30 flex-1 min-h-0 flex items-center justify-center">
+          <div className="text-center text-gray-400 text-sm break-words">
             Click a memory event to set as {label.toLowerCase()}
           </div>
         </div>
@@ -94,8 +94,8 @@ export default function WaypointComparison({
         <h2 className="text-lg font-semibold">A/B Comparison</h2>
       </div>
 
-      <div className="glass flex-1 flat p-4 min-h-0 max-h-fit overflow-hidden">
-        <div className="flex gap-4 h-full min-h-0 max-h-fit">
+      <div className="glass flex-1 flat p-4 min-h-0 overflow-hidden">
+        <div className="flex gap-4 h-full min-h-0">
           {renderWaypoint(
             waypointA,
             "Waypoint A",
@@ -116,26 +116,28 @@ export default function WaypointComparison({
         </div>
 
         {waypointA && waypointB && (
-          <div className="mt-4 p-3 bg-gray-800/50 rounded-lg flex-shrink-0">
-            <h4 className="text-sm font-medium text-gray-300 mb-2">
+          <div className="mt-4 p-3 bg-gray-800/50 rounded-lg flex-shrink-0 min-h-0 overflow-hidden">
+            <h4 className="text-sm font-medium text-gray-300 mb-2 truncate">
               Comparison
             </h4>
-            <div className="grid grid-cols-2 gap-4 text-xs">
-              <div>
-                <div className="text-gray-400 mb-1">Time Difference</div>
-                <div className="text-white">
+            <div className="grid grid-cols-2 gap-4 text-xs min-h-0">
+              <div className="min-w-0">
+                <div className="text-gray-400 mb-1 truncate">
+                  Time Difference
+                </div>
+                <div className="text-white break-words">
                   {Math.abs(waypointA.ts - waypointB.ts)} seconds
                 </div>
               </div>
-              <div>
-                <div className="text-gray-400 mb-1">Source Types</div>
-                <div className="text-white">
+              <div className="min-w-0">
+                <div className="text-gray-400 mb-1 truncate">Source Types</div>
+                <div className="text-white break-words">
                   {waypointA.source} vs {waypointB.source}
                 </div>
               </div>
-              <div className="col-span-2">
-                <div className="text-gray-400 mb-1">Common Facets</div>
-                <div className="text-white">
+              <div className="col-span-2 min-w-0">
+                <div className="text-gray-400 mb-1 truncate">Common Facets</div>
+                <div className="text-white break-words">
                   {(() => {
                     const facetsA = Object.keys(waypointA.facets);
                     const facetsB = Object.keys(waypointB.facets);

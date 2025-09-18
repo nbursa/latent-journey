@@ -25,6 +25,7 @@ interface Point3D {
   isHighlighted: boolean;
   isWaypointA: boolean;
   isWaypointB: boolean;
+  uniqueId: string;
 }
 
 interface RealLatentSpace3DProps {
@@ -275,9 +276,12 @@ export default function RealLatentSpace3D({
               );
             }
 
-            // Check if this event is waypoint A or B
-            const isWaypointA = waypointA?.ts === event.ts;
-            const isWaypointB = waypointB?.ts === event.ts;
+            // Create unique ID for this point using index (truly unique)
+            const uniqueId = `point-${index}`;
+
+            // Check if this event is waypoint A or B using object reference comparison
+            const isWaypointA = !!(waypointA && waypointA === event);
+            const isWaypointB = !!(waypointB && waypointB === event);
             const isWaypointAB = isWaypointA || isWaypointB;
 
             return {
@@ -294,6 +298,7 @@ export default function RealLatentSpace3D({
               isHighlighted,
               isWaypointA,
               isWaypointB,
+              uniqueId,
             };
           }
         );
@@ -658,11 +663,14 @@ export default function RealLatentSpace3D({
         if (intersected.userData && intersected.userData.event) {
           const clickedEvent = intersected.userData.event;
 
-          // Set as waypoint A or B
-          if (waypointA?.ts === clickedEvent.ts) {
+          // Set as waypoint A or B using object reference comparison
+          const isCurrentWaypointA = waypointA && waypointA === clickedEvent;
+          const isCurrentWaypointB = waypointB && waypointB === clickedEvent;
+
+          if (isCurrentWaypointA) {
             // If clicking on waypoint A, clear it
             setWaypointA(null);
-          } else if (waypointB?.ts === clickedEvent.ts) {
+          } else if (isCurrentWaypointB) {
             // If clicking on waypoint B, clear it
             setWaypointB(null);
           } else if (!waypointA) {
