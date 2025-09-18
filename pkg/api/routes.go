@@ -796,6 +796,7 @@ func checkServiceHealth(client *http.Client, port int, serviceName string) bool 
 		if status, ok := healthResp["status"].(string); ok {
 			return status == "healthy" || status == "running"
 		}
+		return false
 	}
 
 	return true

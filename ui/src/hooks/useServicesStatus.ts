@@ -43,7 +43,23 @@ export const useServicesStatus = () => {
         });
 
         clearTimeout(timeoutId);
-        return response.ok;
+
+        if (!response.ok) {
+          return false;
+        }
+
+        // For health endpoints, also check the response body
+        if (endpoint === "/health") {
+          try {
+            const healthResp = await response.json();
+            const status = healthResp.status;
+            return status === "healthy" || status === "running";
+          } catch {
+            return false;
+          }
+        }
+
+        return true;
       } catch {
         return false;
       }
