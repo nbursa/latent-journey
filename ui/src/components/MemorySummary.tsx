@@ -15,11 +15,11 @@ export default function MemorySummary() {
         ...item,
         source: "stm",
         type: "short_term",
-        ts: new Date(item.timestamp).getTime() / 1000, // Convert timestamp to seconds
+        ts: new Date(item.timestamp).getTime() / 1000,
         content: item.content,
         facets: item.facets || {},
         tags: item.tags || [],
-        embedding_id: item.id, // Use id as embedding_id
+        embedding_id: item.id,
       })),
       // LTM data - these are consolidated experiences
       ...ltmData.map((item) => ({

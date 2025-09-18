@@ -165,7 +165,6 @@ export default function LatentSpacePage() {
     return events;
   }, [displayedEvents, selectedCluster, selectedGroup]);
 
-  // Event handlers - CLEAN AND SIMPLE
   const handleExplorationFilterChange = useCallback((events: MemoryEvent[]) => {
     setDisplayedEvents(events);
   }, []);

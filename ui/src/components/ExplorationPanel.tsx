@@ -131,7 +131,7 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
         onClusterSelect(null);
       } else {
         onClusterSelect(cluster);
-        onGroupSelect(null); // Clear group selection
+        onGroupSelect(null);
       }
     };
 
@@ -140,7 +140,6 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
         onGroupSelect(null);
       } else {
         onGroupSelect(group);
-        // Note: onGroupSelect should handle clearing cluster selection internally
       }
     };
 

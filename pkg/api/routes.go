@@ -268,7 +268,7 @@ func postSpeechTranscript(w http.ResponseWriter, r *http.Request) {
 		"embedding_id": "speech-1",
 		"context":      "",
 		"transcript":   out.Transcript,
-		"embedding":    textEmbedding, // Pass the text embedding
+		"embedding":    textEmbedding,
 	}
 	runBody, _ := json.Marshal(runReq)
 	runClient := &http.Client{Timeout: 5 * time.Second}
@@ -692,7 +692,7 @@ func postReduceDimensions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := &http.Client{Timeout: 30 * time.Second} // Longer timeout for ML processing
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Post("http://localhost:8081/reduce-dimensions", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
@@ -787,7 +787,7 @@ func startServiceStatusMonitor() {
 		"embeddings": 8085,
 	}
 
-	client := &http.Client{Timeout: 500 * time.Millisecond} // Ultra-fast timeout
+	client := &http.Client{Timeout: 500 * time.Millisecond}
 
 	for {
 		for service, port := range servicePorts {
@@ -827,7 +827,6 @@ func startServiceStatusMonitor() {
 			}(service, port)
 		}
 
-		// Check every 5 seconds (much less frequent than before)
 		time.Sleep(5 * time.Second)
 	}
 }

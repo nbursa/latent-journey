@@ -87,7 +87,6 @@ impl<'a> Lexer<'a> {
     pub fn next_token(&mut self) -> Token {
         self.skip_whitespace();
         let tok = match self.ch {
-            // Some('=') => Token::new(TokenType::Assign, "="),
             Some('=') => Token::new(TokenType::Equal, "="),
             Some('(') => Token::new(TokenType::LParen, "("),
             Some(')') => Token::new(TokenType::RParen, ")"),

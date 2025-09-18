@@ -46,15 +46,6 @@ export default function DataCleanup() {
             Clear All Data
           </button>
         </div>
-
-        {/* <div className="border-t border-white/10 pt-3">
-          <button
-            onClick={() => setShowConfirm(true)}
-            className="px-4 py-2 text-sm btn-primary bg-red-600 hover:bg-red-700 transition-colors"
-          >
-            Clear All Data
-          </button>
-        </div> */}
       </div>
 
       {showConfirm && (

@@ -26,10 +26,7 @@ export default function JourneyTimeline({
   const isSyncingRef = useRef(false);
 
   // Ensure component updates when cluster/group selection changes
-  useEffect(() => {
-    // This effect ensures the component re-renders when selections change
-    // The actual filtering is handled by finalEvents from the parent
-  }, [selectedCluster, selectedGroup]);
+  useEffect(() => {}, [selectedCluster, selectedGroup]);
 
   // Reset timeline when events change (e.g., when filtering is applied)
   useEffect(() => {

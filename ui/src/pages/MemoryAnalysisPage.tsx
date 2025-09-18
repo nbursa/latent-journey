@@ -36,7 +36,7 @@ export default function MemoryAnalysisPage() {
   const [ltmData, setLtmData] = useState<any[]>([]);
   const [eventsData, setEventsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const playbackIntervalRef = useRef<number | null>(null);
+  const playbackIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const previousSelectedMemoryRef = useRef<any>(null);
   const isUpdatingRef = useRef<boolean>(false);
 
@@ -48,11 +48,11 @@ export default function MemoryAnalysisPage() {
         ...item,
         source: "stm",
         type: "short_term",
-        ts: new Date(item.timestamp).getTime() / 1000, // Convert timestamp to seconds
+        ts: new Date(item.timestamp).getTime() / 1000,
         content: item.content,
         facets: item.facets || {},
         tags: item.tags || [],
-        embedding_id: item.id, // Use id as embedding_id
+        embedding_id: item.id,
       })),
       // LTM data - consolidated experiences
       ...ltmData.map((item) => ({
@@ -476,44 +476,6 @@ export default function MemoryAnalysisPage() {
             </div>
           ) : (
             <div className="h-full flex flex-col">
-              {/* <div className="p-4 bg-ui-surface/50 rounded mb-4">
-                <h3 className="text-sm font-medium mb-2">
-                  Memory Events Summary
-                </h3>
-                <div className="text-xs space-y-1">
-                  <div>Total Events: {allMemoryEvents.length}</div>
-                  <div>
-                    STM:{" "}
-                    {allMemoryEvents.filter((e) => e.source === "stm").length}
-                  </div>
-                  <div>
-                    LTM:{" "}
-                    {allMemoryEvents.filter((e) => e.source === "ltm").length}
-                  </div>
-                  <div>
-                    Vision:{" "}
-                    {
-                      allMemoryEvents.filter((e) => e.source === "vision")
-                        .length
-                    }
-                  </div>
-                  <div>
-                    Speech:{" "}
-                    {
-                      allMemoryEvents.filter((e) => e.source === "speech")
-                        .length
-                    }
-                  </div>
-                  <div>
-                    Selected:{" "}
-                    {selectedMemoryEvent
-                      ? `${
-                          selectedMemoryEvent.source
-                        } - ${selectedMemoryEvent.content?.substring(0, 30)}...`
-                      : "None"}
-                  </div>
-                </div>
-              </div> */}
               <MemoryAnalysisView
                 memoryEvents={allMemoryEvents}
                 selectedEvent={selectedMemoryEvent}

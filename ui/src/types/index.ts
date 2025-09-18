@@ -43,8 +43,8 @@ export interface AudioVisualizationRefs {
 }
 
 export interface MediaRefs {
-  videoRef: React.RefObject<HTMLVideoElement>;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   mediaRecorderRef: React.RefObject<MediaRecorder | null>;
   audioChunksRef: React.MutableRefObject<Blob[]>;
 }

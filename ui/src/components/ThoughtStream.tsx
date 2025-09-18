@@ -50,7 +50,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   } = useEgo({
     memories,
     autoGenerate: isAutoGenerate,
-    intervalMs: 30000, // 30 seconds
+    intervalMs: 30000,
   });
 
   const isEgoAvailable = servicesStatus.ego === "online";
@@ -63,7 +63,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     error: stmError,
   } = useSTMData();
 
-  // Convert STM data to thoughts format - USE ACTUAL DATA
+  // Convert STM data to thoughts format
   useEffect(() => {
     if (stmThoughts.length > 0) {
       const convertedThoughts = stmThoughts.map((thought) => ({
@@ -107,8 +107,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       clearHistory();
     }
   }, [memories.length, clearHistory]);
-
-  // Note: We only show STM data, not currentThought
 
   // Convert ego metrics to legacy format
   useEffect(() => {

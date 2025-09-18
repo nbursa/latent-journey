@@ -55,11 +55,6 @@ const COLORS = {
   default: "#3B82F6",
 } as const;
 
-// Pure utility functions - testable and reusable
-// generateFallbackEmbedding is now handled by the unified utility
-
-// generateRealEmbedding is now imported from utils/embeddings
-
 const projectTo2D = (
   embeddings: number[][],
   memoryEvents: MemoryEvent[],

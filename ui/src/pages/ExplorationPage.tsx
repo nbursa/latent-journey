@@ -25,7 +25,7 @@ export default function ExplorationPage() {
   );
 
   // Custom hooks for state management
-  const { loadMemoryEvents } = useMemoryEventsRealtime(); // Real-time memory events
+  const { loadMemoryEvents } = useMemoryEventsRealtime();
   const {
     audioLevels,
     refs: audioRefs,
@@ -162,8 +162,6 @@ export default function ExplorationPage() {
     // SSE
     const es = new EventSource("/events");
     es.onmessage = handleEventMessage;
-
-    // Memory events are now loaded automatically by useMemoryEventsRealtime hook
 
     return () => {
       es.close();

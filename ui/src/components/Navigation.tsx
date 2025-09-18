@@ -18,7 +18,7 @@ export default function Navigation() {
         await clearAllData();
       } catch (error) {
         console.error("Error during clear all data:", error);
-        throw error; // Re-throw to let the modal handle the error
+        throw error;
       }
     },
     title: "Clear All Data",
@@ -27,7 +27,7 @@ export default function Navigation() {
     confirmText: "Clear All Data",
     cancelText: "Cancel",
     type: "danger",
-    isLoading: false, // Will be set to true during the action
+    isLoading: false,
   });
 
   const pages = [
@@ -87,15 +87,6 @@ export default function Navigation() {
         </div>
 
         <div className="flex gap-2">
-          {/* <button
-            onClick={() => setIsCommandPaletteOpen(true)}
-            className="flex px-3 py-2 text-sm btn-secondary flat hover-glow hover-scale transition-all"
-            title="Open command palette (⌘K)"
-          >
-            <Command className="w-4 h-4 mr-2" />
-            <kbd className="text-xs">⌘K</kbd>
-          </button> */}
-
           <button
             onClick={handleClearAllData}
             className="flex px-4 py-2 text-sm flat btn-danger hover-glow hover-scale transition-all"

@@ -466,12 +466,6 @@ const Scene3D = React.memo(
       }
     }, [currentPoints, camera, setCameraPosition, hasInitialized]);
 
-    // Camera preset changes disabled to prevent position resets on click
-    // Users can manually navigate the camera after initial setup
-
-    // Disabled auto-fit camera to prevent position resets on click
-    // Camera position is only set during initial setup and preset changes
-
     return (
       <>
         <ambientLight intensity={0.4} />
@@ -766,7 +760,7 @@ const LatentScatter3D = memo(
               boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
               maxWidth: "300px",
               fontSize: "12px",
-              pointerEvents: "none", // Prevent tooltip from interfering with mouse events
+              pointerEvents: "none",
             }}
           >
             <div
@@ -838,8 +832,6 @@ const LatentScatter3D = memo(
     );
   },
   (prevProps, nextProps) => {
-    // Allow re-renders for memory events changes to handle filters properly
-    // Only prevent re-render if nothing has changed
     return (
       prevProps.memoryEvents.length === nextProps.memoryEvents.length &&
       prevProps.memoryEvents.every(

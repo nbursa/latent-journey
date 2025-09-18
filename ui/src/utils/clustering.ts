@@ -1,8 +1,6 @@
 import { MemoryEvent } from "../types";
 import { getEmbeddingForEvent } from "./embeddings";
 
-// Embedding generation is now handled by the unified utility
-
 export interface Cluster {
   id: string;
   center: number[];

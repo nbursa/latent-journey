@@ -14,7 +14,7 @@ impl ConsolidationEngine {
     pub fn new() -> Self {
         Self {
             min_thoughts_for_consolidation: 3,
-            consolidation_threshold: 0.6, // Average memory_consolidation_need threshold
+            consolidation_threshold: 0.6,
             reflection_engine: None,
         }
     }
@@ -97,7 +97,7 @@ impl ConsolidationEngine {
         let union = words1.union(&words2).count();
 
         let similarity = intersection as f32 / union as f32;
-        similarity > 0.3 // 30% word overlap threshold
+        similarity > 0.3
     }
 
     pub async fn create_experience_from_thoughts(
@@ -239,7 +239,7 @@ impl ConsolidationEngine {
         if count > 0 {
             total_valence / count as f32
         } else {
-            0.5 // Neutral if no valence data
+            0.5
         }
     }
 
@@ -261,7 +261,7 @@ impl ConsolidationEngine {
         if count > 0 {
             total_importance / count as f32
         } else {
-            0.5 // Medium importance if no data
+            0.5
         }
     }
 
@@ -277,8 +277,6 @@ impl ConsolidationEngine {
     }
 
     fn generate_summary(&self, thoughts: &[&Memory], _llm_prompt: &str) -> String {
-        // For now, create a simple summary by combining thought content
-        // TODO: Integrate with LLM for better summarization
         let mut summaries: Vec<String> = Vec::new();
 
         for thought in thoughts {
@@ -359,8 +357,6 @@ impl ConsolidationEngine {
             themes_identified: all_themes,
         })
     }
-
-    // LLM-powered methods for better consolidation
 
     async fn extract_themes_with_llm(&self, thoughts: &[&Memory]) -> Result<Vec<String>, String> {
         if let Some(reflection_engine) = &self.reflection_engine {

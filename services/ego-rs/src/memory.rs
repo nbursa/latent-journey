@@ -16,8 +16,8 @@ impl MemoryStore {
         Self {
             memories: HashMap::new(),
             experiences: HashMap::new(),
-            file_path: "data/stm.jsonl".to_string(), // STM file in ego-rs/data
-            ltm_file_path: "data/ltm.jsonl".to_string(), // LTM file in ego-rs/data
+            file_path: "data/stm.jsonl".to_string(),
+            ltm_file_path: "data/ltm.jsonl".to_string(),
         }
     }
 

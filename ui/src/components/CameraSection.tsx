@@ -2,8 +2,8 @@ import AudioVisualizer from "./AudioVisualizer";
 import { Camera, Mic, Square } from "lucide-react";
 
 interface CameraSectionProps {
-  videoRef: React.RefObject<HTMLVideoElement>;
-  canvasRef: React.RefObject<HTMLCanvasElement>;
+  videoRef: React.RefObject<HTMLVideoElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
   audioLevels: number[];
   isRecording: boolean;
   isProcessing: boolean;

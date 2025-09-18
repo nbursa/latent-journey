@@ -15,14 +15,12 @@ use uuid::Uuid;
 use warp::reply::json;
 
 fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> EgoThought {
-    // Analyze the memories to generate a simple thought
     let mut vision_count = 0;
     let mut speech_count = 0;
     let mut text_count = 0;
     let mut recent_events = Vec::new();
 
     for memory in memories.iter().take(5) {
-        // Only look at recent memories
         match memory.modality {
             crate::types::Modality::Vision => vision_count += 1,
             crate::types::Modality::Speech => speech_count += 1,
@@ -44,7 +42,6 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
         }
     }
 
-    // Generate thought based on the analysis
     let thought_content = if let Some(query) = user_query {
         format!("Processing query: '{}'. Recent events: {}. I observe {} vision, {} speech, and {} text events.", 
             query,
@@ -52,7 +49,6 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
             vision_count, speech_count, text_count
         )
     } else {
-        // More specific fallback based on actual content
         if !recent_events.is_empty() {
             format!("I observed: {}. This gives me {} vision, {} speech, and {} text memories to process.", 
                 recent_events.join("; "),
@@ -65,7 +61,6 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
         }
     };
 
-    // Generate simple metrics based on memory activity
     let total_memories = memories.len();
     let self_awareness = if total_memories > 0 { 0.6 } else { 0.3 };
     let memory_consolidation_need = if total_memories > 3 { 0.7 } else { 0.4 };
@@ -233,7 +228,6 @@ pub async fn reflect(
 
     if let Err(e) = store.save_all_memories() {
         tracing::error!("Failed to save thought to file: {}", e);
-        // Continue even if save fails - don't return error to user
     } else {
         tracing::info!("Successfully saved thought to file");
     }

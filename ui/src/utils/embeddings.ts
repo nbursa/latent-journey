@@ -7,10 +7,7 @@ export interface Embedding {
   timestamp: number;
 }
 
-/**
- * Generate a deterministic embedding for a memory event
- * This creates consistent embeddings across all views
- */
+// Generate a deterministic embedding for a memory event
 export function generateEmbedding(event: MemoryEvent): Embedding {
   const embedding = new Array(128).fill(0);
 
@@ -104,17 +101,10 @@ export function generateEmbedding(event: MemoryEvent): Embedding {
   };
 }
 
-/**
- * Generate embeddings for multiple events
- */
 export function generateEmbeddings(events: MemoryEvent[]): Embedding[] {
   return events.map(generateEmbedding);
 }
 
-/**
- * Try to generate a real embedding from the ML service
- * Falls back to deterministic generation if service is unavailable
- */
 export async function generateRealEmbedding(
   event: MemoryEvent
 ): Promise<Embedding> {
@@ -159,10 +149,6 @@ export async function generateRealEmbedding(
   }
 }
 
-/**
- * Reduce dimensions using PCA via the ML service
- * Falls back to simple projection if service is unavailable
- */
 export async function reduceDimensions(
   embeddings: Embedding[],
   targetDimensions: number = 3
@@ -201,9 +187,6 @@ export async function reduceDimensions(
   }
 }
 
-/**
- * Cache for embeddings to avoid recomputation
- */
 const embeddingCache = new Map<string, Embedding>();
 
 // Global preference for real vs fallback embeddings
@@ -217,9 +200,6 @@ export function getPreferRealEmbeddings(): boolean {
   return preferRealEmbeddings;
 }
 
-/**
- * Get or generate embedding with caching
- */
 export function getCachedEmbedding(event: MemoryEvent): Embedding {
   const cacheKey = `${event.ts}-${event.source}-${event.content || ""}`;
 
@@ -232,17 +212,10 @@ export function getCachedEmbedding(event: MemoryEvent): Embedding {
   return embedding;
 }
 
-/**
- * Clear the embedding cache
- */
 export function clearEmbeddingCache(): void {
   embeddingCache.clear();
 }
 
-/**
- * Get embedding for an event with unified caching and fallback strategy
- * This is the single source of truth for all views
- */
 export async function getEmbeddingForEvent(
   event: MemoryEvent,
   options: { preferReal?: boolean } = {}
@@ -287,9 +260,6 @@ export async function getEmbeddingForEvent(
   return embedding;
 }
 
-/**
- * Get embeddings for multiple events with concurrency control
- */
 export async function getEmbeddingsForEvents(
   events: MemoryEvent[],
   options: { preferReal?: boolean; concurrency?: number } = {

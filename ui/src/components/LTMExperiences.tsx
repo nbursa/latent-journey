@@ -37,7 +37,7 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
   const { totalMemories } = useEgo({
     memories,
     autoGenerate: false,
-    intervalMs: 30000, // 30 seconds
+    intervalMs: 30000,
   });
 
   // Get service status directly from useServicesStatus

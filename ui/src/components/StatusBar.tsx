@@ -88,18 +88,17 @@ export default function StatusBar({ className = "" }: StatusBarProps) {
         }
 
         // Fallback: estimate based on memory events and other factors
-        const timeBasedMB = Math.round(performance.now() / 1000 / 60); // Minutes since page load
-        const eventBasedMB = Math.round(memoryEvents.length * 0.5); // Based on events
-        const baseMB = Math.max(10, timeBasedMB, eventBasedMB); // Minimum 10MB
+        const timeBasedMB = Math.round(performance.now() / 1000 / 60);
+        const eventBasedMB = Math.round(memoryEvents.length * 0.5);
+        const baseMB = Math.max(10, timeBasedMB, eventBasedMB);
         setRamUsage(`~${baseMB}MB`);
       } catch (error) {
-        // Final fallback
         setRamUsage("Unknown");
       }
     };
 
     updateRAMUsage();
-    const interval = setInterval(updateRAMUsage, 2000); // Update every 2 seconds
+    const interval = setInterval(updateRAMUsage, 2000);
     return () => clearInterval(interval);
   }, [memoryEvents.length]);
 
