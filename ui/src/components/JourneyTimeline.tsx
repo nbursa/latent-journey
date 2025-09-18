@@ -71,7 +71,7 @@ export default function JourneyTimeline({
   };
 
   // Auto-play functionality
-  useMemo(() => {
+  useEffect(() => {
     if (!isPlaying) return;
 
     const interval = setInterval(() => {

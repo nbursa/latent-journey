@@ -1,10 +1,12 @@
 import { useAppStore } from "../stores/appStore";
 import LatentSpaceView from "../components/LatentSpace2D";
 import LatentSpace3D from "../components/LatentSpace3D";
-import LatentScatter from "../components/LatentScatter3D";
+import LatentScatter3D from "../components/LatentScatter3D";
 import WaypointComparison from "../components/WaypointComparison";
 import VisualizationControls from "../components/VisualizationControls";
-import ExplorationPanel from "../components/ExplorationPanel";
+import ExplorationPanel, {
+  ExplorationPanelRef,
+} from "../components/ExplorationPanel";
 import JourneyTimeline from "../components/JourneyTimeline";
 import ProgressiveDisclosure, {
   FacetDisplay,
@@ -13,7 +15,7 @@ import ProgressiveDisclosure, {
 } from "../components/ProgressiveDisclosure";
 import { Cluster, SemanticGroup } from "../utils/clustering";
 import { MemoryEvent } from "../types";
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Map, Eye, Brain, Layers, Search } from "lucide-react";
 
 export default function LatentSpacePage() {
@@ -40,6 +42,9 @@ export default function LatentSpacePage() {
   const [ltmData, setLtmData] = useState<any[]>([]);
   const [eventsData, setEventsData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Ref to access ExplorationPanel reset function
+  const explorationPanelRef = useRef<ExplorationPanelRef>(null);
 
   // Combine all memory data into a unified timeline
   const allMemoryEvents = useMemo(() => {
@@ -86,7 +91,6 @@ export default function LatentSpacePage() {
     ];
 
     const sortedEvents = events.sort((a, b) => a.ts - b.ts);
-    console.log("Combined memory events for latent space:", sortedEvents);
     return sortedEvents;
   }, [stmData, ltmData, eventsData]);
 
@@ -100,7 +104,6 @@ export default function LatentSpacePage() {
         if (stmResponse.ok) {
           const stmResult = await stmResponse.json();
           const stmData = stmResult.data || [];
-          console.log("Loaded STM data for latent space:", stmData);
           setStmData(stmData);
         }
 
@@ -109,7 +112,6 @@ export default function LatentSpacePage() {
         if (ltmResponse.ok) {
           const ltmResult = await ltmResponse.json();
           const ltmData = ltmResult.data || [];
-          console.log("Loaded LTM data for latent space:", ltmData);
           setLtmData(ltmData);
         }
 
@@ -117,7 +119,6 @@ export default function LatentSpacePage() {
         const eventsResponse = await fetch("/api/memory");
         if (eventsResponse.ok) {
           const eventsData = await eventsResponse.json();
-          console.log("Loaded Events data for latent space:", eventsData);
           setEventsData(eventsData);
         }
       } catch (error) {
@@ -166,22 +167,51 @@ export default function LatentSpacePage() {
     return filtered;
   }, [allMemoryEvents, filter, searchQuery, selectedCluster, selectedGroup]);
 
-  const handleFilterChange = (
-    newFilter: "all" | "vision" | "speech" | "stm" | "ltm"
-  ) => {
-    setFilter(newFilter);
-  };
-
   const handleResetView = () => {
-    console.log("Reset view");
+    // Reset camera to default position and clear all filters
+    setCameraPreset("free");
+    setFilter("all");
+    setSearchQuery("");
+    setSelectedCluster(null);
+    setSelectedGroup(null);
+
+    // Reset ExplorationPanel internal state
+    explorationPanelRef.current?.reset();
   };
 
   const handleFitAll = () => {
-    console.log("Fit all points");
+    // Fit all points in view by resetting camera and clearing filters
+    setCameraPreset("free");
+    setFilter("all");
+    setSearchQuery("");
+    setSelectedCluster(null);
+    setSelectedGroup(null);
+
+    // Reset ExplorationPanel internal state
+    explorationPanelRef.current?.reset();
+
+    // The 3D components will automatically recalculate camera position to fit all points
   };
 
   const handleExplorationFilterChange = (events: MemoryEvent[]) => {
-    console.log("Exploration filter changed:", events.length, "events");
+    // Only update filter if user has actively filtered in exploration panel
+    // Don't auto-filter on initial load when all events are shown
+    if (events.length === 0 || events.length === allMemoryEvents.length) {
+      // If no events selected or all events shown, keep current filter
+      return;
+    } else {
+      // Determine the most common source type in the filtered events
+      const sourceCounts = events.reduce((acc, event) => {
+        acc[event.source] = (acc[event.source] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+
+      const mostCommonSource = Object.entries(sourceCounts).reduce((a, b) =>
+        a[1] > b[1] ? a : b
+      )[0] as "vision" | "speech" | "stm" | "ltm";
+
+      setFilter(mostCommonSource);
+    }
   };
 
   const handleClusterSelect = (cluster: Cluster | null) => {
@@ -289,15 +319,13 @@ export default function LatentSpacePage() {
             </div>
           ) : (
             <>
-              {/* Unified Controls */}
+              {/* Visualization Controls */}
               <VisualizationControls
-                onFilterChange={handleFilterChange}
                 onCameraPresetChange={setCameraPreset}
                 onToggleTrajectory={() => setShowTrajectory(!showTrajectory)}
                 onResetView={handleResetView}
                 onFitAll={handleFitAll}
                 showTrajectory={showTrajectory}
-                currentFilter={filter}
                 currentPreset={cameraPreset}
                 pointCount={filteredMemoryEvents.length}
               />
@@ -321,7 +349,7 @@ export default function LatentSpacePage() {
                   selectedGroup={selectedGroup}
                 />
               ) : (
-                <LatentScatter
+                <LatentScatter3D
                   memoryEvents={filteredMemoryEvents}
                   selectedEvent={selectedMemoryEvent}
                   onSelectEvent={setSelectedMemoryEvent}
@@ -338,6 +366,7 @@ export default function LatentSpacePage() {
       <div className="w-96 flex flex-col min-h-0 max-h-fit overflow-y-auto gap-4">
         {/* Exploration Panel */}
         <ExplorationPanel
+          ref={explorationPanelRef}
           memoryEvents={allMemoryEvents}
           onFilterChange={handleExplorationFilterChange}
           onClusterSelect={handleClusterSelect}
@@ -436,7 +465,11 @@ export default function LatentSpacePage() {
 
         {/* Waypoints Panel */}
         <div className="flex-shrink-0">
-          <WaypointComparison />
+          <WaypointComparison
+            memoryEvents={allMemoryEvents}
+            selectedEvent={selectedMemoryEvent}
+            onSelectEvent={setSelectedMemoryEvent}
+          />
         </div>
       </div>
     </div>

@@ -6,7 +6,17 @@ import {
 } from "../stores/appStore";
 import { Bookmark, X, GitCompare } from "lucide-react";
 
-export default function WaypointComparison() {
+interface WaypointComparisonProps {
+  memoryEvents: MemoryEvent[];
+  selectedEvent: MemoryEvent | null;
+  onSelectEvent: (event: MemoryEvent) => void;
+}
+
+export default function WaypointComparison({
+  memoryEvents,
+  selectedEvent,
+  onSelectEvent,
+}: WaypointComparisonProps) {
   const waypointA = useWaypointA();
   const waypointB = useWaypointB();
   const { setWaypointA, setWaypointB } = useWaypointActions();
@@ -48,7 +58,10 @@ export default function WaypointComparison() {
       </div>
 
       {waypoint ? (
-        <div className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50`}>
+        <div
+          className={`p-3 rounded-lg border-2 ${color} bg-gray-800/50 cursor-pointer hover:bg-gray-700/50 transition-colors`}
+          onClick={() => onSelectEvent(waypoint)}
+        >
           <div className="text-xs text-gray-400 mb-2">
             {new Date(waypoint.ts * 1000).toLocaleString()}
           </div>
@@ -140,10 +153,27 @@ export default function WaypointComparison() {
             <div className="text-center text-gray-400">
               <Bookmark className="w-12 h-12 mx-auto mb-4 opacity-50" />
               <div className="text-lg mb-2">No waypoints selected</div>
-              <div className="text-sm">
-                Click memory events in the timeline to set waypoints for
-                comparison
+              <div className="text-sm mb-4">
+                {memoryEvents.length > 0
+                  ? `Select from ${memoryEvents.length} available events`
+                  : "No memory events available"}
               </div>
+              {selectedEvent && (
+                <div className="space-y-2">
+                  <button
+                    onClick={() => handleSetWaypointA(selectedEvent)}
+                    className="px-3 py-1 text-xs btn-primary"
+                  >
+                    Set as Waypoint A
+                  </button>
+                  <button
+                    onClick={() => handleSetWaypointB(selectedEvent)}
+                    className="px-3 py-1 text-xs btn-secondary ml-2"
+                  >
+                    Set as Waypoint B
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         )}

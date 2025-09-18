@@ -9,26 +9,22 @@ import {
 } from "lucide-react";
 
 interface VisualizationControlsProps {
-  onFilterChange: (filter: "all" | "vision" | "speech" | "stm" | "ltm") => void;
   onCameraPresetChange: (preset: "top" | "isometric" | "free") => void;
   onToggleTrajectory: () => void;
   onResetView: () => void;
   onFitAll: () => void;
   showTrajectory: boolean;
-  currentFilter: "all" | "vision" | "speech" | "stm" | "ltm";
   currentPreset: "top" | "isometric" | "free";
   pointCount: number;
   className?: string;
 }
 
 export default function VisualizationControls({
-  onFilterChange,
   onCameraPresetChange,
   onToggleTrajectory,
   onResetView,
   onFitAll,
   showTrajectory,
-  currentFilter,
   currentPreset,
   pointCount,
   className = "",
@@ -63,29 +59,6 @@ export default function VisualizationControls({
           <div className="text-xs text-ui-dim">
             <div>Points: {pointCount}</div>
             <div>Trajectory: {showTrajectory ? "On" : "Off"}</div>
-          </div>
-
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-ui-text">
-              Filter by Source
-            </label>
-            <div className="flex gap-1 flex-wrap">
-              {["all", "vision", "speech", "stm", "ltm"].map((type) => (
-                <button
-                  key={type}
-                  onClick={() => {
-                    onFilterChange(type as any);
-                  }}
-                  className={`px-2 py-1 text-xs transition-colors ${
-                    currentFilter === type
-                      ? "btn-primary nav-active"
-                      : "btn-primary"
-                  }`}
-                >
-                  {type}
-                </button>
-              ))}
-            </div>
           </div>
 
           <div className="space-y-2">

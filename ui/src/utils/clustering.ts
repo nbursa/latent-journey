@@ -284,7 +284,7 @@ export function searchEvents(
 
 export function filterEventsBySource(
   events: MemoryEvent[],
-  source: "all" | "vision" | "speech"
+  source: "all" | "vision" | "speech" | "stm" | "ltm"
 ): MemoryEvent[] {
   if (source === "all") return events;
   return events.filter((event) => event.source === source);

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, memo } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -267,6 +267,75 @@ function JourneyLines({ points }: { points: Point3D[] }) {
   );
 }
 
+// Stable Canvas Component that never gets recreated
+const StableCanvas = memo(
+  function StableCanvas({
+    children,
+    onWebglError,
+  }: {
+    children: React.ReactNode;
+    onWebglError?: (error: boolean) => void;
+  }) {
+    return (
+      <Canvas
+        camera={{ position: [100, 100, 100], fov: 75 }}
+        style={{ background: "transparent" }}
+        gl={{
+          antialias: true,
+          alpha: true,
+          preserveDrawingBuffer: true,
+          powerPreference: "high-performance",
+          failIfMajorPerformanceCaveat: false,
+        }}
+        onError={(error) => {
+          console.error("WebGL error:", error);
+          onWebglError?.(true);
+        }}
+        onCreated={({ gl, scene, camera }) => {
+          // Handle WebGL context loss
+          const handleContextLost = (event: Event) => {
+            event.preventDefault();
+            console.warn("WebGL context lost, attempting to restore...");
+            onWebglError?.(true);
+          };
+
+          const handleContextRestored = () => {
+            console.log("WebGL context restored");
+            onWebglError?.(false);
+            // Force a re-render
+            try {
+              gl.resetState();
+              gl.render(scene, camera);
+            } catch (e) {
+              console.warn("Could not reset WebGL state:", e);
+            }
+          };
+
+          gl.domElement.addEventListener("webglcontextlost", handleContextLost);
+          gl.domElement.addEventListener(
+            "webglcontextrestored",
+            handleContextRestored
+          );
+
+          return () => {
+            gl.domElement.removeEventListener(
+              "webglcontextlost",
+              handleContextLost
+            );
+            gl.domElement.removeEventListener(
+              "webglcontextrestored",
+              handleContextRestored
+            );
+          };
+        }}
+      >
+        {children}
+      </Canvas>
+    );
+  },
+  () => true
+); // Never re-render this component
+
 // Main Scene Component
 function Scene3D({
   points,
@@ -413,256 +482,244 @@ function Scene3D({
   );
 }
 
-export default function LatentScatter({
-  memoryEvents,
-  selectedEvent,
-  onSelectEvent,
-  onHoverEvent,
-  className = "",
-  cameraPreset = "free",
-}: LatentScatterProps) {
-  const [points, setPoints] = useState<Point3D[]>([]);
-  const [isComputing, setIsComputing] = useState(false);
-  const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
-  const [webglError, setWebglError] = useState(false);
-  const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [focusTarget, setFocusTarget] = useState<{
-    x: number;
-    y: number;
-    z: number;
-  } | null>(null);
+const LatentScatter3D = memo(
+  function LatentScatter3D({
+    memoryEvents,
+    selectedEvent,
+    onSelectEvent,
+    onHoverEvent,
+    className = "",
+    cameraPreset = "free",
+  }: LatentScatterProps) {
+    const [points, setPoints] = useState<Point3D[]>([]);
+    const [isComputing, setIsComputing] = useState(false);
+    const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
+    const [webglError, setWebglError] = useState(false);
+    const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
+    const [focusTarget, setFocusTarget] = useState<{
+      x: number;
+      y: number;
+      z: number;
+    } | null>(null);
 
-  // Camera position setter for Scene3D
-  const setCameraPosition = (_pos: { x: number; y: number; z: number }) => {
-    // This is used by Scene3D to update camera position
-  };
+    // Camera position setter for Scene3D
+    const setCameraPosition = (_pos: { x: number; y: number; z: number }) => {
+      // This is used by Scene3D to update camera position
+    };
 
-  // Update visualization when memory events change
-  useEffect(() => {
-    if (memoryEvents.length === 0) {
-      setPoints([]);
-      return;
-    }
+    // Update visualization when memory events change
+    useEffect(() => {
+      if (memoryEvents.length === 0) {
+        setPoints([]);
+        setIsComputing(false);
+        return;
+      }
 
-    setIsComputing(true);
+      setIsComputing(true);
 
-    // Simulate computation delay
-    setTimeout(() => {
-      const embeddings = extractEmbeddings(memoryEvents);
-      const projectedPoints = projectTo3D(embeddings, memoryEvents);
+      // Debounce the computation to prevent rapid re-renders
+      const timeoutId = setTimeout(() => {
+        try {
+          const embeddings = extractEmbeddings(memoryEvents);
+          const projectedPoints = projectTo3D(embeddings, memoryEvents);
 
-      // Update selected state
-      const updatedPoints = projectedPoints.map((point) => ({
-        ...point,
-        isSelected: selectedEvent?.ts === point.event.ts,
-      }));
+          // Update selected state
+          const updatedPoints = projectedPoints.map((point) => ({
+            ...point,
+            isSelected: selectedEvent?.ts === point.event.ts,
+          }));
 
-      console.log(`LatentScatter3D: Generated ${updatedPoints.length} points`);
-      setPoints(updatedPoints);
-      setIsComputing(false);
-    }, 500);
-  }, [memoryEvents, selectedEvent]);
+          console.log(
+            `LatentScatter3D: Generated ${updatedPoints.length} points`
+          );
+          setPoints(updatedPoints);
+          setIsComputing(false);
+        } catch (error) {
+          console.error("Error computing 3D points:", error);
+          setPoints([]);
+          setIsComputing(false);
+        }
+      }, 100); // Further reduced delay
 
-  const handleFocus = (worldX: number, worldY: number) => {
-    // Focus camera on specific coordinates
-    setFocusTarget({ x: worldX, y: worldY, z: 200 });
-  };
+      return () => clearTimeout(timeoutId);
+    }, [memoryEvents, selectedEvent]);
 
-  const handleHover = (
-    event: MemoryEvent | null,
-    mousePos?: { x: number; y: number }
-  ) => {
-    setHoveredEvent(event);
-    if (mousePos) {
-      setMousePosition(mousePos);
-    }
-    onHoverEvent(event);
-  };
+    const handleFocus = (worldX: number, worldY: number) => {
+      // Focus camera on specific coordinates
+      setFocusTarget({ x: worldX, y: worldY, z: 200 });
+    };
 
-  return (
-    <div className={`h-full w-full ${className}`}>
-      {isComputing ? (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center text-ui-dim">
-            <div className="animate-spin w-8 h-8 border-2 border-ui-accent border-t-transparent rounded-full mx-auto mb-2"></div>
-            <div>Computing 3D latent space...</div>
-          </div>
-        </div>
-      ) : points.length === 0 ? (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center text-ui-dim">
-            <div className="w-12 h-12 mx-auto mb-4 opacity-50">🔬</div>
-            <div className="text-lg mb-2">No data yet</div>
-            <div className="text-sm">
-              Capture some images or speak to see the 3D latent space
+    const handleHover = (
+      event: MemoryEvent | null,
+      mousePos?: { x: number; y: number }
+    ) => {
+      setHoveredEvent(event);
+      if (mousePos) {
+        setMousePosition(mousePos);
+      }
+      onHoverEvent(event);
+    };
+
+    return (
+      <div className={`h-full w-full ${className}`}>
+        {isComputing ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center text-ui-dim">
+              <div className="animate-spin w-8 h-8 border-2 border-ui-accent border-t-transparent rounded-full mx-auto mb-2"></div>
+              <div>Computing 3D latent space...</div>
             </div>
           </div>
-        </div>
-      ) : webglError ? (
-        <div className="h-full flex items-center justify-center">
-          <div className="text-center text-ui-dim">
-            <div className="w-12 h-12 mx-auto mb-4 opacity-50">⚠️</div>
-            <div className="text-lg mb-2">WebGL Error</div>
-            <div className="text-sm mb-4">
-              WebGL context was lost. Please refresh the page.
+        ) : points.length === 0 ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center text-ui-dim">
+              <div className="w-12 h-12 mx-auto mb-4 opacity-50">🔬</div>
+              <div className="text-lg mb-2">No data yet</div>
+              <div className="text-sm">
+                Capture some images or speak to see the 3D latent space
+              </div>
             </div>
-            <button
-              onClick={() => window.location.reload()}
-              className="px-4 py-2 bg-ui-accent text-ui-bg rounded hover:bg-ui-accent-2 transition-colors"
-            >
-              Refresh Page
-            </button>
           </div>
-        </div>
-      ) : (
-        <div className="relative h-full w-full">
-          <Canvas
-            camera={{ position: [100, 100, 100], fov: 75 }}
-            style={{ background: "transparent" }}
-            onError={(error) => {
-              console.error("WebGL error:", error);
-              setWebglError(true);
-            }}
-            onCreated={({ gl }) => {
-              // Handle WebGL context loss
-              const handleContextLost = (event: Event) => {
-                event.preventDefault();
-                console.warn("WebGL context lost, attempting to restore...");
-                setWebglError(true);
-              };
+        ) : webglError ? (
+          <div className="h-full flex items-center justify-center">
+            <div className="text-center text-ui-dim">
+              <div className="w-12 h-12 mx-auto mb-4 opacity-50">⚠️</div>
+              <div className="text-lg mb-2">WebGL Error</div>
+              <div className="text-sm mb-4">
+                WebGL context was lost. Please refresh the page.
+              </div>
+              <button
+                onClick={() => window.location.reload()}
+                className="px-4 py-2 bg-ui-accent text-ui-bg rounded hover:bg-ui-accent-2 transition-colors"
+              >
+                Refresh Page
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="relative h-full w-full">
+            <StableCanvas onWebglError={setWebglError}>
+              <Scene3D
+                points={points}
+                onSelectEvent={onSelectEvent}
+                onHoverEvent={handleHover}
+                onFocus={handleFocus}
+                setCameraPosition={setCameraPosition}
+                focusTarget={focusTarget}
+                setFocusTarget={setFocusTarget}
+                cameraPreset={cameraPreset}
+              />
+              <OrbitControls
+                enablePan={true}
+                enableZoom={true}
+                enableRotate={true}
+                autoRotate={false}
+                rotateSpeed={0.5}
+                zoomSpeed={0.8}
+                panSpeed={0.8}
+                minDistance={50}
+                maxDistance={500}
+              />
+            </StableCanvas>
+          </div>
+        )}
 
-              const handleContextRestored = () => {
-                console.log("WebGL context restored");
-                setWebglError(false);
-                // Force re-render by resetting the renderer
-                gl.resetState();
-              };
-
-              gl.domElement.addEventListener(
-                "webglcontextlost",
-                handleContextLost
-              );
-              gl.domElement.addEventListener(
-                "webglcontextrestored",
-                handleContextRestored
-              );
-
-              return () => {
-                gl.domElement.removeEventListener(
-                  "webglcontextlost",
-                  handleContextLost
-                );
-                gl.domElement.removeEventListener(
-                  "webglcontextrestored",
-                  handleContextRestored
-                );
-              };
+        {/* Hover tooltip */}
+        {hoveredEvent && (
+          <div
+            className="absolute p-3 max-w-xs text-white rounded shadow-lg"
+            style={{
+              zIndex: 9999,
+              position: "absolute",
+              top: `${mousePosition.y + 10}px`,
+              left: `${mousePosition.x + 10}px`,
+              backgroundColor: "rgba(0,0,0,0.9)",
+              color: "white",
+              padding: "12px",
+              borderRadius: "0",
+              border: "none",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              maxWidth: "300px",
+              fontSize: "12px",
+              pointerEvents: "none", // Prevent tooltip from interfering with mouse events
             }}
           >
-            <Scene3D
-              points={points}
-              onSelectEvent={onSelectEvent}
-              onHoverEvent={handleHover}
-              onFocus={handleFocus}
-              setCameraPosition={setCameraPosition}
-              focusTarget={focusTarget}
-              setFocusTarget={setFocusTarget}
-              cameraPreset={cameraPreset}
-            />
-            <OrbitControls
-              enablePan={true}
-              enableZoom={true}
-              enableRotate={true}
-              autoRotate={false}
-              rotateSpeed={0.5}
-              zoomSpeed={0.8}
-              panSpeed={0.8}
-              minDistance={50}
-              maxDistance={500}
-            />
-          </Canvas>
-        </div>
-      )}
+            <div
+              className="text-sm font-bold mb-1"
+              style={{ color: "#00E0BE" }}
+            >
+              {hoveredEvent.source.toUpperCase()}
+            </div>
+            <div className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
+              {new Date(hoveredEvent.ts * 1000).toLocaleTimeString()}
+            </div>
+            <div className="space-y-1">
+              {Object.entries(hoveredEvent.facets)
+                .slice(0, 3)
+                .map(([key, value]) => (
+                  <div key={key} className="text-xs">
+                    <span
+                      className="font-semibold"
+                      style={{ color: "#00E0BE" }}
+                    >
+                      {key}:
+                    </span>{" "}
+                    <span>{String(value)}</span>
+                  </div>
+                ))}
+            </div>
+          </div>
+        )}
 
-      {/* Hover tooltip */}
-      {hoveredEvent && (
-        <div
-          className="absolute p-3 max-w-xs text-white rounded shadow-lg"
-          style={{
-            zIndex: 9999,
-            position: "absolute",
-            top: `${mousePosition.y + 10}px`,
-            left: `${mousePosition.x + 10}px`,
-            backgroundColor: "rgba(0,0,0,0.9)",
-            color: "white",
-            padding: "12px",
-            borderRadius: "0",
-            border: "none",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
-            maxWidth: "300px",
-            fontSize: "12px",
-            pointerEvents: "none", // Prevent tooltip from interfering with mouse events
-          }}
-        >
-          <div className="text-sm font-bold mb-1" style={{ color: "#00E0BE" }}>
-            {hoveredEvent.source.toUpperCase()}
+        {/* Legend */}
+        {points.length > 0 && (
+          <div className="absolute bottom-4 right-4 glass flat p-3 rounded">
+            <div className="text-xs font-medium text-ui-text mb-2">
+              Data Types
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-xs">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: "#00E0BE" }}
+                ></div>
+                <span className="text-ui-dim">Vision</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: "#1BB4F2" }}
+                ></div>
+                <span className="text-ui-dim">Speech</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: "#FFB020" }}
+                ></div>
+                <span className="text-ui-dim">STM</span>
+              </div>
+              <div className="flex items-center gap-2 text-xs">
+                <div
+                  className="w-3 h-3 rounded-full"
+                  style={{ backgroundColor: "#8B5CF6" }}
+                ></div>
+                <span className="text-ui-dim">LTM</span>
+              </div>
+            </div>
           </div>
-          <div className="text-xs mb-2" style={{ color: "#9CA3AF" }}>
-            {new Date(hoveredEvent.ts * 1000).toLocaleTimeString()}
-          </div>
-          <div className="space-y-1">
-            {Object.entries(hoveredEvent.facets)
-              .slice(0, 3)
-              .map(([key, value]) => (
-                <div key={key} className="text-xs">
-                  <span className="font-semibold" style={{ color: "#00E0BE" }}>
-                    {key}:
-                  </span>{" "}
-                  <span>{String(value)}</span>
-                </div>
-              ))}
-          </div>
-        </div>
-      )}
+        )}
+      </div>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Only prevent re-render if selected event and camera preset haven't changed
+    // Allow re-renders for memory events changes to handle filters properly
+    return (
+      prevProps.selectedEvent?.ts === nextProps.selectedEvent?.ts &&
+      prevProps.cameraPreset === nextProps.cameraPreset &&
+      prevProps.className === nextProps.className
+    );
+  }
+);
 
-      {/* Legend */}
-      {points.length > 0 && (
-        <div className="absolute bottom-4 right-4 glass flat p-3 rounded">
-          <div className="text-xs font-medium text-ui-text mb-2">
-            Data Types
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: "#00E0BE" }}
-              ></div>
-              <span className="text-ui-dim">Vision</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: "#1BB4F2" }}
-              ></div>
-              <span className="text-ui-dim">Speech</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: "#FFB020" }}
-              ></div>
-              <span className="text-ui-dim">STM</span>
-            </div>
-            <div className="flex items-center gap-2 text-xs">
-              <div
-                className="w-3 h-3 rounded-full"
-                style={{ backgroundColor: "#8B5CF6" }}
-              ></div>
-              <span className="text-ui-dim">LTM</span>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
+export default LatentScatter3D;
