@@ -210,12 +210,18 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           {/* Auto-generate toggle */}
           <button
             onClick={toggleAutoGenerate}
-            disabled={!isEgoAvailable}
+            disabled={!isEgoAvailable || !ollamaAvailable}
             className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
               isAutoGenerate ? "btn-primary" : "btn-secondary"
-            }`}
+            } ${!isEgoAvailable || !ollamaAvailable ? "opacity-50" : ""}`}
             title={
-              isAutoGenerate ? "Stop auto-generation" : "Start auto-generation"
+              !isEgoAvailable
+                ? "Ego service not available"
+                : !ollamaAvailable
+                ? "Ollama not available - needed for AI generation"
+                : isAutoGenerate
+                ? "Stop auto-generation"
+                : "Start auto-generation"
             }
           >
             {isAutoGenerate ? (
@@ -353,6 +359,8 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
                     <div className="text-sm">
                       {!isEgoAvailable
                         ? "Ego service not available"
+                        : !ollamaAvailable
+                        ? "Ollama not available - install and run Ollama to enable AI experience consolidation"
                         : isAutoGenerate
                         ? "Auto-generation enabled - experiences will appear here"
                         : "Click Consolidate to create experiences from thoughts"}

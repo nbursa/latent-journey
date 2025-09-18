@@ -197,12 +197,18 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           {/* Auto-generate toggle */}
           <button
             onClick={toggleAutoGenerate}
-            disabled={!isEgoAvailable}
+            disabled={!isEgoAvailable || !ollamaAvailable}
             className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
               isAutoGenerate ? "btn-primary" : "btn-secondary"
-            }`}
+            } ${!isEgoAvailable || !ollamaAvailable ? "opacity-50" : ""}`}
             title={
-              isAutoGenerate ? "Stop auto-generation" : "Start auto-generation"
+              !isEgoAvailable
+                ? "Ego service not available"
+                : !ollamaAvailable
+                ? "Ollama not available - needed for AI generation"
+                : isAutoGenerate
+                ? "Stop auto-generation"
+                : "Start auto-generation"
             }
           >
             {isAutoGenerate ? (
@@ -216,9 +222,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           {/* Manual refresh */}
           <button
             onClick={() => generateThought()}
-            disabled={isGenerating || !isEgoAvailable}
+            disabled={isGenerating || !isEgoAvailable || !ollamaAvailable}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
-            title="Generate new thought manually"
+            title={
+              !isEgoAvailable
+                ? "Ego service not available"
+                : !ollamaAvailable
+                ? "Ollama not available - needed for AI generation"
+                : "Generate new thought manually"
+            }
           >
             <RefreshCw
               className={`w-3 h-3 ${isGenerating ? "animate-spin" : ""}`}
@@ -380,6 +392,8 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                     <div className="text-sm">
                       {!isEgoAvailable
                         ? "Ego service not available"
+                        : !ollamaAvailable
+                        ? "Ollama not available - install and run Ollama to enable AI thought generation"
                         : isAutoGenerate
                         ? "Auto-generation enabled - thoughts will appear here"
                         : "Click Auto to enable auto-generation or Manual for manual generation"}
