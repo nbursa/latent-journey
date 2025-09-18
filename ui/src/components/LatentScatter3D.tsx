@@ -1,4 +1,11 @@
-import { useState, useMemo, useEffect, memo, useCallback } from "react";
+import React, {
+  useState,
+  useMemo,
+  useEffect,
+  memo,
+  useCallback,
+  useRef,
+} from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
@@ -107,7 +114,7 @@ const extractEmbeddings = async (memoryEvents: MemoryEvent[]) => {
   return embeddings;
 };
 
-// Individual Points Component (more stable for small datasets)
+// Individual Points Component (restored with proper performance)
 function IndividualPoints({
   points,
   onSelectEvent,
@@ -121,7 +128,7 @@ function IndividualPoints({
   ) => void;
 }) {
   // Limit points for display to prevent performance issues
-  const maxPoints = 500; // Reduced to prevent WebGL context loss
+  const maxPoints = 500;
   const limitedPoints = points.slice(0, maxPoints);
 
   if (limitedPoints.length === 0) {
@@ -166,7 +173,7 @@ function IndividualPoints({
   );
 }
 
-// Journey Lines Component
+// Journey Lines Component with proper disposal
 function JourneyLines({ points }: { points: Point3D[] }) {
   const lineGeometry = useMemo(() => {
     const geometry = new THREE.BufferGeometry();
@@ -182,6 +189,13 @@ function JourneyLines({ points }: { points: Point3D[] }) {
     return geometry;
   }, [points]);
 
+  // Cleanup geometry on unmount
+  useEffect(() => {
+    return () => {
+      lineGeometry.dispose();
+    };
+  }, [lineGeometry]);
+
   return (
     <line>
       <primitive object={lineGeometry} />
@@ -192,13 +206,7 @@ function JourneyLines({ points }: { points: Point3D[] }) {
 
 // Stable Canvas Component that never gets recreated
 const StableCanvas = memo(
-  function StableCanvas({
-    children,
-    onWebglError,
-  }: {
-    children: React.ReactNode;
-    onWebglError?: (error: boolean) => void;
-  }) {
+  function StableCanvas({ children }: { children: React.ReactNode }) {
     return (
       <Canvas
         camera={{ position: [100, 100, 100], fov: 75 }}
@@ -212,19 +220,16 @@ const StableCanvas = memo(
         }}
         onError={(error) => {
           console.error("WebGL error:", error);
-          onWebglError?.(true);
         }}
         onCreated={({ gl, scene, camera }) => {
-          // Handle WebGL context loss
+          // Handle WebGL context loss - just log and try to continue
           const handleContextLost = (event: Event) => {
             event.preventDefault();
             console.warn("WebGL context lost, attempting to restore...");
-            onWebglError?.(true);
           };
 
           const handleContextRestored = () => {
             console.log("WebGL context restored");
-            onWebglError?.(false);
             // Force a re-render after a short delay
             setTimeout(() => {
               try {
@@ -264,61 +269,142 @@ const StableCanvas = memo(
   }
 );
 
-// Main Scene Component
-function Scene3D({
-  points,
-  onSelectEvent,
-  onHoverEvent,
-  onFocus: _onFocus,
-  setCameraPosition,
-  focusTarget,
-  setFocusTarget,
-  cameraPreset = "free",
-  showTrajectory = true,
-  onCameraChange,
-}: {
-  points: Point3D[];
-  onSelectEvent: (event: MemoryEvent) => void;
-  onHoverEvent: (
-    event: MemoryEvent | null,
-    mousePos?: { x: number; y: number }
-  ) => void;
-  onFocus: (x: number, y: number) => void;
-  setCameraPosition: (pos: { x: number; y: number; z: number }) => void;
-  focusTarget: { x: number; y: number; z: number } | null;
-  setFocusTarget: (target: { x: number; y: number; z: number } | null) => void;
-  cameraPreset?: "top" | "isometric" | "free";
-  showTrajectory?: boolean;
-  onCameraChange?: () => void;
-}) {
-  const { camera } = useThree();
+// Main Scene Component - Memoized to prevent unnecessary re-renders
+const Scene3D = React.memo(
+  function Scene3D({
+    points,
+    onSelectEvent,
+    onHoverEvent,
+    onFocus: _onFocus,
+    setCameraPosition,
+    focusTarget,
+    setFocusTarget,
+    cameraPreset = "free",
+    showTrajectory = true,
+    onCameraChange,
+  }: {
+    points: Point3D[];
+    onSelectEvent: (event: MemoryEvent) => void;
+    onHoverEvent: (
+      event: MemoryEvent | null,
+      mousePos?: { x: number; y: number }
+    ) => void;
+    onFocus: (x: number, y: number) => void;
+    setCameraPosition: (pos: { x: number; y: number; z: number }) => void;
+    focusTarget: { x: number; y: number; z: number } | null;
+    setFocusTarget: (
+      target: { x: number; y: number; z: number } | null
+    ) => void;
+    cameraPreset?: "top" | "isometric" | "free";
+    showTrajectory?: boolean;
+    onCameraChange?: () => void;
+  }) {
+    const { camera } = useThree();
+    const controlsRef = useRef<any>(null);
+    const [currentPoints, setCurrentPoints] = useState<Point3D[]>(points);
+    const pointsRef = useRef<Point3D[]>(points);
 
-  // Handle focus requests - move camera to specific coordinates
-  useEffect(() => {
-    if (focusTarget) {
-      // Smooth camera movement to the target position
-      const targetX = focusTarget.x;
-      const targetY = focusTarget.y;
-      const targetZ = focusTarget.z || 200;
+    // Update points ref and state when points prop changes
+    useEffect(() => {
+      pointsRef.current = points;
+      setCurrentPoints(points);
+    }, [points]);
 
-      // Set camera position and look at the target
-      camera.position.set(targetX, targetY, targetZ);
-      camera.lookAt(targetX, targetY, 90); // Look at center of Z range
-      camera.updateProjectionMatrix();
+    // Handle focus requests - move camera to specific coordinates
+    useEffect(() => {
+      if (focusTarget) {
+        // Smooth camera movement to the target position
+        const targetX = focusTarget.x;
+        const targetY = focusTarget.y;
+        const targetZ = focusTarget.z || 200;
 
-      // Clear focus target after applying
-      setFocusTarget(null);
-    }
-  }, [focusTarget, camera, setFocusTarget]);
+        // Set camera position and look at the target
+        camera.position.set(targetX, targetY, targetZ);
+        camera.lookAt(targetX, targetY, 90); // Look at center of Z range
+        camera.updateProjectionMatrix();
 
-  // Initialize camera position based on preset - only run when cameraPreset changes or points are first loaded
-  const [hasInitialized, setHasInitialized] = useState(false);
+        // Clear focus target after applying
+        setFocusTarget(null);
+      }
+    }, [focusTarget, camera, setFocusTarget]);
 
-  // Initial camera setup - only runs once when points are first loaded
-  useEffect(() => {
-    if (points.length > 0 && !hasInitialized) {
+    // Initialize camera position based on preset - only run when cameraPreset changes or points are first loaded
+    const [hasInitialized, setHasInitialized] = useState(false);
+
+    // Initial camera setup - only runs once when points are first loaded
+    useEffect(() => {
+      if (currentPoints.length > 0 && !hasInitialized) {
+        // Calculate bounds of all points
+        const bounds = currentPoints.reduce(
+          (acc, point) => ({
+            minX: Math.min(acc.minX, point.x),
+            maxX: Math.max(acc.maxX, point.x),
+            minY: Math.min(acc.minY, point.y),
+            maxY: Math.max(acc.maxY, point.y),
+            minZ: Math.min(acc.minZ, point.z),
+            maxZ: Math.max(acc.maxZ, point.z),
+          }),
+          {
+            minX: Infinity,
+            maxX: -Infinity,
+            minY: Infinity,
+            maxY: -Infinity,
+            minZ: Infinity,
+            maxZ: -Infinity,
+          }
+        );
+
+        const centerX = (bounds.minX + bounds.maxX) / 2;
+        const centerY = (bounds.minY + bounds.maxY) / 2;
+        const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+        const maxSize = Math.max(
+          bounds.maxX - bounds.minX,
+          bounds.maxY - bounds.minY,
+          bounds.maxZ - bounds.minZ
+        );
+        const distance = Math.max(maxSize * 2, 10);
+
+        switch (cameraPreset) {
+          case "top":
+            camera.position.set(centerX, centerY + distance, centerZ);
+            camera.lookAt(centerX, centerY, centerZ);
+            setCameraPosition({
+              x: centerX,
+              y: centerY + distance,
+              z: centerZ,
+            });
+            break;
+          case "isometric":
+            const isoX = centerX + distance * 0.5;
+            const isoY = centerY + distance * 0.5;
+            const isoZ = centerZ + distance * 0.5;
+            camera.position.set(isoX, isoY, isoZ);
+            camera.lookAt(centerX, centerY, centerZ);
+            setCameraPosition({ x: isoX, y: isoY, z: isoZ });
+            break;
+          case "free":
+          default:
+            const freeX = centerX + distance * 0.5;
+            const freeY = centerY + distance * 0.5;
+            const freeZ = centerZ + distance * 0.5;
+            camera.position.set(freeX, freeY, freeZ);
+            camera.lookAt(centerX, centerY, centerZ);
+            setCameraPosition({ x: freeX, y: freeY, z: freeZ });
+            break;
+        }
+        setHasInitialized(true);
+      } else if (currentPoints.length === 0) {
+        // Reset initialization flag when no points
+        setHasInitialized(false);
+      }
+    }, [currentPoints, camera, setCameraPosition, hasInitialized]);
+
+    // Handle camera preset changes after initialization - separate effect
+    useEffect(() => {
+      if (!hasInitialized || currentPoints.length === 0) return;
+
       // Calculate bounds of all points
-      const bounds = points.reduce(
+      const bounds = currentPoints.reduce(
         (acc, point) => ({
           minX: Math.min(acc.minX, point.x),
           maxX: Math.max(acc.maxX, point.x),
@@ -371,112 +457,128 @@ function Scene3D({
           setCameraPosition({ x: freeX, y: freeY, z: freeZ });
           break;
       }
-      setHasInitialized(true);
-    } else if (points.length === 0) {
-      // Reset initialization flag when no points
-      setHasInitialized(false);
-    }
-  }, [points, camera, setCameraPosition, hasInitialized]);
+    }, [
+      cameraPreset,
+      camera,
+      setCameraPosition,
+      currentPoints,
+      hasInitialized,
+    ]);
 
-  // Handle camera preset changes after initialization - separate effect
-  useEffect(() => {
-    if (!hasInitialized || points.length === 0) return;
+    // Auto-fit camera when points change significantly (e.g., after filtering)
+    useEffect(() => {
+      if (!hasInitialized || currentPoints.length === 0) return;
 
-    // Calculate bounds of all points
-    const bounds = points.reduce(
-      (acc, point) => ({
-        minX: Math.min(acc.minX, point.x),
-        maxX: Math.max(acc.maxX, point.x),
-        minY: Math.min(acc.minY, point.y),
-        maxY: Math.max(acc.maxY, point.y),
-        minZ: Math.min(acc.minZ, point.z),
-        maxZ: Math.max(acc.maxZ, point.z),
-      }),
-      {
-        minX: Infinity,
-        maxX: -Infinity,
-        minY: Infinity,
-        maxY: -Infinity,
-        minZ: Infinity,
-        maxZ: -Infinity,
+      // Only auto-fit if the point count changed significantly (e.g., after filtering)
+      const shouldAutoFit = currentPoints.length > 0;
+
+      if (shouldAutoFit) {
+        // Calculate bounds and center
+        const bounds = currentPoints.reduce(
+          (acc, point) => ({
+            minX: Math.min(acc.minX, point.x),
+            maxX: Math.max(acc.maxX, point.x),
+            minY: Math.min(acc.minY, point.y),
+            maxY: Math.max(acc.maxY, point.y),
+            minZ: Math.min(acc.minZ, point.z),
+            maxZ: Math.max(acc.maxZ, point.z),
+          }),
+          {
+            minX: Infinity,
+            maxX: -Infinity,
+            minY: Infinity,
+            maxY: -Infinity,
+            minZ: Infinity,
+            maxZ: -Infinity,
+          }
+        );
+
+        const centerX = (bounds.minX + bounds.maxX) / 2;
+        const centerY = (bounds.minY + bounds.maxY) / 2;
+        const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+        const maxSize = Math.max(
+          bounds.maxX - bounds.minX,
+          bounds.maxY - bounds.minY,
+          bounds.maxZ - bounds.minZ
+        );
+        const distance = Math.max(maxSize * 2, 10);
+
+        // Set the controls target to the center
+        if (controlsRef.current) {
+          controlsRef.current.target.set(centerX, centerY, centerZ);
+          controlsRef.current.update();
+        }
+
+        // Smoothly animate to the new center
+        camera.position.lerp(
+          new THREE.Vector3(
+            centerX + distance * 0.5,
+            centerY + distance * 0.5,
+            centerZ + distance * 0.5
+          ),
+          0.1
+        );
+        camera.lookAt(centerX, centerY, centerZ);
+        camera.updateProjectionMatrix();
       }
-    );
+    }, [currentPoints, camera, hasInitialized]);
 
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-    const maxSize = Math.max(
-      bounds.maxX - bounds.minX,
-      bounds.maxY - bounds.minY,
-      bounds.maxZ - bounds.minZ
-    );
-    const distance = Math.max(maxSize * 2, 10);
-
-    switch (cameraPreset) {
-      case "top":
-        camera.position.set(centerX, centerY + distance, centerZ);
-        camera.lookAt(centerX, centerY, centerZ);
-        setCameraPosition({ x: centerX, y: centerY + distance, z: centerZ });
-        break;
-      case "isometric":
-        const isoX = centerX + distance * 0.5;
-        const isoY = centerY + distance * 0.5;
-        const isoZ = centerZ + distance * 0.5;
-        camera.position.set(isoX, isoY, isoZ);
-        camera.lookAt(centerX, centerY, centerZ);
-        setCameraPosition({ x: isoX, y: isoY, z: isoZ });
-        break;
-      case "free":
-      default:
-        const freeX = centerX + distance * 0.5;
-        const freeY = centerY + distance * 0.5;
-        const freeZ = centerZ + distance * 0.5;
-        camera.position.set(freeX, freeY, freeZ);
-        camera.lookAt(centerX, centerY, centerZ);
-        setCameraPosition({ x: freeX, y: freeY, z: freeZ });
-        break;
-    }
-  }, [cameraPreset, camera, setCameraPosition, points, hasInitialized]);
-
-  return (
-    <>
-      <ambientLight intensity={0.4} />
-      <directionalLight position={[10, 10, 5]} intensity={1} />
-      <pointLight position={[-10, -10, -10]} intensity={0.5} color="#00E0BE" />
-
-      {/* Grid */}
-      <gridHelper args={[600, 30, "#1E2531", "#0F131A"]} />
-
-      {/* Journey lines */}
-      {showTrajectory && points.length > 1 && (
-        <JourneyLines
-          points={[...points].sort((a, b) => a.event.ts - b.event.ts)}
+    return (
+      <>
+        <ambientLight intensity={0.4} />
+        <directionalLight position={[10, 10, 5]} intensity={1} />
+        <pointLight
+          position={[-10, -10, -10]}
+          intensity={0.5}
+          color="#00E0BE"
         />
-      )}
 
-      {/* Individual points */}
-      <IndividualPoints
-        points={points}
-        onSelectEvent={onSelectEvent}
-        onHoverEvent={onHoverEvent}
-      />
+        {/* Grid */}
+        <gridHelper args={[600, 30, "#1E2531", "#0F131A"]} />
 
-      {/* OrbitControls */}
-      <OrbitControls
-        enablePan={true}
-        enableZoom={true}
-        enableRotate={true}
-        autoRotate={false}
-        rotateSpeed={0.5}
-        zoomSpeed={0.8}
-        panSpeed={0.8}
-        minDistance={50}
-        maxDistance={500}
-        onChange={onCameraChange}
-      />
-    </>
-  );
-}
+        {/* Journey lines */}
+        {showTrajectory && currentPoints.length > 1 && (
+          <JourneyLines
+            points={[...currentPoints].sort((a, b) => a.event.ts - b.event.ts)}
+          />
+        )}
+
+        {/* Individual points with proper colors and tooltips */}
+        <IndividualPoints
+          points={currentPoints}
+          onSelectEvent={onSelectEvent}
+          onHoverEvent={onHoverEvent}
+        />
+
+        {/* OrbitControls */}
+        <OrbitControls
+          ref={controlsRef}
+          enablePan={true}
+          enableZoom={true}
+          enableRotate={true}
+          autoRotate={false}
+          rotateSpeed={0.5}
+          zoomSpeed={0.8}
+          panSpeed={0.8}
+          minDistance={50}
+          maxDistance={500}
+          onChange={onCameraChange}
+        />
+      </>
+    );
+  },
+  (prevProps, nextProps) => {
+    // Custom comparison - ignore points changes to prevent WebGL context loss
+    return (
+      prevProps.onSelectEvent === nextProps.onSelectEvent &&
+      prevProps.onHoverEvent === nextProps.onHoverEvent &&
+      prevProps.focusTarget === nextProps.focusTarget &&
+      prevProps.cameraPreset === nextProps.cameraPreset &&
+      prevProps.showTrajectory === nextProps.showTrajectory
+      // Intentionally ignore points prop changes
+    );
+  }
+);
 
 const LatentScatter3D = memo(
   function LatentScatter3D({
@@ -492,7 +594,6 @@ const LatentScatter3D = memo(
     const [points, setPoints] = useState<Point3D[]>([]);
     const [isComputing, setIsComputing] = useState(false);
     const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
-    const [webglError, setWebglError] = useState(false);
     const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
     const [focusTarget, setFocusTarget] = useState<{
       x: number;
@@ -500,10 +601,13 @@ const LatentScatter3D = memo(
       z: number;
     } | null>(null);
 
-    // Camera position setter for Scene3D
-    const setCameraPosition = (_pos: { x: number; y: number; z: number }) => {
-      // This is used by Scene3D to update camera position
-    };
+    // Camera position setter for Scene3D - memoized to prevent re-renders
+    const setCameraPosition = useCallback(
+      (_pos: { x: number; y: number; z: number }) => {
+        // This is used by Scene3D to update camera position
+      },
+      []
+    );
 
     // Camera change handler for OrbitControls
     const handleCameraChange = useCallback(() => {
@@ -577,31 +681,20 @@ const LatentScatter3D = memo(
       [onHoverEvent]
     );
 
-    // Memoize Scene3D to prevent re-mounts on hover
-    const sceneNode = useMemo(
-      () => (
-        <Scene3D
-          points={points}
-          onSelectEvent={onSelectEvent}
-          onHoverEvent={handleHover}
-          onFocus={handleFocus}
-          setCameraPosition={setCameraPosition}
-          focusTarget={focusTarget}
-          setFocusTarget={setFocusTarget}
-          cameraPreset={cameraPreset}
-          showTrajectory={showTrajectory}
-          onCameraChange={handleCameraChange}
-        />
-      ),
-      [
-        points,
-        onSelectEvent,
-        handleHover,
-        handleFocus,
-        focusTarget,
-        cameraPreset,
-        showTrajectory,
-      ]
+    // Create a stable Scene3D component that doesn't remount
+    const sceneNode = (
+      <Scene3D
+        points={points}
+        onSelectEvent={onSelectEvent}
+        onHoverEvent={handleHover}
+        onFocus={handleFocus}
+        setCameraPosition={setCameraPosition}
+        focusTarget={focusTarget}
+        setFocusTarget={setFocusTarget}
+        cameraPreset={cameraPreset}
+        showTrajectory={showTrajectory}
+        onCameraChange={handleCameraChange}
+      />
     );
 
     return (
@@ -623,27 +716,9 @@ const LatentScatter3D = memo(
               </div>
             </div>
           </div>
-        ) : webglError ? (
-          <div className="h-full flex items-center justify-center">
-            <div className="text-center text-ui-dim">
-              <div className="w-12 h-12 mx-auto mb-4 opacity-50">⚠️</div>
-              <div className="text-lg mb-2">WebGL Error</div>
-              <div className="text-sm mb-4">
-                WebGL context was lost. Please refresh the page.
-              </div>
-              <button
-                onClick={() => window.location.reload()}
-                className="px-4 py-2 bg-ui-accent text-ui-bg rounded hover:bg-ui-accent-2 transition-colors"
-              >
-                Refresh Page
-              </button>
-            </div>
-          </div>
         ) : (
           <div className="relative h-full w-full">
-            <StableCanvas onWebglError={setWebglError}>
-              {sceneNode}
-            </StableCanvas>
+            <StableCanvas>{sceneNode}</StableCanvas>
           </div>
         )}
 

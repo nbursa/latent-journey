@@ -148,21 +148,45 @@ export default function LatentSpacePage() {
   // Apply cluster/group filtering to displayed events
   const finalEvents = useMemo(() => {
     let events = displayedEvents;
+    console.log("🔍 Computing finalEvents:", {
+      displayedEventsCount: displayedEvents.length,
+      selectedCluster: selectedCluster?.id,
+      selectedGroup: selectedGroup?.id,
+    });
 
     if (selectedCluster) {
       const clusterEventTimestamps = new Set(
         selectedCluster.points.map((p) => p.ts)
       );
+      const beforeCount = events.length;
       events = events.filter((event) => clusterEventTimestamps.has(event.ts));
+      console.log("🔍 Cluster filtering applied:", {
+        originalCount: displayedEvents.length,
+        beforeFilter: beforeCount,
+        filteredCount: events.length,
+        clusterId: selectedCluster.id,
+        clusterPoints: selectedCluster.points.length,
+        clusterTimestamps: Array.from(clusterEventTimestamps).slice(0, 5),
+      });
     }
 
     if (selectedGroup) {
       const groupEventTimestamps = new Set(
         selectedGroup.events.map((e) => e.ts)
       );
+      const beforeCount = events.length;
       events = events.filter((event) => groupEventTimestamps.has(event.ts));
+      console.log("🔍 Group filtering applied:", {
+        originalCount: displayedEvents.length,
+        beforeFilter: beforeCount,
+        filteredCount: events.length,
+        groupId: selectedGroup.id,
+        groupEvents: selectedGroup.events.length,
+        groupTimestamps: Array.from(groupEventTimestamps).slice(0, 5),
+      });
     }
 
+    console.log("🔍 Final events count:", events.length);
     return events;
   }, [displayedEvents, selectedCluster, selectedGroup]);
 

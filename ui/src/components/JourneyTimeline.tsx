@@ -175,7 +175,7 @@ export default function JourneyTimeline({
 
           {/* Event markers */}
           <div className="absolute top-0 left-0 w-full h-2">
-            {sortedEvents.map((event) => {
+            {sortedEvents.map((event, index) => {
               const safePos =
                 timeRange.duration === 0
                   ? 0
@@ -185,7 +185,9 @@ export default function JourneyTimeline({
 
               return (
                 <button
-                  key={`${event.ts}-${event.embedding_id || "default"}`}
+                  key={`timeline-${event.ts}-${
+                    event.embedding_id || "default"
+                  }-${event.source}-${index}`}
                   onClick={() => {
                     setIsPlaying(false);
                     handleSeek(position);
@@ -277,7 +279,9 @@ export default function JourneyTimeline({
 
           return (
             <button
-              key={`${event.ts}-${event.embedding_id}-${index}`}
+              key={`list-${event.ts}-${event.embedding_id || "default"}-${
+                event.source
+              }-${index}`}
               onClick={() => {
                 setIsPlaying(false);
                 handleSeek(position);
