@@ -115,11 +115,11 @@ pub async fn reflect(
     // Select relevant memories
     let all_memories_refs: Vec<&Memory> = all_memories.iter().collect();
     let selected_memories =
-        select_relevant_memories(&all_memories_refs, request.focus_embedding.as_deref(), 18);
+        select_relevant_memories(&all_memories_refs, request.focus_embedding.as_deref(), 5);
 
-    // If no memories selected, use all available memories for fallback
+    // If no memories selected, use limited memories for fallback (max 5)
     let memories_to_use = if selected_memories.is_empty() {
-        &all_memories_refs
+        &all_memories_refs[..all_memories_refs.len().min(5)]
     } else {
         &selected_memories
     };

@@ -25,6 +25,25 @@ export const useEventStream = () => {
           return;
         }
 
+        // Handle thought generation events
+        if (event.type === "thought.generated") {
+          // Dispatch custom event for components to listen to
+          const customEvent = new CustomEvent("sse-message", {
+            detail: event,
+          });
+          window.dispatchEvent(customEvent);
+          return;
+        }
+
+        // Handle experience consolidation events
+        if (event.type === "experience.consolidated") {
+          const customEvent = new CustomEvent("sse-message", {
+            detail: event,
+          });
+          window.dispatchEvent(customEvent);
+          return;
+        }
+
         // Filter out other system events
         if (event.type !== "connection" && event.type !== "ping") {
           addEvent(event);

@@ -138,6 +138,28 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
     }
   }, [memories.length]);
 
+  // Listen for experience consolidation events and refetch data
+  useEffect(() => {
+    const handleCustomEvent = (e: CustomEvent) => {
+      if (e.detail && e.detail.type === "experience.consolidated") {
+        console.log(
+          "Experience consolidated via custom event, refetching experiences..."
+        );
+        loadExperiences();
+      }
+    };
+
+    // Add event listener
+    window.addEventListener("sse-message", handleCustomEvent as EventListener);
+
+    return () => {
+      window.removeEventListener(
+        "sse-message",
+        handleCustomEvent as EventListener
+      );
+    };
+  }, []);
+
   // Toggle auto-generation
   const toggleAutoGenerate = () => {
     setIsAutoGenerate(!isAutoGenerate);

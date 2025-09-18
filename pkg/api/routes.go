@@ -409,9 +409,16 @@ func postEgoReflect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	// Forward request to ego service
-	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Post("http://localhost:8084/api/ego/reflect", "application/json", r.Body)
+	client := &http.Client{}
+	resp, err := client.Post("http://localhost:8084/api/ego/reflect", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -423,6 +430,17 @@ func postEgoReflect(w http.ResponseWriter, r *http.Request) {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
+	}
+
+	// If successful, broadcast new thought event
+	if resp.StatusCode == 200 {
+		thoughtEvent := map[string]interface{}{
+			"type":      "thought.generated",
+			"timestamp": time.Now().Unix(),
+			"source":    "ego",
+		}
+		thoughtBytes, _ := json.Marshal(thoughtEvent)
+		hub.Broadcast(string(thoughtBytes))
 	}
 
 	// Copy response body
@@ -436,9 +454,16 @@ func postEgoConsolidate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	// Forward request to ego service
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post("http://localhost:8084/api/ego/consolidate", "application/json", r.Body)
+	resp, err := client.Post("http://localhost:8084/api/ego/consolidate", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -450,6 +475,17 @@ func postEgoConsolidate(w http.ResponseWriter, r *http.Request) {
 		for _, value := range values {
 			w.Header().Add(key, value)
 		}
+	}
+
+	// If successful, broadcast experience consolidation event
+	if resp.StatusCode == 200 {
+		experienceEvent := map[string]interface{}{
+			"type":      "experience.consolidated",
+			"timestamp": time.Now().Unix(),
+			"source":    "ego",
+		}
+		experienceBytes, _ := json.Marshal(experienceEvent)
+		hub.Broadcast(string(experienceBytes))
 	}
 
 	// Copy response body
@@ -547,9 +583,16 @@ func postEgoClearLTM(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	// Forward request to ego service
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post("http://localhost:8084/api/ego/clear-ltm", "application/json", r.Body)
+	resp, err := client.Post("http://localhost:8084/api/ego/clear-ltm", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -569,8 +612,15 @@ func postEgoClearLTM(w http.ResponseWriter, r *http.Request) {
 }
 
 func postAddEmbedding(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post("http://localhost:8085/add", "application/json", r.Body)
+	resp, err := client.Post("http://localhost:8085/add", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -635,8 +685,15 @@ func getEmbeddingsBySource(w http.ResponseWriter, r *http.Request) {
 }
 
 func postReduceDimensions(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
 	client := &http.Client{Timeout: 30 * time.Second} // Longer timeout for ML processing
-	resp, err := client.Post("http://localhost:8081/reduce-dimensions", "application/json", r.Body)
+	resp, err := client.Post("http://localhost:8081/reduce-dimensions", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

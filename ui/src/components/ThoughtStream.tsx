@@ -1,12 +1,5 @@
 import React, { useState, useEffect } from "react";
-import {
-  Brain,
-  RefreshCw,
-  Layers,
-  AlertCircle,
-  Play,
-  Pause,
-} from "lucide-react";
+import { Brain, RefreshCw, AlertCircle, Play, Pause } from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
 import { useSTMData } from "../hooks/useSTMData";
 import { Memory } from "../types/memory";
@@ -52,7 +45,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
     isGenerating,
     error,
     generateThought,
-    consolidateMemories,
     clearHistory,
     totalMemories,
   } = useEgo({
@@ -133,13 +125,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
       setMetrics(legacyMetrics);
     }
   }, [currentThought]);
-
-  // Handle memory consolidation
-  const handleConsolidate = async () => {
-    if (currentThought && currentThought.consolidate.length > 0) {
-      await consolidateMemories(currentThought.consolidate);
-    }
-  };
 
   // Toggle auto-generation
   const toggleAutoGenerate = () => {
@@ -406,21 +391,6 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                     <div className="text-xs pb-2 text-ui-text leading-relaxed">
                       {thought.content}
                     </div>
-
-                    {/* Consolidation Actions */}
-                    {currentThought &&
-                      currentThought.consolidate.length > 0 && (
-                        <div className="mt-2 pt-2 border-t border-white/10">
-                          <button
-                            onClick={handleConsolidate}
-                            className="flex items-center gap-1 text-xs text-blue-400 hover:text-blue-300 transition-colors"
-                          >
-                            <Layers className="w-3 h-3" />
-                            Consolidate {currentThought.consolidate.length}{" "}
-                            memories
-                          </button>
-                        </div>
-                      )}
                   </div>
                 ))
               )}

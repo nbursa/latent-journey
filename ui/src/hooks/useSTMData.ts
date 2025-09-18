@@ -70,6 +70,44 @@ export function useSTMData(): STMData {
     fetchSTMData();
   }, []);
 
+  // Listen for new thought events and refetch data
+  useEffect(() => {
+    const handleSSEMessage = (e: MessageEvent) => {
+      try {
+        const event = JSON.parse(e.data);
+        // Refetch when a new thought is generated
+        if (event.type === "thought.generated") {
+          console.log("New thought generated, refetching STM data...");
+          fetchSTMData();
+        }
+      } catch (error) {
+        // Ignore parsing errors for non-JSON events
+      }
+    };
+
+    // Listen for custom events from the SSE connection
+    const handleCustomEvent = (e: CustomEvent) => {
+      if (e.detail && e.detail.type === "thought.generated") {
+        console.log(
+          "New thought generated via custom event, refetching STM data..."
+        );
+        fetchSTMData();
+      }
+    };
+
+    // Add event listeners
+    window.addEventListener("message", handleSSEMessage);
+    window.addEventListener("sse-message", handleCustomEvent as EventListener);
+
+    return () => {
+      window.removeEventListener("message", handleSSEMessage);
+      window.removeEventListener(
+        "sse-message",
+        handleCustomEvent as EventListener
+      );
+    };
+  }, []);
+
   return {
     thoughts,
     loading,

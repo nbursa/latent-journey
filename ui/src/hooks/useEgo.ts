@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Memory } from "../types/memory";
 import { egoService, EgoThought } from "../services/egoService";
 
@@ -39,6 +39,11 @@ export function useEgo({
   const [ollamaAvailable, setOllamaAvailable] = useState(false);
   const [ollamaStatus, setOllamaStatus] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Ref to store the latest generateThought function
+  const generateThoughtRef = useRef<
+    ((userQuery?: string) => Promise<void>) | null
+  >(null);
 
   // Check ego service availability
   const checkEgoHealth = useCallback(async () => {
@@ -83,7 +88,8 @@ export function useEgo({
         // Signal gateway to pause status checks
         await egoService.startGeneration();
 
-        const thought = await egoService.reflect(memories, userQuery);
+        const limitedMemories = memories.slice(0, 10);
+        const thought = await egoService.reflect(limitedMemories, userQuery);
 
         if (thought) {
           setCurrentThought(thought);
@@ -104,6 +110,9 @@ export function useEgo({
     },
     [memories, isEgoAvailable]
   );
+
+  // Store the latest generateThought function in ref
+  generateThoughtRef.current = generateThought;
 
   // Consolidate memories
   const consolidateMemories = useCallback(async (memoryIds: string[]) => {
@@ -133,11 +142,13 @@ export function useEgo({
     if (!autoGenerate || !isEgoAvailable) return;
 
     const interval = setInterval(() => {
-      generateThought();
+      if (generateThoughtRef.current) {
+        generateThoughtRef.current();
+      }
     }, intervalMs);
 
     return () => clearInterval(interval);
-  }, [autoGenerate, isEgoAvailable, generateThought, intervalMs]);
+  }, [autoGenerate, isEgoAvailable, intervalMs]);
 
   // Check services on mount
   useEffect(() => {

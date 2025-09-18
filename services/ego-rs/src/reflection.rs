@@ -15,7 +15,7 @@ pub struct ReflectionEngine {
 impl ReflectionEngine {
     pub fn new(ollama_url: String, model: String) -> Self {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(120)) // 120 seconds timeout
+            .timeout(std::time::Duration::from_secs(30)) // 30 seconds timeout
             .build()
             .unwrap_or_else(|_| Client::new());
 
@@ -31,46 +31,17 @@ impl ReflectionEngine {
         memories: &[&Memory],
         user_query: Option<&str>,
     ) -> Result<EgoThought> {
-        // Step 1: Map memories to notes
-        let notes = self.map_memories_to_notes(memories).await?;
-
-        // Step 2: Reduce notes to context
-        let context = self.reduce_notes_to_context(&notes).await?;
-
-        // Step 3: Generate reflection
-        let thought = self.generate_reflection(&context, user_query).await?;
-
-        Ok(thought)
+        // Use single-call approach for better performance
+        self.reflect_on_memories_single_call(memories, user_query)
+            .await
     }
 
-    async fn map_memories_to_notes(&self, memories: &[&Memory]) -> Result<Vec<MemoryNote>> {
-        let mut notes = Vec::new();
-
-        for memory in memories {
-            let prompt = self.create_map_prompt(memory);
-            let response = self.call_ollama(&prompt).await?;
-
-            if let Some(note) = self.parse_memory_note(&response, &memory.id) {
-                notes.push(note);
-            }
-        }
-
-        Ok(notes)
-    }
-
-    async fn reduce_notes_to_context(&self, notes: &[MemoryNote]) -> Result<ContextSummary> {
-        let prompt = self.create_reduce_prompt(notes);
-        let response = self.call_ollama(&prompt).await?;
-
-        Ok(self.parse_context_summary(&response, notes.len()))
-    }
-
-    async fn generate_reflection(
+    async fn reflect_on_memories_single_call(
         &self,
-        context: &ContextSummary,
+        memories: &[&Memory],
         user_query: Option<&str>,
     ) -> Result<EgoThought> {
-        let prompt = self.create_reflection_prompt(context, user_query);
+        let prompt = self.create_single_reflection_prompt(memories, user_query);
         let response = self.call_ollama(&prompt).await?;
 
         let thought_data = self.parse_reflection_response(&response)?;
@@ -82,224 +53,115 @@ impl ReflectionEngine {
             metrics: thought_data.metrics,
             consolidate: thought_data.consolidate,
             generated_at: Utc::now(),
-            context_hash: self.generate_context_hash(context),
+            context_hash: self.generate_context_hash_from_memories(memories),
             model: self.model.clone(),
         })
     }
 
-    fn create_map_prompt(&self, memory: &Memory) -> String {
-        let modality_str = match memory.modality {
-            crate::types::Modality::Vision => "vision",
-            crate::types::Modality::Speech => "speech",
-            crate::types::Modality::Text => "text",
-            crate::types::Modality::Concept => "concept",
-        };
-
-        // Extract comprehensive content from facets based on modality
-        let specific_content = match memory.modality {
-            crate::types::Modality::Vision => {
-                let object = memory
-                    .facets
-                    .get("vision.object")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-                let color = memory
-                    .facets
-                    .get("color.dominant")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-
-                // Extract emotional context from vision
-                let valence = memory
-                    .facets
-                    .get("affect.valence")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("valence: {:.2}", v))
-                    .unwrap_or_default();
-                let arousal = memory
-                    .facets
-                    .get("affect.arousal")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("arousal: {:.2}", v))
-                    .unwrap_or_default();
-
-                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
-                    let emotions: Vec<String> = [valence, arousal]
-                        .iter()
-                        .filter(|s| !s.is_empty())
-                        .cloned()
-                        .collect();
-                    format!(" (emotional: {})", emotions.join(", "))
-                } else {
-                    String::new()
-                };
-
-                format!("I see a {} {} object{}", color, object, emotional_context)
-            }
-            crate::types::Modality::Speech => {
-                let transcript = memory
-                    .facets
-                    .get("speech.transcript")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-                let intent = memory
-                    .facets
-                    .get("speech.intent")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-                let sentiment = memory
-                    .facets
-                    .get("speech.sentiment")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("unknown");
-
-                // Extract emotional context from speech
-                let valence = memory
-                    .facets
-                    .get("affect.valence")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("valence: {:.2}", v))
-                    .unwrap_or_default();
-                let arousal = memory
-                    .facets
-                    .get("affect.arousal")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("arousal: {:.2}", v))
-                    .unwrap_or_default();
-
-                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
-                    let emotions: Vec<String> = [valence, arousal]
-                        .iter()
-                        .filter(|s| !s.is_empty())
-                        .cloned()
-                        .collect();
-                    format!(" (emotional: {})", emotions.join(", "))
-                } else {
-                    String::new()
-                };
-
-                format!(
-                    "Someone said: \"{}\" (intent: {}, sentiment: {}){}",
-                    transcript, intent, sentiment, emotional_context
-                )
-            }
-            crate::types::Modality::Text => {
-                // For text/thoughts, include any emotional context
-                let valence = memory
-                    .facets
-                    .get("affect.valence")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("valence: {:.2}", v))
-                    .unwrap_or_default();
-                let arousal = memory
-                    .facets
-                    .get("affect.arousal")
-                    .and_then(|v| v.as_f64())
-                    .map(|v| format!("arousal: {:.2}", v))
-                    .unwrap_or_default();
-
-                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
-                    let emotions: Vec<String> = [valence, arousal]
-                        .iter()
-                        .filter(|s| !s.is_empty())
-                        .cloned()
-                        .collect();
-                    format!(" (emotional: {})", emotions.join(", "))
-                } else {
-                    String::new()
-                };
-
-                format!("{}{}", memory.content, emotional_context)
-            }
-            crate::types::Modality::Concept => memory.content.clone(),
-        };
-
-        format!(
-            r#"You are a strict data extractor. Extract ONLY the facts explicitly provided below.
-
-CRITICAL RULES:
-- Use ONLY the data in "SPECIFIC CONTENT TO FOCUS ON" section
-- Do NOT add any details not explicitly mentioned
-- Do NOT make assumptions or inferences
-- Do NOT add visual details not provided
-- Do NOT add behavioral descriptions not mentioned
-
-Return exactly this format:
-<note>[modality] exact facts from data | tags: relevant</note>
-
-SPECIFIC CONTENT TO FOCUS ON:
-{}
-
-MEMORY DATA (for reference only):
-{{
-  "id": "{}",
-  "modality": "{}",
-  "timestamp": "{}",
-  "content": "{}",
-  "facets": {}
-}}"#,
-            specific_content,
-            memory.id,
-            modality_str,
-            memory.timestamp.to_rfc3339(),
-            memory.content,
-            serde_json::to_string_pretty(&memory.facets).unwrap_or_default()
-        )
-    }
-
-    fn create_reduce_prompt(&self, notes: &[MemoryNote]) -> String {
-        let notes_text = notes
-            .iter()
-            .map(|note| {
-                format!(
-                    "<note>[{}] {} | tags: {}</note>",
-                    match note.modality {
-                        crate::types::Modality::Vision => "vision",
-                        crate::types::Modality::Speech => "speech",
-                        crate::types::Modality::Text => "text",
-                        crate::types::Modality::Concept => "concept",
-                    },
-                    note.content,
-                    note.tags.join(", ")
-                )
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-
-        format!(
-            r#"You merge short memory notes into a compact context (<= 120 words).
-- Preserve chronology and temporal relationships
-- Group by motif (e.g., "person interaction", "visual observation")
-- Include specific details: names, objects, colors, emotions, speech content
-- Connect related events (e.g., "I see a person and they introduce themselves")
-- Preserve emotional context (valence/arousal) when available
-- Output 3 bullet points, no extra text
-
-NOTES:
-{}"#,
-            notes_text
-        )
-    }
-
-    fn create_reflection_prompt(
+    fn create_single_reflection_prompt(
         &self,
-        context: &ContextSummary,
+        memories: &[&Memory],
         user_query: Option<&str>,
     ) -> String {
         let query_context = user_query
             .map(|q| format!("\n\nUSER QUERY: {}", q))
             .unwrap_or_default();
 
+        // Format all memories into a single context
+        let memories_text = memories
+            .iter()
+            .enumerate()
+            .map(|(i, memory)| {
+                let modality_str = match memory.modality {
+                    crate::types::Modality::Vision => "vision",
+                    crate::types::Modality::Speech => "speech",
+                    crate::types::Modality::Text => "text",
+                    crate::types::Modality::Concept => "concept",
+                };
+
+                // Extract key details from facets
+                let details = match memory.modality {
+                    crate::types::Modality::Vision => {
+                        let object = memory
+                            .facets
+                            .get("vision.object")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        let color = memory
+                            .facets
+                            .get("color.dominant")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("unknown");
+                        format!("object: {}, color: {}", object, color)
+                    }
+                    crate::types::Modality::Speech => {
+                        let transcript = memory
+                            .facets
+                            .get("speech.transcript")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or(&memory.content);
+                        let sentiment = memory
+                            .facets
+                            .get("speech.sentiment")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("neutral");
+                        format!("transcript: \"{}\", sentiment: {}", transcript, sentiment)
+                    }
+                    _ => "processed".to_string(),
+                };
+
+                // Extract emotional context
+                let valence = memory
+                    .facets
+                    .get("affect.valence")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("valence: {:.2}", v))
+                    .unwrap_or_default();
+                let arousal = memory
+                    .facets
+                    .get("affect.arousal")
+                    .and_then(|v| v.as_f64())
+                    .map(|v| format!("arousal: {:.2}", v))
+                    .unwrap_or_default();
+
+                let emotional_context = if !valence.is_empty() || !arousal.is_empty() {
+                    format!(
+                        " ({}{}{})",
+                        valence,
+                        if !valence.is_empty() && !arousal.is_empty() {
+                            ", "
+                        } else {
+                            ""
+                        },
+                        arousal
+                    )
+                } else {
+                    String::new()
+                };
+
+                format!(
+                    "[{}] {}: {} | {} | ID: {}{}",
+                    i + 1,
+                    modality_str,
+                    memory.content,
+                    details,
+                    memory.id,
+                    emotional_context
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+
         format!(
             r#"You are an AI system observing and reflecting on sensory events and interactions.
 
-Given the context below, generate a concrete, grounded thought based on the ACTUAL events observed.
+Given the memories below, generate a concrete, grounded thought based on the ACTUAL events observed.
 
-CRITICAL: Base your thought ONLY on the specific events described in the context. Do not make up or hallucinate details that aren't mentioned.
+CRITICAL: Base your thought ONLY on the specific events described in the memories. Do not make up or hallucinate details that aren't mentioned.
 
 Instructions:
 1) Write a specific thought (<= 120 words) about what you actually observed
-2) Reference the specific people, objects, or speech mentioned in the context
+2) Reference the specific people, objects, or speech mentioned in the memories
 3) If someone introduced themselves, mention their name
 4) If you saw an object, describe what you actually saw (color, type, etc.)
 5) If someone spoke, reference what they actually said and their intent/sentiment
@@ -324,9 +186,9 @@ Return STRICT JSON only:
 
 No prose outside JSON.
 
-CONTEXT:
+MEMORIES:
 {}{}"#,
-            context.summary, query_context
+            memories_text, query_context
         )
     }
 
@@ -368,51 +230,6 @@ CONTEXT:
         Ok(result.trim().to_string())
     }
 
-    fn parse_memory_note(&self, response: &str, memory_id: &str) -> Option<MemoryNote> {
-        let regex =
-            regex::Regex::new(r"<note>\[([^\]]+)\]\s*(.+?)\s*\|\s*tags:\s*(.+?)</note>").ok()?;
-        let captures = regex.captures(response)?;
-
-        let modality = match captures.get(1)?.as_str() {
-            "vision" => crate::types::Modality::Vision,
-            "speech" => crate::types::Modality::Speech,
-            "text" => crate::types::Modality::Text,
-            "concept" => crate::types::Modality::Concept,
-            _ => return None,
-        };
-
-        let content = captures.get(2)?.as_str().trim().to_string();
-        let tags: Vec<String> = captures
-            .get(3)?
-            .as_str()
-            .split(',')
-            .map(|s| s.trim().to_string())
-            .filter(|s| !s.is_empty())
-            .collect();
-
-        Some(MemoryNote {
-            modality,
-            content,
-            tags,
-            _memory_id: memory_id.to_string(),
-        })
-    }
-
-    fn parse_context_summary(&self, response: &str, memory_count: usize) -> ContextSummary {
-        let bullet_points: Vec<String> = response
-            .lines()
-            .filter(|line| line.trim().starts_with('•') || line.trim().starts_with('-'))
-            .map(|line| line.replace(['•', '-'], "").trim().to_string())
-            .filter(|line| !line.is_empty())
-            .collect();
-
-        ContextSummary {
-            summary: bullet_points.join(" "),
-            memory_count,
-            _time_window: 20,
-        }
-    }
-
     fn parse_reflection_response(&self, response: &str) -> Result<ReflectionResponse> {
         // Extract JSON from response
         let start = response.find('{');
@@ -437,14 +254,22 @@ CONTEXT:
         Ok(parsed)
     }
 
-    fn generate_context_hash(&self, context: &ContextSummary) -> String {
+    fn generate_context_hash_from_memories(&self, memories: &[&Memory]) -> String {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
 
         let mut hasher = DefaultHasher::new();
-        context.summary.hash(&mut hasher);
-        context.memory_count.hash(&mut hasher);
+
+        // Hash memory IDs and content for consistency
+        for memory in memories {
+            memory.id.hash(&mut hasher);
+            memory.content.hash(&mut hasher);
+            // Hash modality as string since it doesn't implement Hash
+            format!("{:?}", memory.modality).hash(&mut hasher);
+        }
+
         self.model.hash(&mut hasher);
+        memories.len().hash(&mut hasher);
 
         format!("{:x}", hasher.finish())
     }
@@ -470,21 +295,6 @@ CONTEXT:
     pub fn model(&self) -> &String {
         &self.model
     }
-}
-
-#[derive(Debug, Clone)]
-struct MemoryNote {
-    modality: crate::types::Modality,
-    content: String,
-    tags: Vec<String>,
-    _memory_id: String,
-}
-
-#[derive(Debug, Clone)]
-struct ContextSummary {
-    summary: String,
-    memory_count: usize,
-    _time_window: u64,
 }
 
 #[derive(Debug, Clone, serde::Deserialize)]
