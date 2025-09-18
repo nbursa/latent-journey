@@ -147,7 +147,10 @@ export default function JourneyTimeline({
                   key={`${event.ts}-${
                     event.embedding_id || sortedEvents.indexOf(event)
                   }`}
-                  onClick={() => handleSeek(position)}
+                  onClick={() => {
+                    handleSeek(position);
+                    onSelectEvent(event);
+                  }}
                   className={`absolute top-1/2 transform -translate-y-1/2 w-3 h-3 rounded-full transition-all ${
                     isSelected
                       ? "bg-ui-accent scale-125 ring-2 ring-ui-accent ring-offset-1 ring-offset-ui-bg"

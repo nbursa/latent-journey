@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { MemoryEvent } from "../types";
+import { generateEmbedding, reduceDimensions } from "../utils/embeddings";
 
 interface Point3D {
   x: number;
@@ -24,7 +25,100 @@ interface RealLatentSpace3DProps {
   cameraPreset?: "top" | "isometric" | "free";
   selectedCluster?: any;
   selectedGroup?: any;
+  showTrajectory?: boolean;
 }
+
+// Constants - single source of truth
+const CAMERA_CONFIG = {
+  distanceMultiplier: 2,
+  minDistance: 10,
+  defaultDistance: 100,
+  fov: 75,
+  near: 0.1,
+  far: 10000,
+} as const;
+
+// Utility functions - pure and testable
+const calculateBounds = (points: Point3D[]) => {
+  if (points.length === 0) return null;
+
+  return points.reduce(
+    (acc, point) => ({
+      minX: Math.min(acc.minX, point.x),
+      maxX: Math.max(acc.maxX, point.x),
+      minY: Math.min(acc.minY, point.y),
+      maxY: Math.max(acc.maxY, point.y),
+      minZ: Math.min(acc.minZ, point.z),
+      maxZ: Math.max(acc.maxZ, point.z),
+    }),
+    {
+      minX: Infinity,
+      maxX: -Infinity,
+      minY: Infinity,
+      maxY: -Infinity,
+      minZ: Infinity,
+      maxZ: -Infinity,
+    }
+  );
+};
+
+const calculateCenter = (bounds: any) => ({
+  x: (bounds.minX + bounds.maxX) / 2,
+  y: (bounds.minY + bounds.maxY) / 2,
+  z: (bounds.minZ + bounds.maxZ) / 2,
+});
+
+const calculateMaxSize = (bounds: any) => {
+  return Math.max(
+    bounds.maxX - bounds.minX,
+    bounds.maxY - bounds.minY,
+    bounds.maxZ - bounds.minZ
+  );
+};
+
+const calculateCameraDistance = (points: Point3D[]) => {
+  if (points.length === 0) return CAMERA_CONFIG.defaultDistance;
+
+  const bounds = calculateBounds(points);
+  if (!bounds) return CAMERA_CONFIG.defaultDistance;
+
+  const maxSize = calculateMaxSize(bounds);
+  return Math.max(
+    maxSize * CAMERA_CONFIG.distanceMultiplier,
+    CAMERA_CONFIG.minDistance
+  );
+};
+
+const positionCamera = (
+  camera: THREE.PerspectiveCamera,
+  center: any,
+  distance: number,
+  preset: string
+) => {
+  switch (preset) {
+    case "top":
+      camera.position.set(center.x, center.y + distance, center.z);
+      camera.lookAt(center.x, center.y, center.z);
+      break;
+    case "isometric":
+      camera.position.set(
+        center.x + distance * 0.5,
+        center.y + distance * 0.5,
+        center.z + distance * 0.5
+      );
+      camera.lookAt(center.x, center.y, center.z);
+      break;
+    case "free":
+    default:
+      camera.position.set(
+        center.x + distance * 0.5,
+        center.y + distance * 0.5,
+        center.z + distance * 0.5
+      );
+      camera.lookAt(center.x, center.y, center.z);
+      break;
+  }
+};
 
 export default function RealLatentSpace3D({
   memoryEvents,
@@ -32,193 +126,82 @@ export default function RealLatentSpace3D({
   onSelectEvent,
   onHover,
   cameraPreset = "free",
+  showTrajectory = true,
 }: RealLatentSpace3DProps) {
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const controlsRef = useRef<OrbitControls | null>(null);
+
+  // Simplified state - only what's necessary
   const [points, setPoints] = useState<Point3D[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
   const [mousePosition, setMousePosition] = useState({ x: 0, y: 0 });
-  const [focusTarget, setFocusTarget] = useState<{
-    x: number;
-    y: number;
-    z: number;
-  } | null>(null);
 
-  // Handle hover events
-  const handleHover = useCallback(
-    (event: MemoryEvent | null) => {
-      setHoveredEvent(event);
-      if (onHover) {
-        onHover(event);
-      }
-    },
-    [onHover]
-  );
+  // Memoized calculations - only recalculate when points change
+  const cameraData = useMemo(() => {
+    if (points.length === 0) return null;
 
-  // Handle focus camera on specific coordinates
-  const handleFocus = useCallback((worldX: number, worldY: number) => {
-    setFocusTarget({ x: worldX, y: worldY, z: 200 });
-  }, []);
+    const bounds = calculateBounds(points);
+    if (!bounds) return null;
+
+    return {
+      bounds,
+      center: calculateCenter(bounds),
+      distance: calculateCameraDistance(points),
+    };
+  }, [points]);
 
   // Extract embeddings from memory events
   const extractEmbeddings = useCallback(async () => {
     if (memoryEvents.length === 0) return [];
 
-    const embeddings = [];
-    for (let index = 0; index < memoryEvents.length; index++) {
-      const event = memoryEvents[index];
-      let embedding: number[];
-
+    return memoryEvents.map((event) => {
       // Use existing embedding if available, otherwise generate one
       if (
         event.embedding &&
         Array.isArray(event.embedding) &&
         event.embedding.length > 0
       ) {
-        embedding = event.embedding as number[];
+        return {
+          id: `embedding-${event.ts}`,
+          embedding: event.embedding as number[],
+          source: event.source,
+          facets: event.facets,
+          confidence: Number(event.facets.confidence) || 0.5,
+        };
       } else {
-        // Generate embedding for STM/LTM data (similar to LatentScatter3D)
-        embedding = new Array(128).fill(0);
-        const facets = event.facets;
-
-        // Vision object features (dimensions 0-19)
-        if (facets["vision.object"]) {
-          const object = String(facets["vision.object"]).toLowerCase();
-          const objectHash = object.split("").reduce((a, b) => {
-            a = (a << 5) - a + b.charCodeAt(0);
-            return a & a;
-          }, 0);
-          for (let i = 0; i < 20; i++) {
-            embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
-          }
-        }
-
-        // Vision color features (dimensions 20-29)
-        if (facets["vision.color"]) {
-          const color = String(facets["vision.color"]).toLowerCase();
-          const colorHash = color.split("").reduce((a, b) => {
-            a = (a << 5) - a + b.charCodeAt(0);
-            return a & a;
-          }, 0);
-          for (let i = 20; i < 30; i++) {
-            embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
-          }
-        }
-
-        // Speech intent features (dimensions 30-49)
-        if (facets["speech.intent"]) {
-          const intent = String(facets["speech.intent"]).toLowerCase();
-          const intentHash = intent.split("").reduce((a, b) => {
-            a = (a << 5) - a + b.charCodeAt(0);
-            return a & a;
-          }, 0);
-          for (let i = 30; i < 50; i++) {
-            embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
-          }
-        }
-
-        // Affect features (dimensions 50-69)
-        if (facets["affect.valence"]) {
-          const valence = Number(facets["affect.valence"]);
-          for (let i = 50; i < 60; i++) {
-            embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
-          }
-        }
-
-        if (facets["affect.arousal"]) {
-          const arousal = Number(facets["affect.arousal"]);
-          for (let i = 60; i < 70; i++) {
-            embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
-          }
-        }
-
-        // Source type features (dimensions 70-79)
-        const sourceHash = event.source.split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        for (let i = 70; i < 80; i++) {
-          embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
-        }
-
-        // STM/LTM specific features (dimensions 80-89)
-        if (event.source === "stm" || event.source === "ltm") {
-          const content = event.content || "";
-          const contentHash = content.split("").reduce((a, b) => {
-            a = (a << 5) - a + b.charCodeAt(0);
-            return a & a;
-          }, 0);
-          for (let i = 80; i < 90; i++) {
-            embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
-          }
-        }
-
-        // Temporal features (dimensions 90-99)
-        const timeHash = event.ts
-          .toString()
-          .split("")
-          .reduce((a, b) => {
-            a = (a << 5) - a + parseInt(b);
-            return a & a;
-          }, 0);
-        for (let i = 90; i < 100; i++) {
-          embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
-        }
-
-        // Fill remaining dimensions with zeros (dimensions 100-127)
-        for (let i = 100; i < 128; i++) {
-          embedding[i] = 0;
-        }
+        const generated = generateEmbedding(event);
+        return {
+          id: `embedding-${event.ts}`,
+          embedding: generated.vector,
+          source: event.source,
+          facets: event.facets,
+          confidence: generated.confidence,
+        };
       }
-
-      embeddings.push({
-        id: `embedding-${index}`,
-        embedding: embedding,
-        source: event.source,
-        facets: event.facets,
-        confidence: Number(event.facets.confidence) || 0.5,
-      });
-    }
-
-    return embeddings;
+    });
   }, [memoryEvents]);
 
-  // Reduce dimensions using ML service
-  const reduceDimensions = useCallback(async (embeddings: any[]) => {
+  // Reduce dimensions using unified utility
+  const reduceDimensionsCallback = useCallback(async (embeddings: any[]) => {
     if (embeddings.length === 0) return [];
 
     try {
-      const response = await fetch("/api/embeddings/reduce-dimensions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          embeddings: embeddings.map((e) => e.embedding),
-          method: "pca", // Use PCA for stability
-          n_components: 3,
-        }),
-      });
+      const embeddingObjects = embeddings.map((e) => ({
+        vector: e.embedding,
+        confidence: e.confidence,
+        source: e.source,
+        timestamp: e.timestamp || 0,
+      }));
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const result = await response.json();
-
-      if (result.error) {
-        throw new Error(result.error);
-      }
-
-      return result.reduced_embeddings;
+      return await reduceDimensions(embeddingObjects);
     } catch (err) {
-      console.error("Dimension reduction failed:", err);
       setError("Failed to reduce dimensions. Please check the ML service.");
+      console.error("Dimension reduction error:", err);
       return [];
     }
   }, []);
@@ -243,18 +226,21 @@ export default function RealLatentSpace3D({
           return;
         }
 
-        const reducedEmbeddings = await reduceDimensions(embeddings);
+        const reducedEmbeddings = await reduceDimensionsCallback(embeddings);
 
         const newPoints: Point3D[] = reducedEmbeddings.map(
           (coords: number[], index: number) => {
             const embedding = embeddings[index];
             const event = memoryEvents[index];
 
-            // Scale coordinates for better visualization
-            const scale = 100;
-            const x = coords[0] * scale;
-            const y = coords[1] * scale;
-            const z = coords[2] * scale;
+            // Use same projection as LatentScatter3D for consistency
+            const x = (coords[0] || 0) * 200;
+            const y = (coords[1] || 0) * 200;
+
+            // Use arousal/sentiment for Z (semantic height) like scatter view
+            const arousal = Number(event.facets["affect.arousal"]) || 0.5;
+            const valence = Number(event.facets["affect.valence"]) || 0.5;
+            const z = arousal * 80 + (valence - 0.5) * 40 + 50;
 
             // Color based on data source type
             let color = "#3B82F6"; // Default blue
@@ -268,9 +254,9 @@ export default function RealLatentSpace3D({
               color = "#8B5CF6"; // Purple for LTM
             }
 
-            // Size based on confidence and recency
-            const age = Date.now() / 1000 - event.ts;
-            const size = Math.max(1, 3 + embedding.confidence * 4 - age / 3600);
+            // Size based on importance/confidence like scatter view
+            const confidence = Number(event.facets["confidence"]) || 0.5;
+            const size = Math.max(1, 3 + confidence * 4);
 
             return {
               x,
@@ -289,7 +275,6 @@ export default function RealLatentSpace3D({
 
         setPoints(newPoints);
       } catch (err) {
-        console.error("Visualization update failed:", err);
         setError("Failed to update visualization");
       } finally {
         setIsLoading(false);
@@ -297,13 +282,44 @@ export default function RealLatentSpace3D({
     };
 
     updateVisualization();
-  }, [memoryEvents, selectedEvent, extractEmbeddings, reduceDimensions]);
+  }, [memoryEvents, extractEmbeddings, reduceDimensionsCallback]);
 
-  // Initialize Three.js scene
+  // Update selection without recomputing embeddings
+  useEffect(() => {
+    setPoints((prevPoints) =>
+      prevPoints.map((point) => ({
+        ...point,
+        isSelected: selectedEvent?.ts === point.event.ts,
+      }))
+    );
+  }, [selectedEvent]);
+
+  // Update camera position when preset changes
+  useEffect(() => {
+    if (!cameraRef.current || !controlsRef.current || !cameraData) return;
+
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+
+    positionCamera(
+      camera,
+      cameraData.center,
+      cameraData.distance,
+      cameraPreset
+    );
+    controls.target.set(
+      cameraData.center.x,
+      cameraData.center.y,
+      cameraData.center.z
+    );
+    controls.update();
+  }, [cameraPreset, cameraData]);
+
+  // Initialize Three.js scene - only once
   useEffect(() => {
     if (!mountRef.current) return;
 
-    // Clean up any existing renderer and all canvas elements
+    // Clean up any existing renderer
     if (rendererRef.current) {
       if (mountRef.current.contains(rendererRef.current.domElement)) {
         mountRef.current.removeChild(rendererRef.current.domElement);
@@ -314,7 +330,6 @@ export default function RealLatentSpace3D({
 
     // Remove any existing canvas elements
     const existingCanvases = mountRef.current.querySelectorAll("canvas");
-
     existingCanvases.forEach((canvas) => {
       if (mountRef.current && mountRef.current.contains(canvas)) {
         mountRef.current.removeChild(canvas);
@@ -322,28 +337,29 @@ export default function RealLatentSpace3D({
     });
 
     const scene = new THREE.Scene();
-    scene.background = null; // Transparent background like LatentScatter
+    scene.background = null;
     sceneRef.current = scene;
 
     const camera = new THREE.PerspectiveCamera(
-      75,
+      CAMERA_CONFIG.fov,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.1,
-      1000
+      CAMERA_CONFIG.near,
+      CAMERA_CONFIG.far
     );
     cameraRef.current = camera;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      powerPreference: "high-performance",
+    });
     renderer.setSize(
       mountRef.current.clientWidth,
       mountRef.current.clientHeight
     );
     renderer.shadowMap.enabled = true;
     renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-
-    // Set renderer clear color to transparent like LatentScatter
-    renderer.setClearColor(0x000000, 0.0); // Transparent
-    renderer.autoClear = true; // Enable auto-clear like LatentScatter
+    renderer.setClearColor(0x000000, 0.0);
+    renderer.autoClear = true;
     renderer.autoClearColor = true;
 
     // Ensure canvas is positioned absolutely to fill the container
@@ -359,13 +375,14 @@ export default function RealLatentSpace3D({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.05;
+    controls.minDistance = 10;
+    controls.maxDistance = 2000;
     controlsRef.current = controls;
 
-    // Add flat lighting setup
+    // Add lighting
     const ambientLight = new THREE.AmbientLight(0x404040, 0.8);
     scene.add(ambientLight);
 
-    // Main directional light for clean shadows
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0);
     directionalLight.position.set(100, 100, 100);
     directionalLight.castShadow = true;
@@ -373,32 +390,21 @@ export default function RealLatentSpace3D({
     directionalLight.shadow.mapSize.height = 2048;
     scene.add(directionalLight);
 
-    // Fill light for even illumination
     const fillLight = new THREE.DirectionalLight(0xffffff, 0.3);
     fillLight.position.set(-50, -50, 50);
     scene.add(fillLight);
 
-    // Add subtle grid for spatial reference
+    // Add grid
     const gridHelper = new THREE.GridHelper(600, 30, 0x1e2531, 0x0f131a);
-    gridHelper.position.y = -50; // Place below the data points
+    gridHelper.position.y = 0;
     scene.add(gridHelper);
-
-    // Add subtle axes
-    const axesHelper = new THREE.AxesHelper(50);
-    axesHelper.position.y = -50;
-    scene.add(axesHelper);
 
     const animate = () => {
       requestAnimationFrame(animate);
       controls.update();
-
-      // Let Three.js handle clearing automatically
-
       renderer.render(scene, camera);
     };
     animate();
-
-    // Try a simple test - draw a colored rectangle directly to canvas
 
     const handleResize = () => {
       if (!mountRef.current) return;
@@ -428,40 +434,22 @@ export default function RealLatentSpace3D({
     };
   }, []);
 
-  // Cleanup effect for component unmount
+  // Update 3D points and camera - single effect
   useEffect(() => {
-    return () => {
-      if (rendererRef.current) {
-        if (
-          mountRef.current &&
-          mountRef.current.contains(rendererRef.current.domElement)
-        ) {
-          mountRef.current.removeChild(rendererRef.current.domElement);
-        }
-        rendererRef.current.dispose();
-        rendererRef.current = null;
-      }
-      if (sceneRef.current) {
-        sceneRef.current = null;
-      }
-      if (cameraRef.current) {
-        cameraRef.current = null;
-      }
-      if (controlsRef.current) {
-        controlsRef.current = null;
-      }
-    };
-  }, []);
-
-  // Update 3D points
-  useEffect(() => {
-    if (!sceneRef.current || !rendererRef.current || !cameraRef.current) return;
+    if (
+      !sceneRef.current ||
+      !rendererRef.current ||
+      !cameraRef.current ||
+      !controlsRef.current
+    )
+      return;
 
     const scene = sceneRef.current;
     const renderer = rendererRef.current;
     const camera = cameraRef.current;
+    const controls = controlsRef.current;
 
-    // Remove ALL existing meshes (spheres, cubes, etc.)
+    // Clear existing meshes
     const existingMeshes = scene.children.filter(
       (child) => child instanceof THREE.Mesh
     );
@@ -475,19 +463,30 @@ export default function RealLatentSpace3D({
       }
     });
 
-    if (points.length === 0) {
-      return;
-    }
+    // Clear existing lines
+    const existingLines = scene.children.filter(
+      (child) => child instanceof THREE.Line
+    );
+    existingLines.forEach((line) => {
+      scene.remove(line);
+      if (line instanceof THREE.Line) {
+        line.geometry.dispose();
+        if (line.material instanceof THREE.Material) {
+          line.material.dispose();
+        }
+      }
+    });
 
-    // Create spheres for each data point with modern flat design
-    const sphereGeometry = new THREE.SphereGeometry(2, 16, 16); // Appropriately sized spheres
+    if (points.length === 0) return;
 
-    // Create individual spheres for each point
+    // Create spheres for each data point
+    const sphereGeometry = new THREE.SphereGeometry(1, 16, 16);
+
     points.forEach((point, index) => {
       const sphere = new THREE.Mesh(
         sphereGeometry,
         new THREE.MeshStandardMaterial({
-          color: point.color, // Use the calculated color for each data type
+          color: point.color,
           transparent: true,
           opacity: 0.8,
           roughness: 0.2,
@@ -495,14 +494,13 @@ export default function RealLatentSpace3D({
         })
       );
       sphere.position.set(point.x, point.y, point.z);
+      sphere.scale.setScalar(point.size);
       sphere.userData = { event: point.event, index };
       scene.add(sphere);
     });
 
-    // console.log("Total objects in scene:", scene.children.length);
-
     // Add journey lines connecting the points
-    if (points.length > 1) {
+    if (showTrajectory && points.length > 1) {
       const lineGeometry = new THREE.BufferGeometry();
       const positions = new Float32Array(points.length * 3);
 
@@ -528,81 +526,36 @@ export default function RealLatentSpace3D({
       scene.add(line);
     }
 
-    // Keep background transparent like LatentScatter
-    scene.background = null;
-
-    // Position camera to view all data points properly
-    if (points.length > 0) {
-      // Calculate bounds of all points
-      const bounds = points.reduce(
-        (acc, point) => ({
-          minX: Math.min(acc.minX, point.x),
-          maxX: Math.max(acc.maxX, point.x),
-          minY: Math.min(acc.minY, point.y),
-          maxY: Math.max(acc.maxY, point.y),
-          minZ: Math.min(acc.minZ, point.z),
-          maxZ: Math.max(acc.maxZ, point.z),
-        }),
-        {
-          minX: Infinity,
-          maxX: -Infinity,
-          minY: Infinity,
-          maxY: -Infinity,
-          minZ: Infinity,
-          maxZ: -Infinity,
-        }
-      );
-
-      const centerX = (bounds.minX + bounds.maxX) / 2;
-      const centerY = (bounds.minY + bounds.maxY) / 2;
-      const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-
-      // Calculate the maximum dimension to ensure all points are visible
-      const maxSize = Math.max(
-        bounds.maxX - bounds.minX,
-        bounds.maxY - bounds.minY,
-        bounds.maxZ - bounds.minZ
-      );
-
-      // Set camera distance to encompass all points with appropriate padding
-      const distance = Math.max(maxSize * 1, 10);
-
-      // Position camera at a good viewing angle
-      const cameraX = centerX + distance * 0.5;
-      const cameraY = centerY + distance * 0.5;
-      const cameraZ = centerZ + distance * 0.5;
-
-      camera.position.set(cameraX, cameraY, cameraZ);
-      camera.lookAt(centerX, centerY, centerZ);
-    } else {
-      // Default camera position when no points
-      camera.position.set(50, 50, 50);
-      camera.lookAt(0, 0, 0);
+    // Position grid at the center of the data points
+    const gridHelper = scene.children.find(
+      (child) => child instanceof THREE.GridHelper
+    ) as THREE.GridHelper;
+    if (gridHelper && points.length > 0) {
+      const avgZ =
+        points.reduce((sum, point) => sum + point.z, 0) / points.length;
+      gridHelper.position.y = avgZ;
     }
 
-    // Handle focus target
-    if (focusTarget && controlsRef.current) {
-      camera.position.set(focusTarget.x, focusTarget.y, focusTarget.z);
-      camera.lookAt(focusTarget.x, focusTarget.y, 0);
-      controlsRef.current.target.set(focusTarget.x, focusTarget.y, 0);
-      controlsRef.current.update();
-      setFocusTarget(null);
-    } else if (controlsRef.current && points.length > 0) {
-      // Update controls target to center of points
-      const center = points.reduce(
-        (acc, point) => ({
-          x: acc.x + point.x,
-          y: acc.y + point.y,
-          z: acc.z + point.z,
-        }),
-        { x: 0, y: 0, z: 0 }
+    // Position camera
+    if (cameraData) {
+      positionCamera(
+        camera,
+        cameraData.center,
+        cameraData.distance,
+        cameraPreset
       );
-      const centerX = center.x / points.length;
-      const centerY = center.y / points.length;
-      const centerZ = center.z / points.length;
-
-      controlsRef.current.target.set(centerX, centerY, centerZ);
-      controlsRef.current.update();
+      controls.target.set(
+        cameraData.center.x,
+        cameraData.center.y,
+        cameraData.center.z
+      );
+      controls.update();
+    } else {
+      // Default camera position when no points
+      camera.position.set(100, 100, 100);
+      camera.lookAt(0, 0, 0);
+      controls.target.set(0, 0, 0);
+      controls.update();
     }
 
     // Add click handling
@@ -617,7 +570,6 @@ export default function RealLatentSpace3D({
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
       raycaster.setFromCamera(mouse, camera);
-      // Only check for meshes (spheres), not lines
       const meshes = scene.children.filter(
         (child) => child instanceof THREE.Mesh
       );
@@ -638,14 +590,12 @@ export default function RealLatentSpace3D({
       mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
       mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-      // Update mouse position for tooltip
       setMousePosition({
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       });
 
       raycaster.setFromCamera(mouse, camera);
-      // Only check for meshes (spheres), not lines
       const meshes = scene.children.filter(
         (child) => child instanceof THREE.Mesh
       );
@@ -654,10 +604,12 @@ export default function RealLatentSpace3D({
       if (intersects.length > 0) {
         const intersected = intersects[0].object;
         if (intersected.userData && intersected.userData.event) {
-          handleHover(intersected.userData.event);
+          setHoveredEvent(intersected.userData.event);
+          if (onHover) onHover(intersected.userData.event);
         }
       } else {
-        handleHover(null);
+        setHoveredEvent(null);
+        if (onHover) onHover(null);
       }
     };
 
@@ -668,74 +620,7 @@ export default function RealLatentSpace3D({
       renderer.domElement.removeEventListener("click", handleClick);
       renderer.domElement.removeEventListener("mousemove", handleMouseMove);
     };
-  }, [points, onSelectEvent, onHover, focusTarget, handleHover, handleFocus]);
-
-  // Camera presets - only run when cameraPreset changes, not when points change
-  useEffect(() => {
-    if (!cameraRef.current || !controlsRef.current || points.length === 0)
-      return;
-
-    const camera = cameraRef.current;
-    const controls = controlsRef.current;
-
-    // Calculate bounds of all points
-    const bounds = points.reduce(
-      (acc, point) => ({
-        minX: Math.min(acc.minX, point.x),
-        maxX: Math.max(acc.maxX, point.x),
-        minY: Math.min(acc.minY, point.y),
-        maxY: Math.max(acc.maxY, point.y),
-        minZ: Math.min(acc.minZ, point.z),
-        maxZ: Math.max(acc.maxZ, point.z),
-      }),
-      {
-        minX: Infinity,
-        maxX: -Infinity,
-        minY: Infinity,
-        maxY: -Infinity,
-        minZ: Infinity,
-        maxZ: -Infinity,
-      }
-    );
-
-    const centerX = (bounds.minX + bounds.maxX) / 2;
-    const centerY = (bounds.minY + bounds.maxY) / 2;
-    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
-
-    const maxSize = Math.max(
-      bounds.maxX - bounds.minX,
-      bounds.maxY - bounds.minY,
-      bounds.maxZ - bounds.minZ
-    );
-    const distance = Math.max(maxSize * 0.8, 30);
-
-    switch (cameraPreset) {
-      case "top":
-        camera.position.set(centerX, centerY + distance, centerZ);
-        camera.lookAt(centerX, centerY, centerZ);
-        break;
-      case "isometric":
-        camera.position.set(
-          centerX + distance * 0.5,
-          centerY + distance * 0.5,
-          centerZ + distance * 0.5
-        );
-        camera.lookAt(centerX, centerY, centerZ);
-        break;
-      case "free":
-      default:
-        camera.position.set(
-          centerX + distance * 0.5,
-          centerY + distance * 0.5,
-          centerZ + distance * 0.5
-        );
-        camera.lookAt(centerX, centerY, centerZ);
-        break;
-    }
-
-    controls.target.set(centerX, centerY, centerZ);
-    controls.update();
-  }, [cameraPreset]);
+  }, [points, cameraData, cameraPreset, onSelectEvent, onHover]);
 
   return (
     <div className="relative w-full h-full">
@@ -784,7 +669,7 @@ export default function RealLatentSpace3D({
             boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
             maxWidth: "300px",
             fontSize: "12px",
-            pointerEvents: "none", // Prevent tooltip from interfering with mouse events
+            pointerEvents: "none",
           }}
         >
           <div className="text-sm font-bold mb-1" style={{ color: "#00E0BE" }}>

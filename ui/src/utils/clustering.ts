@@ -1,4 +1,7 @@
 import { MemoryEvent } from "../types";
+import { generateEmbedding } from "./embeddings";
+
+// Embedding generation is now handled by the unified utility
 
 export interface Cluster {
   id: string;
@@ -25,12 +28,8 @@ export function clusterEmbeddings(
 ): Cluster[] {
   if (events.length === 0) return [];
 
-  // Extract embeddings
-  const embeddings = events
-    .filter((event) => event.embedding && event.embedding.length > 0)
-    .map((event) => event.embedding as number[]);
-
-  if (embeddings.length === 0) return [];
+  // Generate embeddings for all events (same logic as visualization components)
+  const embeddings = events.map((event) => generateEmbedding(event).vector);
 
   // Simple K-means implementation
   const dimensions = embeddings[0].length;
@@ -67,10 +66,8 @@ export function clusterEmbeddings(
     });
 
     // Assign points to nearest centroid
-    embeddings.forEach((embedding) => {
-      const event = events.find((e) => e.embedding === embedding);
-      if (!event) return;
-
+    events.forEach((event, index) => {
+      const embedding = embeddings[index];
       let minDistance = Infinity;
       let nearestCluster = clusters[0];
 
@@ -91,9 +88,9 @@ export function clusterEmbeddings(
         const newCenter = Array(dimensions).fill(0);
 
         cluster.points.forEach((point) => {
-          const embedding = point.embedding as number[];
+          const pointEmbedding = generateEmbedding(point).vector;
           for (let i = 0; i < dimensions; i++) {
-            newCenter[i] += embedding[i];
+            newCenter[i] += pointEmbedding[i];
           }
         });
 
@@ -260,7 +257,8 @@ function generateClusterLabel(events: MemoryEvent[]): string {
     a[1] > b[1] ? a : b
   )[0];
 
-  return `${mostCommonSource} (${mostCommonFacet[0]})`;
+  const facetKey = mostCommonFacet ? mostCommonFacet[0] : "unknown";
+  return `${mostCommonSource} (${facetKey})`;
 }
 
 // Search and filter utilities

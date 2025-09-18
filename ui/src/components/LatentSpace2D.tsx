@@ -1,8 +1,9 @@
 import { MemoryEvent } from "../types";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { Map } from "lucide-react";
 import { useWaypoints, useWaypointActions } from "../stores/appStore";
+import { generateRealEmbedding, reduceDimensions } from "../utils/embeddings";
 
 interface LatentSpaceViewProps {
   memoryEvents: MemoryEvent[];
@@ -19,6 +20,65 @@ interface Point2D {
   isWaypoint: boolean;
 }
 
+// Constants - single source of truth
+const VISUALIZATION_CONFIG = {
+  projectionScale: 200,
+  maxWidth: 600,
+  maxHeight: 400,
+  margin: { top: 20, right: 20, bottom: 20, left: 20 },
+  padding: 0.1,
+  pointRadius: 4,
+  selectedRadius: 6,
+  waypointRadius: 8,
+  trajectoryOpacity: 0.6,
+  pointOpacity: 0.8,
+  selectedOpacity: 1.0,
+} as const;
+
+const COLORS = {
+  vision: "#00E0BE",
+  speech: "#1BB4F2",
+  stm: "#FFB020",
+  ltm: "#8B5CF6",
+  default: "#3B82F6",
+} as const;
+
+// Pure utility functions - testable and reusable
+// generateFallbackEmbedding is now handled by the unified utility
+
+// generateRealEmbedding is now imported from utils/embeddings
+
+const projectTo2D = (
+  embeddings: number[][],
+  memoryEvents: MemoryEvent[],
+  waypoints: Set<number>
+): Point2D[] => {
+  if (embeddings.length === 0) return [];
+
+  return embeddings.map((embedding, index) => ({
+    x: (embedding[0] || 0) * VISUALIZATION_CONFIG.projectionScale,
+    y: (embedding[1] || 0) * VISUALIZATION_CONFIG.projectionScale,
+    event: memoryEvents[index],
+    isSelected: false,
+    isWaypoint: waypoints.has(memoryEvents[index].ts),
+  }));
+};
+
+const getPointColor = (source: string): string => {
+  return COLORS[source as keyof typeof COLORS] || COLORS.default;
+};
+
+const getPointRadius = (point: Point2D): number => {
+  if (point.isSelected) return VISUALIZATION_CONFIG.selectedRadius;
+  if (point.isWaypoint) return VISUALIZATION_CONFIG.waypointRadius;
+  return VISUALIZATION_CONFIG.pointRadius;
+};
+
+const getPointOpacity = (point: Point2D): number => {
+  if (point.isSelected) return VISUALIZATION_CONFIG.selectedOpacity;
+  return VISUALIZATION_CONFIG.pointOpacity;
+};
+
 export default function LatentSpaceView({
   memoryEvents,
   selectedEvent,
@@ -32,121 +92,35 @@ export default function LatentSpaceView({
   const waypoints = useWaypoints();
   const { toggleWaypoint } = useWaypointActions();
 
-  const projectTo2D = (embeddings: number[][]) => {
-    if (embeddings.length === 0) return [];
+  // Memoized embedding extraction - only recalculates when memoryEvents change
+  const extractEmbeddings = useCallback(async () => {
+    const embeddings = [];
 
-    // Simple 2D projection: use first two dimensions
-    return embeddings.map((embedding, index) => ({
-      x: (embedding[0] || 0) * 100,
-      y: (embedding[1] || 0) * 100,
-      event: memoryEvents[index],
-      isSelected: false,
-      isWaypoint: waypoints.has(memoryEvents[index].ts),
-    }));
-  };
+    for (let index = 0; index < memoryEvents.length; index++) {
+      const event = memoryEvents[index];
+      let embedding: number[];
 
-  // Extract embeddings from memory events
-  const extractEmbeddings = () => {
-    // Create embeddings based on stored facets
-    return memoryEvents.map((event) => {
-      const facets = event.facets;
-      const embedding = new Array(128).fill(0);
-
-      // Vision object features (dimensions 0-19)
-      if (facets["vision.object"]) {
-        const object = String(facets["vision.object"]).toLowerCase();
-        const objectHash = object.split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        // Distribute object features across multiple dimensions
-        for (let i = 0; i < 20; i++) {
-          embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
-        }
+      // Use existing embedding if available, otherwise generate one
+      if (
+        event.embedding &&
+        Array.isArray(event.embedding) &&
+        event.embedding.length > 0 &&
+        event.embedding.every((val) => typeof val === "number" && !isNaN(val))
+      ) {
+        embedding = [...event.embedding];
+      } else {
+        // Generate real embedding using ML service
+        const embeddingResult = await generateRealEmbedding(event);
+        embedding = embeddingResult.vector;
       }
 
-      // Vision color features (dimensions 20-29)
-      if (facets["vision.color"]) {
-        const color = String(facets["vision.color"]).toLowerCase();
-        const colorHash = color.split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        for (let i = 20; i < 30; i++) {
-          embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
-        }
-      }
+      embeddings.push(embedding);
+    }
 
-      // Speech intent features (dimensions 30-49)
-      if (facets["speech.intent"]) {
-        const intent = String(facets["speech.intent"]).toLowerCase();
-        const intentHash = intent.split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        for (let i = 30; i < 50; i++) {
-          embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
-        }
-      }
+    return embeddings;
+  }, [memoryEvents]);
 
-      // Affect features (dimensions 50-69)
-      if (facets["affect.valence"]) {
-        const valence = Number(facets["affect.valence"]);
-        // Spread valence across multiple dimensions
-        for (let i = 50; i < 60; i++) {
-          embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
-        }
-      }
-
-      if (facets["affect.arousal"]) {
-        const arousal = Number(facets["affect.arousal"]);
-        for (let i = 60; i < 70; i++) {
-          embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
-        }
-      }
-
-      // Source type features (dimensions 70-79)
-      const sourceHash = event.source.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 70; i < 80; i++) {
-        embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
-      }
-
-      // STM/LTM specific features (dimensions 90-99)
-      if (event.source === "stm" || event.source === "ltm") {
-        const content = event.content || "";
-        const contentHash = content.split("").reduce((a, b) => {
-          a = (a << 5) - a + b.charCodeAt(0);
-          return a & a;
-        }, 0);
-        for (let i = 90; i < 100; i++) {
-          embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
-        }
-      }
-
-      // Temporal features (dimensions 100-109)
-      const timeHash = event.ts
-        .toString()
-        .split("")
-        .reduce((a, b) => {
-          a = (a << 5) - a + parseInt(b);
-          return a & a;
-        }, 0);
-      for (let i = 100; i < 110; i++) {
-        embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
-      }
-
-      for (let i = 110; i < 128; i++) {
-        embedding[i] = 0;
-      }
-
-      return embedding;
-    });
-  };
-
-  // Update visualization when memory events change
+  // Update points when memory events change
   useEffect(() => {
     if (memoryEvents.length === 0) {
       setPoints([]);
@@ -155,308 +129,235 @@ export default function LatentSpaceView({
 
     setIsComputing(true);
 
-    setTimeout(() => {
-      const embeddings = extractEmbeddings();
-      const projectedPoints = projectTo2D(embeddings);
+    const processEmbeddings = async () => {
+      try {
+        const embeddings = await extractEmbeddings();
+        const reducedEmbeddings = await reduceDimensions(
+          embeddings.map((e) => ({
+            vector: e,
+            confidence: 0.8,
+            source: "unknown",
+            timestamp: 0,
+          }))
+        );
+        const projectedPoints = projectTo2D(
+          reducedEmbeddings,
+          memoryEvents,
+          waypoints
+        );
 
-      // Update selected state
-      const updatedPoints = projectedPoints.map((point) => ({
-        ...point,
-        isSelected: selectedEvent?.ts === point.event.ts,
-      }));
+        // Update selected state
+        const updatedPoints = projectedPoints.map((point) => ({
+          ...point,
+          isSelected: selectedEvent?.ts === point.event.ts,
+        }));
 
-      setPoints(updatedPoints);
-      setIsComputing(false);
-    }, 500);
-  }, [memoryEvents, selectedEvent, waypoints]);
+        setPoints(updatedPoints);
+        setIsComputing(false);
+      } catch (error) {
+        console.error("Error processing embeddings:", error);
+        setPoints([]);
+        setIsComputing(false);
+      }
+    };
+
+    processEmbeddings();
+  }, [memoryEvents, selectedEvent, waypoints, extractEmbeddings]);
+
+  // Memoized D3 visualization - only re-renders when points change
+  const renderVisualization = useCallback(() => {
+    if (!svgRef.current || points.length === 0) return;
+
+    const svg = d3.select(svgRef.current);
+    svg.selectAll("*").remove();
+
+    // Get container dimensions
+    const container = svgRef.current?.parentElement;
+    const containerWidth = container?.clientWidth || 400;
+    const containerHeight = container?.clientHeight || 300;
+
+    const width = Math.min(containerWidth, VISUALIZATION_CONFIG.maxWidth);
+    const height = Math.min(containerHeight, VISUALIZATION_CONFIG.maxHeight);
+    const margin = VISUALIZATION_CONFIG.margin;
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg
+      .attr("width", "100%")
+      .attr("height", "100%")
+      .attr("viewBox", `0 0 ${width} ${height}`)
+      .append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Create scales
+    const xExtent = d3.extent(points, (d) => d.x) as [number, number];
+    const yExtent = d3.extent(points, (d) => d.y) as [number, number];
+
+    // Add padding to ensure points are visible
+    const xPadding =
+      (xExtent[1] - xExtent[0]) * VISUALIZATION_CONFIG.padding || 10;
+    const yPadding =
+      (yExtent[1] - yExtent[0]) * VISUALIZATION_CONFIG.padding || 10;
+
+    const xScale = d3
+      .scaleLinear()
+      .domain([xExtent[0] - xPadding, xExtent[1] + xPadding])
+      .range([0, innerWidth]);
+
+    const yScale = d3
+      .scaleLinear()
+      .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
+      .range([innerHeight, 0]);
+
+    // Add trajectory line if enabled
+    if (showTrajectory && points.length > 1) {
+      const line = d3
+        .line<Point2D>()
+        .x((d) => xScale(d.x))
+        .y((d) => yScale(d.y));
+
+      g.append("path")
+        .datum(points)
+        .attr("fill", "none")
+        .attr("stroke", "#00E0BE")
+        .attr("stroke-width", 2)
+        .attr("opacity", VISUALIZATION_CONFIG.trajectoryOpacity)
+        .attr("d", line);
+    }
+
+    // Add points
+    const pointGroup = g.append("g").attr("class", "points");
+
+    pointGroup
+      .selectAll("circle")
+      .data(points)
+      .enter()
+      .append("circle")
+      .attr("cx", (d) => xScale(d.x))
+      .attr("cy", (d) => yScale(d.y))
+      .attr("r", getPointRadius)
+      .attr("fill", (d) => getPointColor(d.event.source))
+      .attr("opacity", getPointOpacity)
+      .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
+      .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
+      .style("cursor", "pointer")
+      .on("click", (event, d) => {
+        event.stopPropagation();
+        onSelectEvent(d.event);
+      })
+      .on("dblclick", (event, d) => {
+        event.stopPropagation();
+        toggleWaypoint(d.event.ts);
+      });
+
+    // Add axes
+    const xAxis = d3
+      .axisBottom(xScale)
+      .tickSize(0)
+      .tickFormat(() => "");
+    const yAxis = d3
+      .axisLeft(yScale)
+      .tickSize(0)
+      .tickFormat(() => "");
+
+    g.append("g")
+      .attr("class", "x-axis")
+      .attr("transform", `translate(0,${innerHeight})`)
+      .call(xAxis);
+
+    g.append("g").attr("class", "y-axis").call(yAxis);
+
+    // Add legend
+    const legend = g
+      .append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${innerWidth - 100}, 10)`);
+
+    // Vision
+    legend
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 0)
+      .attr("r", 4)
+      .attr("fill", COLORS.vision);
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 4)
+      .text("Vision")
+      .style("font-size", "8px")
+      .style("fill", "#9CA3AF");
+
+    // Speech
+    legend
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 16)
+      .attr("r", 4)
+      .attr("fill", COLORS.speech);
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 20)
+      .text("Speech")
+      .style("font-size", "8px")
+      .style("fill", "#9CA3AF");
+
+    // STM
+    legend
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 32)
+      .attr("r", 4)
+      .attr("fill", COLORS.stm);
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 36)
+      .text("STM")
+      .style("font-size", "8px")
+      .style("fill", "#9CA3AF");
+
+    // LTM
+    legend
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 48)
+      .attr("r", 4)
+      .attr("fill", COLORS.ltm);
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 52)
+      .text("LTM")
+      .style("font-size", "8px")
+      .style("fill", "#9CA3AF");
+
+    // Waypoint
+    legend
+      .append("circle")
+      .attr("cx", 0)
+      .attr("cy", 64)
+      .attr("r", 6)
+      .attr("fill", "none")
+      .attr("stroke", "#FFD700")
+      .attr("stroke-width", 2);
+
+    legend
+      .append("text")
+      .attr("x", 12)
+      .attr("y", 68)
+      .text("Waypoint")
+      .style("font-size", "8px")
+      .style("fill", "#9CA3AF");
+  }, [points, selectedEvent, onSelectEvent, showTrajectory, toggleWaypoint]);
 
   // Render D3 visualization
   useEffect(() => {
-    if (!svgRef.current || points.length === 0) return;
-
-    const renderVisualization = () => {
-      const svg = d3.select(svgRef.current);
-      svg.selectAll("*").remove();
-
-      // Get container dimensions
-      const container = svgRef.current?.parentElement;
-      const containerWidth = container?.clientWidth || 400;
-      const containerHeight = container?.clientHeight || 300;
-
-      const width = Math.min(containerWidth, 600); // Max width for readability
-      const height = Math.min(containerHeight, 400); // Max height for readability
-      const margin = { top: 20, right: 20, bottom: 20, left: 20 };
-      const innerWidth = width - margin.left - margin.right;
-      const innerHeight = height - margin.top - margin.bottom;
-
-      const g = svg
-        .attr("width", "100%")
-        .attr("height", "100%")
-        .attr("viewBox", `0 0 ${width} ${height}`)
-        .append("g")
-        .attr("transform", `translate(${margin.left},${margin.top})`);
-
-      // Create scales
-      const xScale = d3
-        .scaleLinear()
-        .domain(d3.extent(points, (d) => d.x) as [number, number])
-        .range([0, innerWidth]);
-
-      const yScale = d3
-        .scaleLinear()
-        .domain(d3.extent(points, (d) => d.y) as [number, number])
-        .range([innerHeight, 0]);
-
-      // Add axes
-      g.append("g")
-        .attr("transform", `translate(0,${innerHeight})`)
-        .call(d3.axisBottom(xScale).tickSize(0))
-        .selectAll("text")
-        .style("fill", "#9CA3AF");
-
-      g.append("g")
-        .call(d3.axisLeft(yScale).tickSize(0))
-        .selectAll("text")
-        .style("fill", "#9CA3AF");
-
-      // Draw trajectory lines with temporal progression
-      if (showTrajectory && points.length > 1) {
-        // Sort points by timestamp for proper temporal ordering
-        const sortedPoints = [...points].sort(
-          (a, b) => a.event.ts - b.event.ts
-        );
-
-        // Create gradient for temporal progression
-        const gradient = svg
-          .append("defs")
-          .append("linearGradient")
-          .attr("id", "trajectory-gradient")
-          .attr("gradientUnits", "userSpaceOnUse")
-          .attr("x1", 0)
-          .attr("y1", 0)
-          .attr("x2", innerWidth)
-          .attr("y2", innerHeight);
-
-        gradient
-          .append("stop")
-          .attr("offset", "0%")
-          .attr("stop-color", "#00E0BE")
-          .attr("stop-opacity", 0.3);
-
-        gradient
-          .append("stop")
-          .attr("offset", "100%")
-          .attr("stop-color", "#1BB4F2")
-          .attr("stop-opacity", 0.8);
-
-        // Draw trajectory line
-        g.append("path")
-          .datum(sortedPoints)
-          .attr("fill", "none")
-          .attr("stroke", "url(#trajectory-gradient)")
-          .attr("stroke-width", 3)
-          .attr("stroke-opacity", 0.8)
-          .attr("stroke-linecap", "round")
-          .attr("stroke-linejoin", "round")
-          .attr(
-            "d",
-            d3
-              .line<Point2D>()
-              .x((d) => xScale(d.x))
-              .y((d) => yScale(d.y))
-          );
-
-        // Add temporal markers along the trajectory
-        sortedPoints.forEach((point, index) => {
-          if (index > 0) {
-            const progress = index / (sortedPoints.length - 1);
-            const x = xScale(point.x);
-            const y = yScale(point.y);
-
-            // Add small temporal marker with progress-based opacity
-            g.append("circle")
-              .attr("cx", x)
-              .attr("cy", y)
-              .attr("r", 2)
-              .attr("fill", "#00E0BE")
-              .attr("opacity", 0.3 + progress * 0.7) // Fade in over time
-              .attr("stroke", "white")
-              .attr("stroke-width", 1);
-          }
-        });
-      }
-
-      // Draw points
-      const circles = g
-        .selectAll<SVGCircleElement, Point2D>("circle")
-        .data(points);
-
-      circles.exit().remove();
-
-      const circlesEnter = circles.enter().append("circle");
-
-      // Merge enter and update selections
-      const circlesMerged = circlesEnter.merge(circles);
-
-      circlesMerged
-        .attr("cx", (d) => xScale(d.x))
-        .attr("cy", (d) => yScale(d.y))
-        .attr("r", (d) => (d.isSelected ? 8 : d.isWaypoint ? 6 : 4))
-        .attr("fill", (d) => {
-          if (d.isSelected) return "#00E0BE";
-          if (d.isWaypoint) return "#9CA3AF";
-          if (d.event.source === "vision") return "#00E0BE";
-          if (d.event.source === "speech") return "#1BB4F2";
-          if (d.event.source === "stm") return "#FFB020";
-          if (d.event.source === "ltm") return "#8B5CF6";
-          return "#3B82F6"; // Default blue
-        })
-        .attr("stroke", (d) => (d.isSelected ? "#FFFFFF" : "none"))
-        .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
-        .style("cursor", "pointer")
-        .on("click", (_, d) => {
-          d3.selectAll(".tooltip").remove();
-          onSelectEvent(d.event);
-        })
-        .on("contextmenu", (event, d) => {
-          event.preventDefault();
-          handleToggleWaypoint(d.event);
-        })
-        .on("mouseover", function (event, d) {
-          d3.select(this).attr("r", 8);
-
-          // Show enhanced tooltip
-          const tooltip = d3
-            .select("body")
-            .append("div")
-            .attr("class", "tooltip")
-            .style("position", "absolute")
-            .style("background", "rgba(0,0,0,0.9)")
-            .style("color", "white")
-            .style("padding", "12px")
-            .style("border-radius", "0")
-            .style("font-size", "12px")
-            .style("pointer-events", "none")
-            .style("z-index", "1000")
-            .style("border", "none")
-            .style("box-shadow", "0 4px 12px rgba(0,0,0,0.3)")
-            .style("max-width", "300px");
-
-          const facets = Object.entries(d.event.facets)
-            .slice(0, 3)
-            .map(
-              ([key, value]) =>
-                `<div><span style="color: #00E0BE">${key}:</span> ${value}</div>`
-            )
-            .join("");
-
-          tooltip.html(`
-            <div style="font-weight: bold; color: #00E0BE; margin-bottom: 4px;">${d.event.source.toUpperCase()}</div>
-            <div style="color: #9CA3AF; margin-bottom: 8px;">${new Date(
-              d.event.ts * 1000
-            ).toLocaleTimeString()}</div>
-            <div>${facets}</div>
-          `);
-
-          tooltip
-            .style("left", event.pageX + 10 + "px")
-            .style("top", event.pageY - 10 + "px");
-        })
-        .on("mouseout", function (_, d: Point2D) {
-          d3.select(this).attr("r", () =>
-            d.isSelected ? 8 : d.isWaypoint ? 6 : 4
-          );
-          d3.selectAll(".tooltip").remove();
-        });
-
-      // Legend
-      const legend = g
-        .append("g")
-        .attr(
-          "transform",
-          `translate(${innerWidth + 80}, ${innerHeight - 240})`
-        );
-
-      legend
-        .append("rect")
-        .attr("x", -10)
-        .attr("y", -10)
-        .attr("width", 70)
-        .attr("height", 100)
-        .attr("fill", "rgba(0, 0, 0, 0.25)")
-        .attr("rx", 4);
-
-      legend
-        .append("circle")
-        .attr("cx", 0)
-        .attr("cy", 0)
-        .attr("r", 4)
-        .attr("fill", "#00E0BE");
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 4)
-        .text("Vision")
-        .style("font-size", "8px")
-        .style("fill", "#9CA3AF");
-
-      legend
-        .append("circle")
-        .attr("cx", 0)
-        .attr("cy", 20)
-        .attr("r", 4)
-        .attr("fill", "#1BB4F2");
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 24)
-        .text("Speech")
-        .style("font-size", "8px")
-        .style("fill", "#9CA3AF");
-
-      legend
-        .append("circle")
-        .attr("cx", 0)
-        .attr("cy", 40)
-        .attr("r", 4)
-        .attr("fill", "#FFB020");
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 44)
-        .text("STM")
-        .style("font-size", "8px")
-        .style("fill", "#9CA3AF");
-
-      legend
-        .append("circle")
-        .attr("cx", 0)
-        .attr("cy", 60)
-        .attr("r", 4)
-        .attr("fill", "#8B5CF6");
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 64)
-        .text("LTM")
-        .style("font-size", "8px")
-        .style("fill", "#9CA3AF");
-
-      legend
-        .append("circle")
-        .attr("cx", 0)
-        .attr("cy", 80)
-        .attr("r", 4)
-        .attr("fill", "#9CA3AF");
-      legend
-        .append("text")
-        .attr("x", 12)
-        .attr("y", 84)
-        .text("Waypoint")
-        .style("font-size", "8px")
-        .style("fill", "#9CA3AF");
-    };
-
     renderVisualization();
 
     const resizeObserver = new ResizeObserver(() => {
@@ -470,11 +371,7 @@ export default function LatentSpaceView({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [points, selectedEvent, onSelectEvent, showTrajectory]);
-
-  const handleToggleWaypoint = (event: MemoryEvent) => {
-    toggleWaypoint(event.ts);
-  };
+  }, [renderVisualization]);
 
   return (
     <div className="h-full flex flex-col min-h-0 p-2">

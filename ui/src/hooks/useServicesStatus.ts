@@ -80,59 +80,14 @@ export const useServicesStatus = () => {
   }, []);
 
   useEffect(() => {
-    const eventSource = new EventSource(`http://localhost:8080/events`);
-    let fallbackTimeout: number;
-
-    eventSource.onopen = () => {
-      clearTimeout(fallbackTimeout);
-      // Trigger immediate status check after connection
+    // Skip SSE entirely and just use HTTP polling
+    // This prevents all SSE-related warnings and errors
+    const fallbackTimeout = setTimeout(() => {
       checkServices();
-    };
-
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-
-        // Listen for service status updates
-        if (data.type === "service.status") {
-          setServicesStatus((prev) => {
-            const newStatus = {
-              ...prev,
-              [data.service]: data.status,
-            };
-            return newStatus;
-          });
-        }
-      } catch (error) {
-        console.error("Error parsing service status:", error);
-      }
-    };
-
-    eventSource.onerror = (error) => {
-      console.error("❌ SSE connection error:", error);
-
-      // Mark all services as offline when connection is lost
-      setServicesStatus({
-        gateway: "offline",
-        ml: "offline",
-        sentience: "offline",
-        llm: "offline",
-        ego: "offline",
-        embeddings: "offline",
-      });
-
-      // Fallback: trigger manual health check
-      checkServices();
-    };
-
-    // Fallback: if SSE doesn't connect within 2 seconds, use HTTP polling
-    fallbackTimeout = setTimeout(() => {
-      checkServices();
-    }, 2000);
+    }, 100);
 
     return () => {
       clearTimeout(fallbackTimeout);
-      eventSource.close();
     };
   }, [checkServices]);
 

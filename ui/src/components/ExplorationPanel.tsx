@@ -65,11 +65,34 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
 
     // Generate clusters and groups
     const clusters = useMemo(() => {
-      return clusterEmbeddings(memoryEvents, clusterCount);
+      const result = clusterEmbeddings(memoryEvents, clusterCount);
+      console.log("🔍 ExplorationPanel - Clusters generated:", {
+        memoryEventsCount: memoryEvents.length,
+        clusterCount: clusterCount,
+        clustersGenerated: result.length,
+        clusters: result.map((c) => ({
+          id: c.id,
+          label: c.label,
+          pointsCount: c.points.length,
+          points: c.points.map((p) => ({ ts: p.ts, source: p.source })),
+        })),
+      });
+      return result;
     }, [memoryEvents, clusterCount]);
 
     const semanticGroups = useMemo(() => {
-      return createSemanticGroups(memoryEvents);
+      const result = createSemanticGroups(memoryEvents);
+      console.log("🔍 ExplorationPanel - Groups generated:", {
+        memoryEventsCount: memoryEvents.length,
+        groupsGenerated: result.length,
+        groups: result.map((g) => ({
+          id: g.id,
+          name: g.name,
+          eventsCount: g.events.length,
+          events: g.events.map((e) => ({ ts: e.ts, source: e.source })),
+        })),
+      });
+      return result;
     }, [memoryEvents]);
 
     // Apply filters and search
@@ -118,18 +141,42 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
     );
 
     const handleClusterClick = (cluster: Cluster) => {
+      console.log("🔍 ExplorationPanel - Cluster clicked:", {
+        clusterId: cluster.id,
+        clusterLabel: cluster.label,
+        pointsCount: cluster.points.length,
+        points: cluster.points.map((p) => ({ ts: p.ts, source: p.source })),
+        isCurrentlySelected: selectedCluster?.id === cluster.id,
+      });
+
       if (selectedCluster?.id === cluster.id) {
+        console.log("🔍 ExplorationPanel - Deselecting cluster");
         onClusterSelect(null);
       } else {
+        console.log(
+          "🔍 ExplorationPanel - Selecting cluster, calling onClusterSelect"
+        );
         onClusterSelect(cluster);
         onGroupSelect(null); // Clear group selection
       }
     };
 
     const handleGroupClick = (group: SemanticGroup) => {
+      console.log("🔍 ExplorationPanel - Group clicked:", {
+        groupId: group.id,
+        groupName: group.name,
+        eventsCount: group.events.length,
+        events: group.events.map((e) => ({ ts: e.ts, source: e.source })),
+        isCurrentlySelected: selectedGroup?.id === group.id,
+      });
+
       if (selectedGroup?.id === group.id) {
+        console.log("🔍 ExplorationPanel - Deselecting group");
         onGroupSelect(null);
       } else {
+        console.log(
+          "🔍 ExplorationPanel - Selecting group, calling onGroupSelect"
+        );
         onGroupSelect(group);
         onClusterSelect(null); // Clear cluster selection
       }
@@ -260,32 +307,39 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
               </div>
 
               {/* Cluster list */}
-              {clusters.map((cluster) => (
-                <button
-                  key={cluster.id}
-                  onClick={() => handleClusterClick(cluster)}
-                  className={`w-full text-left p-2 flat ${
-                    selectedCluster?.id === cluster.id
-                      ? "btn-primary nav-active"
-                      : "btn-secondary"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: cluster.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate">
-                        {cluster.label}
-                      </div>
-                      <div className="text-xs text-ui-dim">
-                        {cluster.size} points
+              {clusters.map((cluster) => {
+                console.log("🔍 Rendering cluster:", cluster.id, cluster.label);
+                return (
+                  <button
+                    key={cluster.id}
+                    onClick={() => {
+                      console.log("🔍 Button clicked for cluster:", cluster.id);
+                      handleClusterClick(cluster);
+                    }}
+                    className={`w-full text-left p-2 flat ${
+                      selectedCluster?.id === cluster.id
+                        ? "btn-primary nav-active"
+                        : "btn-secondary"
+                    }`}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: cluster.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">
+                          {cluster.label}
+                        </div>
+                        <div className="text-xs text-ui-dim">
+                          {cluster.size} points
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>
@@ -309,32 +363,39 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
 
           {showGroups && (
             <div className="space-y-1">
-              {semanticGroups.map((group) => (
-                <button
-                  key={group.id}
-                  onClick={() => handleGroupClick(group)}
-                  className={`w-full text-left p-2 flat ${
-                    selectedGroup?.id === group.id
-                      ? "btn-primary nav-active"
-                      : "btn-secondary"
-                  }`}
-                >
-                  <div className="flex items-center gap-2">
-                    <div
-                      className="w-3 h-3 rounded-full"
-                      style={{ backgroundColor: group.color }}
-                    />
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs font-medium truncate">
-                        {group.name}
-                      </div>
-                      <div className="text-xs text-ui-dim">
-                        {group.events.length} events
+              {semanticGroups.map((group) => {
+                console.log("🔍 Rendering group:", group.id, group.name);
+                return (
+                  <button
+                    key={group.id}
+                    onClick={() => {
+                      console.log("🔍 Button clicked for group:", group.id);
+                      handleGroupClick(group);
+                    }}
+                    className={`w-full text-left p-2 flat ${
+                      selectedGroup?.id === group.id
+                        ? "btn-primary nav-active"
+                        : "btn-secondary"
+                    }`}
+                    style={{ cursor: "pointer" }}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-3 h-3 rounded-full"
+                        style={{ backgroundColor: group.color }}
+                      />
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium truncate">
+                          {group.name}
+                        </div>
+                        <div className="text-xs text-ui-dim">
+                          {group.events.length} events
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </button>
-              ))}
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

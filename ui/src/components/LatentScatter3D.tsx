@@ -3,6 +3,7 @@ import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { MemoryEvent } from "../types";
+import { generateEmbedding } from "../utils/embeddings";
 
 interface LatentScatterProps {
   memoryEvents: MemoryEvent[];
@@ -14,6 +15,7 @@ interface LatentScatterProps {
   ) => void;
   className?: string;
   cameraPreset?: "top" | "isometric" | "free";
+  showTrajectory?: boolean;
 }
 
 interface Point3D {
@@ -89,101 +91,19 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
   });
 };
 
-// Extract embeddings from memory events
+// Extract embeddings from memory events using unified utility
 const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
   return memoryEvents.map((event) => {
-    const facets = event.facets;
-    const embedding = new Array(128).fill(0);
-
-    // Vision object features (dimensions 0-19)
-    if (facets["vision.object"]) {
-      const object = String(facets["vision.object"]).toLowerCase();
-      const objectHash = object.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 0; i < 20; i++) {
-        embedding[i] = Math.sin(objectHash + i) * 0.5 + 0.5;
-      }
+    // Use existing embedding if available, otherwise generate one
+    if (
+      event.embedding &&
+      Array.isArray(event.embedding) &&
+      event.embedding.length > 0
+    ) {
+      return event.embedding as number[];
+    } else {
+      return generateEmbedding(event).vector;
     }
-
-    // Vision color features (dimensions 20-29)
-    if (facets["vision.color"]) {
-      const color = String(facets["vision.color"]).toLowerCase();
-      const colorHash = color.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 20; i < 30; i++) {
-        embedding[i] = Math.cos(colorHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Speech intent features (dimensions 30-49)
-    if (facets["speech.intent"]) {
-      const intent = String(facets["speech.intent"]).toLowerCase();
-      const intentHash = intent.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 30; i < 50; i++) {
-        embedding[i] = Math.sin(intentHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Affect features (dimensions 50-69)
-    if (facets["affect.valence"]) {
-      const valence = Number(facets["affect.valence"]);
-      for (let i = 50; i < 60; i++) {
-        embedding[i] = valence * (0.8 + 0.4 * Math.sin(i));
-      }
-    }
-
-    if (facets["affect.arousal"]) {
-      const arousal = Number(facets["affect.arousal"]);
-      for (let i = 60; i < 70; i++) {
-        embedding[i] = arousal * (0.8 + 0.4 * Math.cos(i));
-      }
-    }
-
-    // Source type features (dimensions 70-79)
-    const sourceHash = event.source.split("").reduce((a, b) => {
-      a = (a << 5) - a + b.charCodeAt(0);
-      return a & a;
-    }, 0);
-    for (let i = 70; i < 80; i++) {
-      embedding[i] = Math.sin(sourceHash + i) * 0.5 + 0.5;
-    }
-
-    // STM/LTM specific features (dimensions 80-89)
-    if (event.source === "stm" || event.source === "ltm") {
-      const content = event.content || "";
-      const contentHash = content.split("").reduce((a, b) => {
-        a = (a << 5) - a + b.charCodeAt(0);
-        return a & a;
-      }, 0);
-      for (let i = 80; i < 90; i++) {
-        embedding[i] = Math.cos(contentHash + i) * 0.5 + 0.5;
-      }
-    }
-
-    // Temporal features (dimensions 90-99)
-    const timeHash = event.ts
-      .toString()
-      .split("")
-      .reduce((a, b) => {
-        a = (a << 5) - a + parseInt(b);
-        return a & a;
-      }, 0);
-    for (let i = 90; i < 100; i++) {
-      embedding[i] = Math.cos(timeHash + i) * 0.5 + 0.5;
-    }
-
-    for (let i = 100; i < 128; i++) {
-      embedding[i] = 0;
-    }
-
-    return embedding;
   });
 };
 
@@ -335,8 +255,11 @@ const StableCanvas = memo(
       </Canvas>
     );
   },
-  () => true
-); // Never re-render this component
+  (prevProps, nextProps) => {
+    // Only re-render if children actually change
+    return prevProps.children === nextProps.children;
+  }
+);
 
 // Main Scene Component
 function Scene3D({
@@ -348,6 +271,7 @@ function Scene3D({
   focusTarget,
   setFocusTarget,
   cameraPreset = "free",
+  showTrajectory = true,
 }: {
   points: Point3D[];
   onSelectEvent: (event: MemoryEvent) => void;
@@ -360,6 +284,7 @@ function Scene3D({
   focusTarget: { x: number; y: number; z: number } | null;
   setFocusTarget: (target: { x: number; y: number; z: number } | null) => void;
   cameraPreset?: "top" | "isometric" | "free";
+  showTrajectory?: boolean;
 }) {
   const { camera } = useThree();
 
@@ -462,6 +387,66 @@ function Scene3D({
     }
   }, [camera, setCameraPosition, points, cameraPreset, hasInitialized]);
 
+  // Handle camera preset changes after initialization
+  useEffect(() => {
+    if (!hasInitialized || points.length === 0) return;
+
+    // Calculate bounds of all points
+    const bounds = points.reduce(
+      (acc, point) => ({
+        minX: Math.min(acc.minX, point.x),
+        maxX: Math.max(acc.maxX, point.x),
+        minY: Math.min(acc.minY, point.y),
+        maxY: Math.max(acc.maxY, point.y),
+        minZ: Math.min(acc.minZ, point.z),
+        maxZ: Math.max(acc.maxZ, point.z),
+      }),
+      {
+        minX: Infinity,
+        maxX: -Infinity,
+        minY: Infinity,
+        maxY: -Infinity,
+        minZ: Infinity,
+        maxZ: -Infinity,
+      }
+    );
+
+    const centerX = (bounds.minX + bounds.maxX) / 2;
+    const centerY = (bounds.minY + bounds.maxY) / 2;
+    const centerZ = (bounds.minZ + bounds.maxZ) / 2;
+    const maxSize = Math.max(
+      bounds.maxX - bounds.minX,
+      bounds.maxY - bounds.minY,
+      bounds.maxZ - bounds.minZ
+    );
+    const distance = Math.max(maxSize * 2, 10);
+
+    switch (cameraPreset) {
+      case "top":
+        camera.position.set(centerX, centerY + distance, centerZ);
+        camera.lookAt(centerX, centerY, centerZ);
+        setCameraPosition({ x: centerX, y: centerY + distance, z: centerZ });
+        break;
+      case "isometric":
+        const isoX = centerX + distance * 0.5;
+        const isoY = centerY + distance * 0.5;
+        const isoZ = centerZ + distance * 0.5;
+        camera.position.set(isoX, isoY, isoZ);
+        camera.lookAt(centerX, centerY, centerZ);
+        setCameraPosition({ x: isoX, y: isoY, z: isoZ });
+        break;
+      case "free":
+      default:
+        const freeX = centerX + distance * 0.5;
+        const freeY = centerY + distance * 0.5;
+        const freeZ = centerZ + distance * 0.5;
+        camera.position.set(freeX, freeY, freeZ);
+        camera.lookAt(centerX, centerY, centerZ);
+        setCameraPosition({ x: freeX, y: freeY, z: freeZ });
+        break;
+    }
+  }, [cameraPreset, camera, setCameraPosition, points, hasInitialized]);
+
   return (
     <>
       <ambientLight intensity={0.4} />
@@ -472,7 +457,7 @@ function Scene3D({
       <gridHelper args={[600, 30, "#1E2531", "#0F131A"]} />
 
       {/* Journey lines */}
-      {points.length > 1 && <JourneyLines points={points} />}
+      {showTrajectory && points.length > 1 && <JourneyLines points={points} />}
 
       {/* Individual points */}
       <IndividualPoints
@@ -492,6 +477,7 @@ const LatentScatter3D = memo(
     onHoverEvent,
     className = "",
     cameraPreset = "free",
+    showTrajectory = true,
   }: LatentScatterProps) {
     const [points, setPoints] = useState<Point3D[]>([]);
     const [isComputing, setIsComputing] = useState(false);
@@ -609,6 +595,7 @@ const LatentScatter3D = memo(
                 focusTarget={focusTarget}
                 setFocusTarget={setFocusTarget}
                 cameraPreset={cameraPreset}
+                showTrajectory={showTrajectory}
               />
               <OrbitControls
                 enablePan={true}
@@ -714,9 +701,15 @@ const LatentScatter3D = memo(
     );
   },
   (prevProps, nextProps) => {
-    // Only prevent re-render if selected event and camera preset haven't changed
     // Allow re-renders for memory events changes to handle filters properly
+    // Only prevent re-render if nothing has changed
     return (
+      prevProps.memoryEvents.length === nextProps.memoryEvents.length &&
+      prevProps.memoryEvents.every(
+        (event, index) =>
+          event.ts === nextProps.memoryEvents[index]?.ts &&
+          event.source === nextProps.memoryEvents[index]?.source
+      ) &&
       prevProps.selectedEvent?.ts === nextProps.selectedEvent?.ts &&
       prevProps.cameraPreset === nextProps.cameraPreset &&
       prevProps.className === nextProps.className
