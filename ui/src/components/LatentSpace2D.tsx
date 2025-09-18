@@ -3,7 +3,7 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import * as d3 from "d3";
 import { Map } from "lucide-react";
 import { useWaypoints, useWaypointActions } from "../stores/appStore";
-import { generateRealEmbedding, reduceDimensions } from "../utils/embeddings";
+import { getEmbeddingsForEvents, reduceDimensions } from "../utils/embeddings";
 
 interface LatentSpaceViewProps {
   memoryEvents: MemoryEvent[];
@@ -94,33 +94,16 @@ export default function LatentSpaceView({
 
   // Memoized embedding extraction - only recalculates when memoryEvents change
   const extractEmbeddings = useCallback(async () => {
-    const embeddings = [];
+    if (memoryEvents.length === 0) return [];
 
-    for (let index = 0; index < memoryEvents.length; index++) {
-      const event = memoryEvents[index];
-      let embedding: number[];
+    const embeddings = await getEmbeddingsForEvents(memoryEvents, {
+      concurrency: 6,
+    });
 
-      // Use existing embedding if available, otherwise generate one
-      if (
-        event.embedding &&
-        Array.isArray(event.embedding) &&
-        event.embedding.length > 0 &&
-        event.embedding.every((val) => typeof val === "number" && !isNaN(val))
-      ) {
-        embedding = [...event.embedding];
-      } else {
-        // Generate real embedding using ML service
-        const embeddingResult = await generateRealEmbedding(event);
-        embedding = embeddingResult.vector;
-      }
-
-      embeddings.push(embedding);
-    }
-
-    return embeddings;
+    return embeddings.map((e) => e.vector);
   }, [memoryEvents]);
 
-  // Update points when memory events change
+  // Heavy computation: embeddings + reduction (only when memoryEvents change)
   useEffect(() => {
     if (memoryEvents.length === 0) {
       setPoints([]);
@@ -138,7 +121,8 @@ export default function LatentSpaceView({
             confidence: 0.8,
             source: "unknown",
             timestamp: 0,
-          }))
+          })),
+          2 // Use 2 dimensions for 2D visualization
         );
         const projectedPoints = projectTo2D(
           reducedEmbeddings,
@@ -146,13 +130,7 @@ export default function LatentSpaceView({
           waypoints
         );
 
-        // Update selected state
-        const updatedPoints = projectedPoints.map((point) => ({
-          ...point,
-          isSelected: selectedEvent?.ts === point.event.ts,
-        }));
-
-        setPoints(updatedPoints);
+        setPoints(projectedPoints);
         setIsComputing(false);
       } catch (error) {
         console.error("Error processing embeddings:", error);
@@ -162,14 +140,24 @@ export default function LatentSpaceView({
     };
 
     processEmbeddings();
-  }, [memoryEvents, selectedEvent, waypoints, extractEmbeddings]);
+  }, [memoryEvents, extractEmbeddings]);
 
-  // Memoized D3 visualization - only re-renders when points change
-  const renderVisualization = useCallback(() => {
-    if (!svgRef.current || points.length === 0) return;
+  // Light updates: selection and waypoint states (no recomputation)
+  useEffect(() => {
+    setPoints((prevPoints) =>
+      prevPoints.map((point) => ({
+        ...point,
+        isSelected: selectedEvent?.ts === point.event.ts,
+        isWaypoint: waypoints.has(point.event.ts),
+      }))
+    );
+  }, [selectedEvent, waypoints]);
+
+  // Initialize SVG structure (only runs once)
+  const initializeSVG = useCallback(() => {
+    if (!svgRef.current) return;
 
     const svg = d3.select(svgRef.current);
-    svg.selectAll("*").remove();
 
     // Get container dimensions
     const container = svgRef.current?.parentElement;
@@ -182,12 +170,52 @@ export default function LatentSpaceView({
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
+    // Clear and setup SVG
+    svg.selectAll("*").remove();
+
     const g = svg
       .attr("width", "100%")
       .attr("height", "100%")
       .attr("viewBox", `0 0 ${width} ${height}`)
       .append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    // Create static elements
+    g.append("g").attr("class", "x-axis");
+    g.append("g").attr("class", "y-axis");
+    g.append("g").attr("class", "points");
+    g.append("g").attr("class", "trajectory");
+    g.append("g").attr("class", "legend");
+
+    return { g, width, height, innerWidth, innerHeight, margin };
+  }, []);
+
+  // Update visualization data (runs when points change)
+  const updateVisualization = useCallback(() => {
+    if (!svgRef.current || points.length === 0) return;
+
+    const svg = d3.select(svgRef.current);
+    const g = svg.select("g");
+
+    if (g.empty()) {
+      initializeSVG();
+      return;
+    }
+
+    // Get container dimensions
+    const container = svgRef.current?.parentElement;
+    const containerWidth = container?.clientWidth || 400;
+    const containerHeight = container?.clientHeight || 300;
+
+    const width = Math.min(containerWidth, VISUALIZATION_CONFIG.maxWidth);
+    const height = Math.min(containerHeight, VISUALIZATION_CONFIG.maxHeight);
+    const margin = VISUALIZATION_CONFIG.margin;
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    // Update SVG dimensions
+    svg.attr("viewBox", `0 0 ${width} ${height}`);
+    g.attr("transform", `translate(${margin.left},${margin.top})`);
 
     // Create scales
     const xExtent = d3.extent(points, (d) => d.x) as [number, number];
@@ -209,37 +237,49 @@ export default function LatentSpaceView({
       .domain([yExtent[0] - yPadding, yExtent[1] + yPadding])
       .range([innerHeight, 0]);
 
-    // Add trajectory line if enabled
+    // Update trajectory line
+    const trajectoryGroup = g.select(".trajectory");
     if (showTrajectory && points.length > 1) {
       const line = d3
         .line<Point2D>()
         .x((d) => xScale(d.x))
         .y((d) => yScale(d.y));
 
-      g.append("path")
-        .datum(points)
+      // Sort points by timestamp for proper trajectory order
+      const sortedPoints = [...points].sort((a, b) => a.event.ts - b.event.ts);
+
+      const trajectoryPath = trajectoryGroup
+        .selectAll("path")
+        .data([sortedPoints]);
+
+      trajectoryPath.exit().remove();
+
+      trajectoryPath
+        .enter()
+        .append("path")
+        .merge(trajectoryPath as any)
         .attr("fill", "none")
         .attr("stroke", "#00E0BE")
         .attr("stroke-width", 2)
         .attr("opacity", VISUALIZATION_CONFIG.trajectoryOpacity)
         .attr("d", line);
+    } else {
+      trajectoryGroup.selectAll("path").remove();
     }
 
-    // Add points
-    const pointGroup = g.append("g").attr("class", "points");
-
-    pointGroup
+    // Update points using data-join
+    const pointGroup = g.select(".points");
+    const circles = pointGroup
       .selectAll("circle")
-      .data(points)
+      .data(points, (d: any) => d.event.ts); // Key function for stable updates
+
+    // Remove old points
+    circles.exit().remove();
+
+    // Add new points
+    const newCircles = circles
       .enter()
       .append("circle")
-      .attr("cx", (d) => xScale(d.x))
-      .attr("cy", (d) => yScale(d.y))
-      .attr("r", getPointRadius)
-      .attr("fill", (d) => getPointColor(d.event.source))
-      .attr("opacity", getPointOpacity)
-      .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
-      .attr("stroke-width", (d) => (d.isSelected ? 2 : 0))
       .style("cursor", "pointer")
       .on("click", (event, d) => {
         event.stopPropagation();
@@ -250,7 +290,18 @@ export default function LatentSpaceView({
         toggleWaypoint(d.event.ts);
       });
 
-    // Add axes
+    // Update all points (new + existing)
+    circles
+      .merge(newCircles as any)
+      .attr("cx", (d) => xScale(d.x))
+      .attr("cy", (d) => yScale(d.y))
+      .attr("r", getPointRadius)
+      .attr("fill", (d) => getPointColor(d.event.source))
+      .attr("opacity", getPointOpacity)
+      .attr("stroke", (d) => (d.isSelected ? "#ffffff" : "none"))
+      .attr("stroke-width", (d) => (d.isSelected ? 2 : 0));
+
+    // Update axes
     const xAxis = d3
       .axisBottom(xScale)
       .tickSize(0)
@@ -260,18 +311,19 @@ export default function LatentSpaceView({
       .tickSize(0)
       .tickFormat(() => "");
 
-    g.append("g")
-      .attr("class", "x-axis")
+    g.select(".x-axis")
       .attr("transform", `translate(0,${innerHeight})`)
-      .call(xAxis);
+      .call(xAxis as any);
 
-    g.append("g").attr("class", "y-axis").call(yAxis);
+    g.select(".y-axis").call(yAxis as any);
 
-    // Add legend
+    // Update legend
     const legend = g
-      .append("g")
-      .attr("class", "legend")
+      .select(".legend")
       .attr("transform", `translate(${innerWidth - 100}, 10)`);
+
+    // Clear and recreate legend items
+    legend.selectAll("*").remove();
 
     // Vision
     legend
@@ -354,14 +406,29 @@ export default function LatentSpaceView({
       .text("Waypoint")
       .style("font-size", "8px")
       .style("fill", "#9CA3AF");
-  }, [points, selectedEvent, onSelectEvent, showTrajectory, toggleWaypoint]);
+  }, [
+    points,
+    selectedEvent,
+    onSelectEvent,
+    showTrajectory,
+    toggleWaypoint,
+    initializeSVG,
+  ]);
 
-  // Render D3 visualization
+  // Initialize SVG on mount
   useEffect(() => {
-    renderVisualization();
+    initializeSVG();
+  }, [initializeSVG]);
 
+  // Update visualization when data changes
+  useEffect(() => {
+    updateVisualization();
+  }, [updateVisualization]);
+
+  // Handle resize
+  useEffect(() => {
     const resizeObserver = new ResizeObserver(() => {
-      renderVisualization();
+      updateVisualization();
     });
 
     if (svgRef.current && svgRef.current.parentElement) {
@@ -371,7 +438,7 @@ export default function LatentSpaceView({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [renderVisualization]);
+  }, [updateVisualization]);
 
   return (
     <div className="h-full flex flex-col min-h-0 p-2">

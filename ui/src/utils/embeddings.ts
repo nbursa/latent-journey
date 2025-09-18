@@ -164,7 +164,8 @@ export async function generateRealEmbedding(
  * Falls back to simple projection if service is unavailable
  */
 export async function reduceDimensions(
-  embeddings: Embedding[]
+  embeddings: Embedding[],
+  targetDimensions: number = 3
 ): Promise<number[][]> {
   try {
     const response = await fetch("/api/embeddings/reduce-dimensions", {
@@ -174,7 +175,7 @@ export async function reduceDimensions(
       },
       body: JSON.stringify({
         embeddings: embeddings.map((e) => e.vector),
-        target_dimensions: 3,
+        target_dimensions: targetDimensions,
       }),
     });
 
@@ -190,12 +191,13 @@ export async function reduceDimensions(
       error
     );
 
-    // Simple fallback: use first 3 dimensions
-    return embeddings.map((embedding) => [
-      embedding.vector[0] || 0,
-      embedding.vector[1] || 0,
-      embedding.vector[2] || 0,
-    ]);
+    // Simple fallback: use first N dimensions
+    return embeddings.map((embedding) =>
+      Array.from(
+        { length: targetDimensions },
+        (_, i) => embedding.vector[i] || 0
+      )
+    );
   }
 }
 
@@ -203,6 +205,17 @@ export async function reduceDimensions(
  * Cache for embeddings to avoid recomputation
  */
 const embeddingCache = new Map<string, Embedding>();
+
+// Global preference for real vs fallback embeddings
+let preferRealEmbeddings = true;
+
+export function setPreferRealEmbeddings(prefer: boolean) {
+  preferRealEmbeddings = prefer;
+}
+
+export function getPreferRealEmbeddings(): boolean {
+  return preferRealEmbeddings;
+}
 
 /**
  * Get or generate embedding with caching
@@ -224,4 +237,96 @@ export function getCachedEmbedding(event: MemoryEvent): Embedding {
  */
 export function clearEmbeddingCache(): void {
   embeddingCache.clear();
+}
+
+/**
+ * Get embedding for an event with unified caching and fallback strategy
+ * This is the single source of truth for all views
+ */
+export async function getEmbeddingForEvent(
+  event: MemoryEvent,
+  options: { preferReal?: boolean } = {}
+): Promise<Embedding> {
+  const preferReal = options.preferReal ?? preferRealEmbeddings;
+  const cacheKey = `${event.ts}-${event.source}-${event.content || ""}`;
+
+  // Check cache first
+  if (embeddingCache.has(cacheKey)) {
+    return embeddingCache.get(cacheKey)!;
+  }
+
+  let embedding: Embedding;
+
+  // Use existing embedding if available
+  if (
+    event.embedding &&
+    Array.isArray(event.embedding) &&
+    event.embedding.length > 0
+  ) {
+    embedding = {
+      vector: event.embedding as number[],
+      confidence: Number(event.facets["confidence"]) || 0.8,
+      source: event.source,
+      timestamp: event.ts,
+    };
+  } else if (preferReal) {
+    // Try real embedding first, fall back to deterministic
+    try {
+      embedding = await generateRealEmbedding(event);
+    } catch (error) {
+      console.warn("Failed to generate real embedding, using fallback:", error);
+      embedding = generateEmbedding(event);
+    }
+  } else {
+    // Use deterministic generation
+    embedding = generateEmbedding(event);
+  }
+
+  // Cache the result
+  embeddingCache.set(cacheKey, embedding);
+  return embedding;
+}
+
+/**
+ * Get embeddings for multiple events with concurrency control
+ */
+export async function getEmbeddingsForEvents(
+  events: MemoryEvent[],
+  options: { preferReal?: boolean; concurrency?: number } = {
+    concurrency: 6,
+  }
+): Promise<Embedding[]> {
+  const preferReal = options.preferReal ?? preferRealEmbeddings;
+  const { concurrency = 6 } = options;
+  const results: Embedding[] = [];
+
+  // Process in batches to control concurrency
+  for (let i = 0; i < events.length; i += concurrency) {
+    const batch = events.slice(i, i + concurrency);
+    const batchPromises = batch.map((event) =>
+      getEmbeddingForEvent(event, { preferReal })
+    );
+
+    try {
+      const batchResults = await Promise.allSettled(batchPromises);
+      batchResults.forEach((result, index) => {
+        if (result.status === "fulfilled") {
+          results.push(result.value);
+        } else {
+          console.warn(
+            `Failed to get embedding for event ${batch[index].ts}:`,
+            result.reason
+          );
+          // Fallback to deterministic generation
+          results.push(generateEmbedding(batch[index]));
+        }
+      });
+    } catch (error) {
+      console.error("Batch embedding generation failed:", error);
+      // Fallback to deterministic for the entire batch
+      batch.forEach((event) => results.push(generateEmbedding(event)));
+    }
+  }
+
+  return results;
 }

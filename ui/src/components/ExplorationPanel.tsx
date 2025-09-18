@@ -58,26 +58,21 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
       "all" | "vision" | "speech" | "stm" | "ltm"
     >("all");
     const [sortBy, setSortBy] = useState<"time" | "confidence">("time");
-    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("desc");
+    const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
     const [showClusters, setShowClusters] = useState(true);
     const [showGroups, setShowGroups] = useState(true);
     const [clusterCount, setClusterCount] = useState(5);
 
     // Generate clusters and groups
-    const clusters = useMemo(() => {
-      const result = clusterEmbeddings(memoryEvents, clusterCount);
-      console.log("🔍 ExplorationPanel - Clusters generated:", {
-        memoryEventsCount: memoryEvents.length,
-        clusterCount: clusterCount,
-        clustersGenerated: result.length,
-        clusters: result.map((c) => ({
-          id: c.id,
-          label: c.label,
-          pointsCount: c.points.length,
-          points: c.points.map((p) => ({ ts: p.ts, source: p.source })),
-        })),
-      });
-      return result;
+    const [clusters, setClusters] = useState<Cluster[]>([]);
+
+    useEffect(() => {
+      const generateClusters = async () => {
+        // Use memoryEvents for clustering to maintain consistency
+        const result = await clusterEmbeddings(memoryEvents, clusterCount);
+        setClusters(result);
+      };
+      generateClusters();
     }, [memoryEvents, clusterCount]);
 
     const semanticGroups = useMemo(() => {
@@ -125,7 +120,7 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
       setSearchQuery("");
       setSourceFilter("all");
       setSortBy("time");
-      setSortOrder("desc");
+      setSortOrder("asc");
       setClusterCount(5);
       setShowClusters(true);
       setShowGroups(true);
@@ -411,16 +406,17 @@ const ExplorationPanel = forwardRef<ExplorationPanelRef, ExplorationPanelProps>(
               }}
               className="px-2 py-1 text-xs btn-secondary"
             >
-              Clear All
+              Clear Selection
             </button>
             <button
               onClick={() => {
-                setSearchQuery("");
-                setSourceFilter("all");
+                resetInternalState();
+                onClusterSelect(null);
+                onGroupSelect(null);
               }}
               className="px-2 py-1 text-xs btn-secondary"
             >
-              Reset Filters
+              Reset All
             </button>
           </div>
         </div>

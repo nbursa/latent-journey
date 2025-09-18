@@ -47,6 +47,11 @@ export default function LatentSpacePage() {
   // Refs
   const explorationPanelRef = useRef<ExplorationPanelRef>(null);
 
+  // Stable callbacks to prevent child re-renders
+  const handleHoverEvent = useCallback((_event: MemoryEvent | null) => {
+    // No-op for now, but stable reference
+  }, []);
+
   // Combine all memory data into a unified timeline - SINGLE SOURCE OF TRUTH
   const allMemoryEvents = useMemo(() => {
     const events = [
@@ -294,15 +299,13 @@ export default function LatentSpacePage() {
                   onSelectEvent={setSelectedMemoryEvent}
                   showTrajectory={showTrajectory}
                   cameraPreset={cameraPreset}
-                  selectedCluster={selectedCluster}
-                  selectedGroup={selectedGroup}
                 />
               ) : (
                 <LatentScatter3D
                   memoryEvents={finalEvents}
                   selectedEvent={selectedMemoryEvent}
                   onSelectEvent={setSelectedMemoryEvent}
-                  onHoverEvent={() => {}}
+                  onHoverEvent={handleHoverEvent}
                   cameraPreset={cameraPreset}
                   showTrajectory={showTrajectory}
                 />

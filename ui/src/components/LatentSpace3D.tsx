@@ -2,7 +2,8 @@ import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as THREE from "three";
 import { OrbitControls } from "three-stdlib";
 import { MemoryEvent } from "../types";
-import { generateEmbedding, reduceDimensions } from "../utils/embeddings";
+import { getEmbeddingForEvent, reduceDimensions } from "../utils/embeddings";
+import { useWaypoints } from "../stores/appStore";
 
 interface Point3D {
   x: number;
@@ -23,8 +24,6 @@ interface RealLatentSpace3DProps {
   onSelectEvent: (event: MemoryEvent) => void;
   onHover?: (event: MemoryEvent | null) => void;
   cameraPreset?: "top" | "isometric" | "free";
-  selectedCluster?: any;
-  selectedGroup?: any;
   showTrajectory?: boolean;
 }
 
@@ -128,6 +127,7 @@ export default function RealLatentSpace3D({
   cameraPreset = "free",
   showTrajectory = true,
 }: RealLatentSpace3DProps) {
+  const waypoints = useWaypoints();
   const mountRef = useRef<HTMLDivElement>(null);
   const sceneRef = useRef<THREE.Scene | null>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -155,35 +155,24 @@ export default function RealLatentSpace3D({
     };
   }, [points]);
 
-  // Extract embeddings from memory events
+  // Extract embeddings from memory events using unified utility
   const extractEmbeddings = useCallback(async () => {
     if (memoryEvents.length === 0) return [];
 
-    return memoryEvents.map((event) => {
-      // Use existing embedding if available, otherwise generate one
-      if (
-        event.embedding &&
-        Array.isArray(event.embedding) &&
-        event.embedding.length > 0
-      ) {
+    const embeddings = await Promise.all(
+      memoryEvents.map(async (event) => {
+        const embedding = await getEmbeddingForEvent(event);
         return {
           id: `embedding-${event.ts}`,
-          embedding: event.embedding as number[],
+          embedding: embedding.vector,
           source: event.source,
           facets: event.facets,
-          confidence: Number(event.facets.confidence) || 0.5,
+          confidence: embedding.confidence,
         };
-      } else {
-        const generated = generateEmbedding(event);
-        return {
-          id: `embedding-${event.ts}`,
-          embedding: generated.vector,
-          source: event.source,
-          facets: event.facets,
-          confidence: generated.confidence,
-        };
-      }
-    });
+      })
+    );
+
+    return embeddings;
   }, [memoryEvents]);
 
   // Reduce dimensions using unified utility
@@ -256,7 +245,7 @@ export default function RealLatentSpace3D({
 
             // Size based on importance/confidence like scatter view
             const confidence = Number(event.facets["confidence"]) || 0.5;
-            const size = Math.max(1, 3 + confidence * 4);
+            const baseSize = Math.max(1, 3 + confidence * 4);
 
             return {
               x,
@@ -264,9 +253,9 @@ export default function RealLatentSpace3D({
               z,
               event,
               isSelected: selectedEvent?.ts === event.ts,
-              isWaypoint: false,
+              isWaypoint: waypoints.has(event.ts),
               color,
-              size,
+              size: waypoints.has(event.ts) ? baseSize * 1.5 : baseSize, // Make waypoints bigger
               confidence: embedding.confidence,
               source: event.source,
             };
@@ -284,15 +273,23 @@ export default function RealLatentSpace3D({
     updateVisualization();
   }, [memoryEvents, extractEmbeddings, reduceDimensionsCallback]);
 
-  // Update selection without recomputing embeddings
+  // Update selection and waypoints without recomputing embeddings
   useEffect(() => {
     setPoints((prevPoints) =>
-      prevPoints.map((point) => ({
-        ...point,
-        isSelected: selectedEvent?.ts === point.event.ts,
-      }))
+      prevPoints.map((point) => {
+        const baseSize = Math.max(
+          1,
+          3 + (Number(point.event.facets["confidence"]) || 0.5) * 4
+        );
+        return {
+          ...point,
+          isSelected: selectedEvent?.ts === point.event.ts,
+          isWaypoint: waypoints.has(point.event.ts),
+          size: waypoints.has(point.event.ts) ? baseSize * 1.5 : baseSize,
+        };
+      })
     );
-  }, [selectedEvent]);
+  }, [selectedEvent, waypoints]);
 
   // Update camera position when preset changes
   useEffect(() => {
@@ -504,7 +501,10 @@ export default function RealLatentSpace3D({
       const lineGeometry = new THREE.BufferGeometry();
       const positions = new Float32Array(points.length * 3);
 
-      points.forEach((point, index) => {
+      // Sort points by timestamp for proper trajectory order
+      const sortedPoints = [...points].sort((a, b) => a.event.ts - b.event.ts);
+
+      sortedPoints.forEach((point, index) => {
         positions[index * 3] = point.x;
         positions[index * 3 + 1] = point.y;
         positions[index * 3 + 2] = point.z;

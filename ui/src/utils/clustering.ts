@@ -1,5 +1,5 @@
 import { MemoryEvent } from "../types";
-import { generateEmbedding } from "./embeddings";
+import { getEmbeddingForEvent } from "./embeddings";
 
 // Embedding generation is now handled by the unified utility
 
@@ -22,14 +22,19 @@ export interface SemanticGroup {
 }
 
 // Simple K-means clustering for embeddings
-export function clusterEmbeddings(
+export async function clusterEmbeddings(
   events: MemoryEvent[],
   k: number = 5
-): Cluster[] {
+): Promise<Cluster[]> {
   if (events.length === 0) return [];
 
-  // Generate embeddings for all events (same logic as visualization components)
-  const embeddings = events.map((event) => generateEmbedding(event).vector);
+  // Generate embeddings for all events using unified utility
+  const embeddings = await Promise.all(
+    events.map(async (event) => {
+      const embedding = await getEmbeddingForEvent(event);
+      return embedding.vector;
+    })
+  );
 
   // Simple K-means implementation
   const dimensions = embeddings[0].length;
@@ -83,31 +88,35 @@ export function clusterEmbeddings(
     });
 
     // Update centroids
-    clusters.forEach((cluster) => {
-      if (cluster.points.length > 0) {
-        const newCenter = Array(dimensions).fill(0);
+    await Promise.all(
+      clusters.map(async (cluster) => {
+        if (cluster.points.length > 0) {
+          const newCenter = Array(dimensions).fill(0);
 
-        cluster.points.forEach((point) => {
-          const pointEmbedding = generateEmbedding(point).vector;
+          await Promise.all(
+            cluster.points.map(async (point) => {
+              const pointEmbedding = (await getEmbeddingForEvent(point)).vector;
+              for (let i = 0; i < dimensions; i++) {
+                newCenter[i] += pointEmbedding[i];
+              }
+            })
+          );
+
           for (let i = 0; i < dimensions; i++) {
-            newCenter[i] += pointEmbedding[i];
+            newCenter[i] /= cluster.points.length;
           }
-        });
 
-        for (let i = 0; i < dimensions; i++) {
-          newCenter[i] /= cluster.points.length;
+          // Check if centroid changed significantly
+          const distance = euclideanDistance(cluster.center, newCenter);
+          if (distance > 0.01) {
+            changed = true;
+          }
+
+          cluster.center = newCenter;
+          cluster.size = cluster.points.length;
         }
-
-        // Check if centroid changed significantly
-        const distance = euclideanDistance(cluster.center, newCenter);
-        if (distance > 0.01) {
-          changed = true;
-        }
-
-        cluster.center = newCenter;
-        cluster.size = cluster.points.length;
-      }
-    });
+      })
+    );
   }
 
   // Generate meaningful labels based on cluster content
@@ -253,9 +262,11 @@ function generateClusterLabel(events: MemoryEvent[]): string {
   });
 
   // Find most common facet
-  const mostCommonFacet = Object.entries(facetCounts).reduce((a, b) =>
-    a[1] > b[1] ? a : b
-  )[0];
+  const facetEntries = Object.entries(facetCounts);
+  const mostCommonFacet =
+    facetEntries.length > 0
+      ? facetEntries.reduce((a, b) => (a[1] > b[1] ? a : b))
+      : null;
 
   const facetKey = mostCommonFacet ? mostCommonFacet[0] : "unknown";
   return `${mostCommonSource} (${facetKey})`;

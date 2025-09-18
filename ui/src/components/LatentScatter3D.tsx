@@ -1,9 +1,10 @@
-import { useState, useMemo, useEffect, memo } from "react";
+import { useState, useMemo, useEffect, memo, useCallback } from "react";
 import { Canvas, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import * as THREE from "three";
 import { MemoryEvent } from "../types";
-import { generateEmbedding } from "../utils/embeddings";
+import { getEmbeddingForEvent } from "../utils/embeddings";
+import { useWaypoints } from "../stores/appStore";
 
 interface LatentScatterProps {
   memoryEvents: MemoryEvent[];
@@ -33,7 +34,11 @@ interface Point3D {
 }
 
 // Enhanced 3D projection with semantic height
-const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
+const projectTo3D = (
+  embeddings: number[][],
+  memoryEvents: MemoryEvent[],
+  waypoints: Set<number>
+) => {
   if (embeddings.length === 0) return [];
 
   return embeddings.map((embedding, index) => {
@@ -75,9 +80,9 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
       z,
       event,
       isSelected: false,
-      isWaypoint: false,
+      isWaypoint: waypoints.has(event.ts),
       color,
-      size,
+      size: waypoints.has(event.ts) ? size * 1.5 : size, // Make waypoints bigger
       modality: (isVision
         ? "vision"
         : isSpeech
@@ -92,19 +97,14 @@ const projectTo3D = (embeddings: number[][], memoryEvents: MemoryEvent[]) => {
 };
 
 // Extract embeddings from memory events using unified utility
-const extractEmbeddings = (memoryEvents: MemoryEvent[]) => {
-  return memoryEvents.map((event) => {
-    // Use existing embedding if available, otherwise generate one
-    if (
-      event.embedding &&
-      Array.isArray(event.embedding) &&
-      event.embedding.length > 0
-    ) {
-      return event.embedding as number[];
-    } else {
-      return generateEmbedding(event).vector;
-    }
-  });
+const extractEmbeddings = async (memoryEvents: MemoryEvent[]) => {
+  const embeddings = await Promise.all(
+    memoryEvents.map(async (event) => {
+      const embedding = await getEmbeddingForEvent(event);
+      return embedding.vector;
+    })
+  );
+  return embeddings;
 };
 
 // Individual Points Component (more stable for small datasets)
@@ -137,15 +137,18 @@ function IndividualPoints({
           scale={[point.size, point.size, point.size]}
           onClick={() => onSelectEvent(point.event)}
           onPointerOver={(event) => {
-            const target = event.nativeEvent.target as HTMLElement;
-            if (target) {
-              const rect = target.getBoundingClientRect();
-              const mousePos = {
-                x: event.nativeEvent.clientX - rect.left,
-                y: event.nativeEvent.clientY - rect.top,
-              };
-              onHoverEvent(point.event, mousePos);
-            }
+            // Throttle hover events to reduce parent state updates
+            requestAnimationFrame(() => {
+              const target = event.nativeEvent.target as HTMLElement;
+              if (target) {
+                const rect = target.getBoundingClientRect();
+                const mousePos = {
+                  x: event.nativeEvent.clientX - rect.left,
+                  y: event.nativeEvent.clientY - rect.top,
+                };
+                onHoverEvent(point.event, mousePos);
+              }
+            });
           }}
           onPointerOut={() => onHoverEvent(null)}
         >
@@ -203,7 +206,7 @@ const StableCanvas = memo(
         gl={{
           antialias: true,
           alpha: true,
-          preserveDrawingBuffer: true,
+          preserveDrawingBuffer: false,
           powerPreference: "high-performance",
           failIfMajorPerformanceCaveat: false,
         }}
@@ -272,6 +275,7 @@ function Scene3D({
   setFocusTarget,
   cameraPreset = "free",
   showTrajectory = true,
+  onCameraChange,
 }: {
   points: Point3D[];
   onSelectEvent: (event: MemoryEvent) => void;
@@ -285,23 +289,9 @@ function Scene3D({
   setFocusTarget: (target: { x: number; y: number; z: number } | null) => void;
   cameraPreset?: "top" | "isometric" | "free";
   showTrajectory?: boolean;
+  onCameraChange?: () => void;
 }) {
   const { camera } = useThree();
-
-  // Track camera position changes
-  useEffect(() => {
-    const updatePosition = () => {
-      setCameraPosition({
-        x: camera.position.x,
-        y: camera.position.y,
-        z: camera.position.z,
-      });
-    };
-
-    // Update position periodically
-    const interval = setInterval(updatePosition, 100);
-    return () => clearInterval(interval);
-  }, [camera, setCameraPosition]);
 
   // Handle focus requests - move camera to specific coordinates
   useEffect(() => {
@@ -324,6 +314,7 @@ function Scene3D({
   // Initialize camera position based on preset - only run when cameraPreset changes or points are first loaded
   const [hasInitialized, setHasInitialized] = useState(false);
 
+  // Initial camera setup - only runs once when points are first loaded
   useEffect(() => {
     if (points.length > 0 && !hasInitialized) {
       // Calculate bounds of all points
@@ -385,9 +376,9 @@ function Scene3D({
       // Reset initialization flag when no points
       setHasInitialized(false);
     }
-  }, [camera, setCameraPosition, points, cameraPreset, hasInitialized]);
+  }, [points, camera, setCameraPosition, hasInitialized]);
 
-  // Handle camera preset changes after initialization
+  // Handle camera preset changes after initialization - separate effect
   useEffect(() => {
     if (!hasInitialized || points.length === 0) return;
 
@@ -457,13 +448,31 @@ function Scene3D({
       <gridHelper args={[600, 30, "#1E2531", "#0F131A"]} />
 
       {/* Journey lines */}
-      {showTrajectory && points.length > 1 && <JourneyLines points={points} />}
+      {showTrajectory && points.length > 1 && (
+        <JourneyLines
+          points={[...points].sort((a, b) => a.event.ts - b.event.ts)}
+        />
+      )}
 
       {/* Individual points */}
       <IndividualPoints
         points={points}
         onSelectEvent={onSelectEvent}
         onHoverEvent={onHoverEvent}
+      />
+
+      {/* OrbitControls */}
+      <OrbitControls
+        enablePan={true}
+        enableZoom={true}
+        enableRotate={true}
+        autoRotate={false}
+        rotateSpeed={0.5}
+        zoomSpeed={0.8}
+        panSpeed={0.8}
+        minDistance={50}
+        maxDistance={500}
+        onChange={onCameraChange}
       />
     </>
   );
@@ -479,6 +488,7 @@ const LatentScatter3D = memo(
     cameraPreset = "free",
     showTrajectory = true,
   }: LatentScatterProps) {
+    const waypoints = useWaypoints();
     const [points, setPoints] = useState<Point3D[]>([]);
     const [isComputing, setIsComputing] = useState(false);
     const [hoveredEvent, setHoveredEvent] = useState<MemoryEvent | null>(null);
@@ -495,6 +505,11 @@ const LatentScatter3D = memo(
       // This is used by Scene3D to update camera position
     };
 
+    // Camera change handler for OrbitControls
+    const handleCameraChange = useCallback(() => {
+      // This will be called by OrbitControls onChange
+    }, []);
+
     // Update visualization when memory events change
     useEffect(() => {
       if (memoryEvents.length === 0) {
@@ -506,10 +521,14 @@ const LatentScatter3D = memo(
       setIsComputing(true);
 
       // Debounce the computation to prevent rapid re-renders
-      const timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(async () => {
         try {
-          const embeddings = extractEmbeddings(memoryEvents);
-          const projectedPoints = projectTo3D(embeddings, memoryEvents);
+          const embeddings = await extractEmbeddings(memoryEvents);
+          const projectedPoints = projectTo3D(
+            embeddings,
+            memoryEvents,
+            waypoints
+          );
 
           // Update selected state
           const updatedPoints = projectedPoints.map((point) => ({
@@ -530,23 +549,60 @@ const LatentScatter3D = memo(
       }, 100); // Further reduced delay
 
       return () => clearTimeout(timeoutId);
-    }, [memoryEvents, selectedEvent]);
+    }, [memoryEvents, selectedEvent, waypoints]);
 
-    const handleFocus = (worldX: number, worldY: number) => {
+    // Update selection without recomputing embeddings
+    useEffect(() => {
+      setPoints((prev) =>
+        prev.map((p) => ({
+          ...p,
+          isSelected: selectedEvent?.ts === p.event.ts,
+        }))
+      );
+    }, [selectedEvent]);
+
+    const handleFocus = useCallback((worldX: number, worldY: number) => {
       // Focus camera on specific coordinates
       setFocusTarget({ x: worldX, y: worldY, z: 200 });
-    };
+    }, []);
 
-    const handleHover = (
-      event: MemoryEvent | null,
-      mousePos?: { x: number; y: number }
-    ) => {
-      setHoveredEvent(event);
-      if (mousePos) {
-        setMousePosition(mousePos);
-      }
-      onHoverEvent(event);
-    };
+    const handleHover = useCallback(
+      (event: MemoryEvent | null, mousePos?: { x: number; y: number }) => {
+        setHoveredEvent(event);
+        if (mousePos) {
+          setMousePosition(mousePos);
+        }
+        onHoverEvent(event);
+      },
+      [onHoverEvent]
+    );
+
+    // Memoize Scene3D to prevent re-mounts on hover
+    const sceneNode = useMemo(
+      () => (
+        <Scene3D
+          points={points}
+          onSelectEvent={onSelectEvent}
+          onHoverEvent={handleHover}
+          onFocus={handleFocus}
+          setCameraPosition={setCameraPosition}
+          focusTarget={focusTarget}
+          setFocusTarget={setFocusTarget}
+          cameraPreset={cameraPreset}
+          showTrajectory={showTrajectory}
+          onCameraChange={handleCameraChange}
+        />
+      ),
+      [
+        points,
+        onSelectEvent,
+        handleHover,
+        handleFocus,
+        focusTarget,
+        cameraPreset,
+        showTrajectory,
+      ]
+    );
 
     return (
       <div className={`h-full w-full ${className}`}>
@@ -586,28 +642,7 @@ const LatentScatter3D = memo(
         ) : (
           <div className="relative h-full w-full">
             <StableCanvas onWebglError={setWebglError}>
-              <Scene3D
-                points={points}
-                onSelectEvent={onSelectEvent}
-                onHoverEvent={handleHover}
-                onFocus={handleFocus}
-                setCameraPosition={setCameraPosition}
-                focusTarget={focusTarget}
-                setFocusTarget={setFocusTarget}
-                cameraPreset={cameraPreset}
-                showTrajectory={showTrajectory}
-              />
-              <OrbitControls
-                enablePan={true}
-                enableZoom={true}
-                enableRotate={true}
-                autoRotate={false}
-                rotateSpeed={0.5}
-                zoomSpeed={0.8}
-                panSpeed={0.8}
-                minDistance={50}
-                maxDistance={500}
-              />
+              {sceneNode}
             </StableCanvas>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { MemoryEvent } from "../types";
 import { Clock, Play, Pause, RotateCcw } from "lucide-react";
 
@@ -18,6 +18,7 @@ export default function JourneyTimeline({
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [playbackSpeed, setPlaybackSpeed] = useState(1);
+  const isSyncingRef = useRef(false);
 
   // Sort events by timestamp
   const sortedEvents = useMemo(() => {
@@ -39,7 +40,10 @@ export default function JourneyTimeline({
   const currentEvent = useMemo(() => {
     if (sortedEvents.length === 0) return null;
 
-    const targetTime = timeRange.start + currentTime * timeRange.duration;
+    const targetTime =
+      timeRange.duration === 0
+        ? timeRange.start
+        : timeRange.start + currentTime * timeRange.duration;
 
     // Find the closest event to the target time
     let closestEvent = sortedEvents[0];
@@ -90,10 +94,44 @@ export default function JourneyTimeline({
 
   // Select current event when it changes
   useEffect(() => {
-    if (currentEvent && currentEvent !== selectedEvent) {
+    if (
+      currentEvent &&
+      currentEvent.ts !== selectedEvent?.ts &&
+      !isSyncingRef.current
+    ) {
       onSelectEvent(currentEvent);
     }
-  }, [currentEvent, selectedEvent, onSelectEvent]);
+  }, [currentEvent?.ts, selectedEvent?.ts, onSelectEvent]);
+
+  // Sync timeline position when selectedEvent changes (from other views)
+  useEffect(() => {
+    if (
+      !selectedEvent ||
+      sortedEvents.length === 0 ||
+      timeRange.duration === 0 ||
+      isSyncingRef.current
+    )
+      return;
+
+    const pos = (selectedEvent.ts - timeRange.start) / timeRange.duration;
+    const newTime = Math.max(0, Math.min(1, pos));
+
+    // Only update if significantly different to avoid ping-pong
+    if (Math.abs(newTime - currentTime) > 1e-3) {
+      isSyncingRef.current = true;
+      setCurrentTime(newTime);
+      // Reset the flag after a short delay
+      setTimeout(() => {
+        isSyncingRef.current = false;
+      }, 100);
+    }
+  }, [
+    selectedEvent?.ts,
+    sortedEvents.length,
+    timeRange.start,
+    timeRange.duration,
+    currentTime,
+  ]);
 
   if (sortedEvents.length === 0) {
     return (
@@ -138,16 +176,18 @@ export default function JourneyTimeline({
           {/* Event markers */}
           <div className="absolute top-0 left-0 w-full h-2">
             {sortedEvents.map((event) => {
-              const position =
-                (event.ts - timeRange.start) / timeRange.duration;
+              const safePos =
+                timeRange.duration === 0
+                  ? 0
+                  : (event.ts - timeRange.start) / timeRange.duration;
+              const position = Math.max(0, Math.min(1, safePos));
               const isSelected = selectedEvent?.ts === event.ts;
 
               return (
                 <button
-                  key={`${event.ts}-${
-                    event.embedding_id || sortedEvents.indexOf(event)
-                  }`}
+                  key={`${event.ts}-${event.embedding_id || "default"}`}
                   onClick={() => {
+                    setIsPlaying(false);
                     handleSeek(position);
                     onSelectEvent(event);
                   }}
@@ -229,12 +269,17 @@ export default function JourneyTimeline({
       <div className="space-y-1">
         {sortedEvents.slice(0, 10).map((event, index) => {
           const isSelected = selectedEvent?.ts === event.ts;
-          const position = (event.ts - timeRange.start) / timeRange.duration;
+          const safePos =
+            timeRange.duration === 0
+              ? 0
+              : (event.ts - timeRange.start) / timeRange.duration;
+          const position = Math.max(0, Math.min(1, safePos));
 
           return (
             <button
               key={`${event.ts}-${event.embedding_id}-${index}`}
               onClick={() => {
+                setIsPlaying(false);
                 handleSeek(position);
                 onSelectEvent(event);
               }}
