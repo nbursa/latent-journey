@@ -3,9 +3,6 @@
 > An interactive tool for exploring the latent spaces of multimodal AI models  
 > through real-time perception, introspective feedback, and symbolic memory.
 
-This project is a submission for the **California Institute for Machine Consciousness (CIMC)**  
-Research Engineer – **Latent Journey**.
-
 ---
 
 ## What it does
