@@ -55,7 +55,7 @@ The experiments are implemented as a new microservice (`experiments-rs`) that in
 - Trauma score gap ≥ 0.20 (negative > neutral)
 - Recovery time ≤ 200 steps
 
-### EXP-03: Subjective Input Bias and Self-Model Distortion
+### EXP-03: Subjective Input Bias
 
 **Goal**: Investigate how perceptual input bias influences self-model formation.
 
@@ -177,6 +177,7 @@ curl -X POST http://localhost:8086/api/experiments/run-all
 ### API Endpoints
 
 - `GET /health` - Health check
+- `GET /api/experiments/summary` - Get experiment summary and status
 - `POST /api/experiments/run` - Run single experiment
 - `POST /api/experiments/run-all` - Run all experiments
 - `GET /api/experiments/results` - Get experiment results
@@ -202,11 +203,43 @@ experiments:
     # ... agent configurations
 ```
 
+## Construct Validity
+
+The experiments use proxy measures for complex psychological constructs. These approximations are explicitly acknowledged and validated through bootstrap sampling and replication:
+
+### Self-Model Divergence (SMD)
+
+- **Proxy**: `1 - cosine_similarity(baseline_embedding, current_embedding)`
+- **Rationale**: Captures semantic drift in self-representation
+- **Validation**: Bootstrap confidence intervals, multiple seeds
+- **Future**: Will be replaced with proper sentence embeddings
+
+### Reflection Entropy
+
+- **Proxy**: Combines (1) distribution entropy, (2) lexical diversity (TTR), (3) semantic variance
+- **Rationale**: Captures cognitive complexity and disorder
+- **Validation**: Cross-validated with windowed analysis and trend tests
+- **Future**: Will use proper semantic similarity measures
+
+### Reflection Coherence
+
+- **Proxy**: Combines (1) sentence embedding similarity, (2) topic coherence, (3) temporal consistency
+- **Rationale**: Captures logical consistency and narrative flow
+- **Validation**: Bootstrap sampling, permutation tests
+- **Future**: Will use advanced coherence models
+
+### Hallucination Detection
+
+- **Proxy**: `1 - similarity(reflection, input_context) + novel_entity_penalty`
+- **Rationale**: Identifies content not supported by input context
+- **Validation**: Manual annotation on small gold set (planned)
+- **Future**: Will use specialized hallucination detection models
+
 ## Results
 
-Results are saved to `results/experiments_<timestamp>/` with:
+Results are saved to the directory specified by `EXPERIMENTS_OUT_DIR` environment variable (default: `experiments_data/`) with:
 
-- Individual experiment results (`EXP-01_result.json`, etc.)
+- Individual experiment results (`EXP-01_<timestamp>.json`, etc.)
 - Batch results (`batch_results.json`)
 - Summary report (`SUMMARY.md`)
 

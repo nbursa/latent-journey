@@ -82,7 +82,7 @@ pub async fn get_experiment_summary(
             let experiments = vec![
                 ("EXP-01", "Editable vs Transparent Self-Model"),
                 ("EXP-02", "Synthetic Trauma"),
-                ("EXP-03", "Subjective Input Self-Distortion"),
+                ("EXP-03", "Subjective Input Bias"),
                 ("EXP-04", "Observation vs Experience"),
                 ("EXP-05", "Reflection Entropy Drift"),
                 ("EXP-06", "Self-Model Divergence"),

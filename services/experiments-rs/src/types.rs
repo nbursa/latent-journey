@@ -40,6 +40,16 @@ pub struct AgentConfig {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SuperegoModeResult {
+    pub mode: String,
+    pub results: AgentMetrics,
+    pub utility_score: f32,
+    pub coverage_score: f32,
+    pub toxic_count: u64,
+    pub filtered_ratio: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InputProfile {
     pub negative_rate: f32,
     pub recovery_blocks: Option<Vec<RecoveryBlock>>,

@@ -1,5 +1,7 @@
 // use crate::types::{AgentRunResult, AgentMetrics};
 use anyhow::Result;
+use rand::{Rng, SeedableRng};
+use rand_chacha::ChaCha8Rng;
 use std::collections::HashMap;
 
 pub struct StatisticalAnalyzer;
@@ -271,62 +273,78 @@ impl StatisticalAnalyzer {
         }
     }
 
-    /// Calculate p-value using Welch's t-test (unequal variances)
+    /// Calculate p-value using permutation test (robust, no external dependencies)
     pub fn calculate_p_value(group1: &[f32], group2: &[f32]) -> Result<f32> {
+        Self::calculate_p_value_with_seed(group1, group2, 42) // Default seed
+    }
+
+    /// Calculate p-value using permutation test with specific seed for reproducibility
+    pub fn calculate_p_value_with_seed(group1: &[f32], group2: &[f32], seed: u64) -> Result<f32> {
         if group1.is_empty() || group2.is_empty() {
             return Ok(1.0);
         }
 
+        // Calculate observed difference
         let mean1 = group1.iter().sum::<f32>() / group1.len() as f32;
         let mean2 = group2.iter().sum::<f32>() / group2.len() as f32;
+        let observed_diff = (mean1 - mean2).abs();
 
-        let var1 = Self::calculate_variance(group1, mean1);
-        let var2 = Self::calculate_variance(group2, mean2);
+        // Combine all data for permutation
+        let mut combined = Vec::new();
+        combined.extend_from_slice(group1);
+        combined.extend_from_slice(group2);
 
-        // Welch's t-test for unequal variances
-        let se = (var1 / group1.len() as f32 + var2 / group2.len() as f32).sqrt();
+        // Perform permutation test with seeded RNG
+        let n_permutations = 1000; // Adjust based on computational budget
+        let mut extreme_count = 0;
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
-        if se == 0.0 {
-            return Ok(1.0);
+        for _ in 0..n_permutations {
+            // Shuffle combined data with seeded RNG
+            Self::shuffle_slice_with_rng(&mut combined, &mut rng);
+
+            // Split back into two groups
+            let perm_group1 = &combined[..group1.len()];
+            let perm_group2 = &combined[group1.len()..];
+
+            // Calculate permuted difference
+            let perm_mean1 = perm_group1.iter().sum::<f32>() / perm_group1.len() as f32;
+            let perm_mean2 = perm_group2.iter().sum::<f32>() / perm_group2.len() as f32;
+            let perm_diff = (perm_mean1 - perm_mean2).abs();
+
+            // Count extreme values
+            if perm_diff >= observed_diff {
+                extreme_count += 1;
+            }
         }
 
-        let t_stat = (mean1 - mean2).abs() / se;
-
-        // Degrees of freedom for Welch's t-test
-        let df = ((var1 / group1.len() as f32 + var2 / group2.len() as f32).powi(2))
-            / ((var1 / group1.len() as f32).powi(2) / (group1.len() - 1) as f32
-                + (var2 / group2.len() as f32).powi(2) / (group2.len() - 1) as f32);
-
-        // Approximate p-value using t-distribution approximation
-        Self::approximate_t_test_p_value(t_stat, df as u32)
+        // Avoid zero p-values: (extreme_count + 1) / (n_permutations + 1)
+        Ok((extreme_count + 1) as f32 / (n_permutations + 1) as f32)
     }
 
-    fn approximate_t_test_p_value(t_stat: f32, df: u32) -> Result<f32> {
-        // Simplified approximation of t-test p-value
-        // For more accuracy, would need proper t-distribution implementation
-        let critical_95 = if df >= 30 {
-            1.96
-        } else if df >= 10 {
-            2.0
-        } else {
-            2.5
-        };
-        let critical_99 = if df >= 30 {
-            2.58
-        } else if df >= 10 {
-            2.8
-        } else {
-            3.0
-        };
+    /// Shuffle a slice in-place using Fisher-Yates algorithm with seeded RNG
+    fn shuffle_slice_with_rng<T, R: Rng>(slice: &mut [T], rng: &mut R) {
+        for i in (1..slice.len()).rev() {
+            let j = rng.gen_range(0..=i);
+            slice.swap(i, j);
+        }
+    }
 
-        if t_stat > critical_99 {
-            Ok(0.01)
-        } else if t_stat > critical_95 {
-            Ok(0.05)
-        } else if t_stat > 1.5 {
-            Ok(0.1)
-        } else {
-            Ok(0.5)
+    /// Shuffle a slice in-place using Fisher-Yates algorithm (legacy, non-deterministic)
+    fn shuffle_slice<T>(slice: &mut [T]) {
+        use std::time::{SystemTime, UNIX_EPOCH};
+
+        // Simple PRNG using system time
+        let mut seed = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos() as u64;
+
+        for i in (1..slice.len()).rev() {
+            // Generate pseudo-random index
+            seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
+            let j = (seed % (i + 1) as u64) as usize;
+            slice.swap(i, j);
         }
     }
 
@@ -354,31 +372,53 @@ impl StatisticalAnalyzer {
         Ok((mean1 - mean2) / pooled_std)
     }
 
-    /// Calculate 95% confidence interval for difference between groups
+    /// Calculate 95% confidence interval using bootstrap percentile method
     pub fn calculate_confidence_interval(group1: &[f32], group2: &[f32]) -> Result<(f32, f32)> {
+        Self::calculate_confidence_interval_with_seed(group1, group2, 42) // Default seed
+    }
+
+    /// Calculate 95% confidence interval using bootstrap percentile method with seed
+    pub fn calculate_confidence_interval_with_seed(
+        group1: &[f32],
+        group2: &[f32],
+        seed: u64,
+    ) -> Result<(f32, f32)> {
         if group1.is_empty() || group2.is_empty() {
             return Ok((0.0, 0.0));
         }
 
-        let mean1 = group1.iter().sum::<f32>() / group1.len() as f32;
-        let mean2 = group2.iter().sum::<f32>() / group2.len() as f32;
-        let diff = mean1 - mean2;
+        // Bootstrap sampling with seeded RNG
+        let n_bootstrap = 1000;
+        let mut bootstrap_diffs = Vec::new();
+        let mut rng = ChaCha8Rng::seed_from_u64(seed);
 
-        let var1 = Self::calculate_variance(group1, mean1);
-        let var2 = Self::calculate_variance(group2, mean2);
+        for _ in 0..n_bootstrap {
+            // Bootstrap sample from group1
+            let mut bootstrap_group1 = Vec::new();
+            for _ in 0..group1.len() {
+                let idx = rng.gen_range(0..group1.len());
+                bootstrap_group1.push(group1[idx]);
+            }
 
-        // Standard error for difference
-        let se = (var1 / group1.len() as f32 + var2 / group2.len() as f32).sqrt();
+            // Bootstrap sample from group2
+            let mut bootstrap_group2 = Vec::new();
+            for _ in 0..group2.len() {
+                let idx = rng.gen_range(0..group2.len());
+                bootstrap_group2.push(group2[idx]);
+            }
 
-        if se == 0.0 {
-            return Ok((diff, diff));
+            // Calculate difference
+            let mean1 = bootstrap_group1.iter().sum::<f32>() / bootstrap_group1.len() as f32;
+            let mean2 = bootstrap_group2.iter().sum::<f32>() / bootstrap_group2.len() as f32;
+            bootstrap_diffs.push(mean1 - mean2);
         }
 
-        // Approximate 95% CI using t-distribution (simplified)
-        let t_critical = 1.96; // For large samples, approximate with normal distribution
-        let margin = t_critical * se;
+        // Sort and get percentiles
+        bootstrap_diffs.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let lower_idx = (0.025 * bootstrap_diffs.len() as f32) as usize;
+        let upper_idx = (0.975 * bootstrap_diffs.len() as f32) as usize;
 
-        Ok((diff - margin, diff + margin))
+        Ok((bootstrap_diffs[lower_idx], bootstrap_diffs[upper_idx]))
     }
 
     /// Calculate ANOVA F-statistic for multiple groups
@@ -425,5 +465,333 @@ impl StatisticalAnalyzer {
         }
 
         Ok(ms_between / ms_within)
+    }
+
+    /// Calculate p-value for ANOVA using permutation test
+    pub fn calculate_anova_p_value(groups: &[&[f32]]) -> Result<f32> {
+        if groups.is_empty() || groups.iter().any(|g| g.is_empty()) {
+            return Ok(1.0);
+        }
+
+        // Calculate observed F-statistic
+        let observed_f = Self::calculate_anova_f_statistic(groups)?;
+
+        // Combine all data for permutation
+        let mut combined = Vec::new();
+        for group in groups {
+            combined.extend_from_slice(group);
+        }
+
+        // Perform permutation test
+        let n_permutations = 1000;
+        let mut extreme_count = 0;
+
+        for _ in 0..n_permutations {
+            // Shuffle combined data
+            Self::shuffle_slice(&mut combined);
+
+            // Recreate groups with same sizes
+            let mut perm_groups = Vec::new();
+            let mut start = 0;
+            for group in groups {
+                let end = start + group.len();
+                perm_groups.push(&combined[start..end]);
+                start = end;
+            }
+
+            // Calculate permuted F-statistic
+            let perm_f = Self::calculate_anova_f_statistic(&perm_groups)?;
+
+            // Count extreme values
+            if perm_f >= observed_f {
+                extreme_count += 1;
+            }
+        }
+
+        // P-value is proportion of permutations with F >= observed
+        Ok(extreme_count as f32 / n_permutations as f32)
+    }
+
+    /// Calculate Benjamini-Hochberg FDR correction for multiple comparisons
+    pub fn calculate_fdr_correction(p_values: &[f32]) -> Vec<f32> {
+        if p_values.is_empty() {
+            return Vec::new();
+        }
+
+        // Create indices and sort by p-value
+        let mut indexed_p: Vec<(usize, f32)> =
+            p_values.iter().enumerate().map(|(i, &p)| (i, p)).collect();
+        indexed_p.sort_by(|a, b| a.1.partial_cmp(&b.1).unwrap());
+
+        let m = p_values.len() as f32;
+        let mut corrected = vec![0.0; p_values.len()];
+
+        // Apply Benjamini-Hochberg procedure
+        for (rank, (original_idx, p_value)) in indexed_p.iter().enumerate() {
+            let rank_f = (rank + 1) as f32;
+            let corrected_p = p_value * m / rank_f;
+            corrected[*original_idx] = corrected_p.min(1.0);
+        }
+
+        corrected
+    }
+
+    /// Calculate windowed entropy over time series
+    pub fn calculate_windowed_entropy(
+        values: &[f32],
+        window_size: usize,
+        stride: usize,
+    ) -> Vec<f32> {
+        if values.is_empty() || window_size == 0 || window_size > values.len() {
+            return Vec::new();
+        }
+
+        let mut windowed_entropies = Vec::new();
+        let mut start = 0;
+
+        while start + window_size <= values.len() {
+            let window = &values[start..start + window_size];
+            let entropy = Self::calculate_entropy(window);
+            windowed_entropies.push(entropy);
+            start += stride;
+        }
+
+        windowed_entropies
+    }
+
+    /// Calculate windowed coherence over time series
+    pub fn calculate_windowed_coherence(
+        texts: &[String],
+        window_size: usize,
+        stride: usize,
+    ) -> Vec<f32> {
+        if texts.is_empty() || window_size == 0 || window_size > texts.len() {
+            return Vec::new();
+        }
+
+        let mut windowed_coherences = Vec::new();
+        let mut start = 0;
+
+        while start + window_size <= texts.len() {
+            let window = &texts[start..start + window_size];
+            let coherence = Self::calculate_coherence(window);
+            windowed_coherences.push(coherence);
+            start += stride;
+        }
+
+        windowed_coherences
+    }
+
+    /// Calculate linear trend slope using simple linear regression
+    pub fn calculate_trend_slope(values: &[f32]) -> f32 {
+        if values.len() < 2 {
+            return 0.0;
+        }
+
+        let n = values.len() as f32;
+        let x_mean = (n - 1.0) / 2.0; // x values are 0, 1, 2, ..., n-1
+        let y_mean = values.iter().sum::<f32>() / n;
+
+        let mut numerator = 0.0;
+        let mut denominator = 0.0;
+
+        for (i, &y) in values.iter().enumerate() {
+            let x = i as f32;
+            numerator += (x - x_mean) * (y - y_mean);
+            denominator += (x - x_mean).powi(2);
+        }
+
+        if denominator == 0.0 {
+            0.0
+        } else {
+            numerator / denominator
+        }
+    }
+
+    /// Calculate Mann-Kendall trend test (simplified version)
+    /// Returns: (S statistic, p-value approximation)
+    pub fn calculate_mann_kendall_trend(values: &[f32]) -> (f32, f32) {
+        if values.len() < 3 {
+            return (0.0, 1.0);
+        }
+
+        let mut s = 0;
+        let n = values.len();
+
+        // Calculate S statistic
+        for i in 0..n - 1 {
+            for j in i + 1..n {
+                if values[j] > values[i] {
+                    s += 1;
+                } else if values[j] < values[i] {
+                    s -= 1;
+                }
+                // If equal, no change to S
+            }
+        }
+
+        // Approximate p-value (simplified)
+        let s_f = s as f32;
+        let n_f = n as f32;
+        let variance = (n_f * (n_f - 1.0) * (2.0 * n_f + 5.0)) / 18.0;
+        let z = if variance > 0.0 {
+            s_f / variance.sqrt()
+        } else {
+            0.0
+        };
+
+        // Approximate p-value using normal distribution
+        let p_value = if z.abs() > 2.58 {
+            0.01
+        } else if z.abs() > 1.96 {
+            0.05
+        } else if z.abs() > 1.65 {
+            0.1
+        } else {
+            0.5
+        };
+
+        (s_f, p_value)
+    }
+
+    /// Detect hallucinations by comparing reflection content with input context
+    /// Returns: (hallucination_count, hallucination_rate, confidence_scores)
+    pub fn detect_hallucinations(
+        reflections: &[String],
+        input_contexts: &[String],
+        similarity_threshold: f32,
+    ) -> (usize, f32, Vec<f32>) {
+        if reflections.is_empty() || input_contexts.is_empty() {
+            return (0, 0.0, Vec::new());
+        }
+
+        let mut hallucination_count = 0;
+        let mut confidence_scores = Vec::new();
+
+        for (i, reflection) in reflections.iter().enumerate() {
+            // Find the most relevant input context (simplified: use same index or closest)
+            let context_idx = i.min(input_contexts.len() - 1);
+            let context = &input_contexts[context_idx];
+
+            // Calculate content similarity
+            let similarity = Self::calculate_text_similarity(reflection, context);
+            confidence_scores.push(similarity);
+
+            // Check for hallucination indicators
+            let is_hallucination =
+                Self::is_hallucination(reflection, context, similarity, similarity_threshold);
+            if is_hallucination {
+                hallucination_count += 1;
+            }
+        }
+
+        let hallucination_rate = hallucination_count as f32 / reflections.len() as f32;
+        (hallucination_count, hallucination_rate, confidence_scores)
+    }
+
+    /// Determine if a reflection is likely a hallucination
+    fn is_hallucination(reflection: &str, context: &str, similarity: f32, threshold: f32) -> bool {
+        // Low similarity with context
+        if similarity < threshold {
+            return true;
+        }
+
+        // Check for hallucination indicators
+        let hallucination_indicators = [
+            "I remember",
+            "I recall",
+            "I know",
+            "I believe",
+            "I think",
+            "definitely",
+            "certainly",
+            "absolutely",
+            "without a doubt",
+            "I'm sure",
+            "I'm certain",
+            "I'm confident",
+        ];
+
+        let reflection_lower = reflection.to_lowercase();
+        let context_lower = context.to_lowercase();
+
+        // Count hallucination indicators in reflection
+        let reflection_indicators = hallucination_indicators
+            .iter()
+            .filter(|&&indicator| reflection_lower.contains(indicator))
+            .count();
+
+        // Count hallucination indicators in context
+        let context_indicators = hallucination_indicators
+            .iter()
+            .filter(|&&indicator| context_lower.contains(indicator))
+            .count();
+
+        // If reflection has more indicators than context, likely hallucination
+        if reflection_indicators > context_indicators {
+            return true;
+        }
+
+        // Check for novel entities not in context
+        let reflection_words: std::collections::HashSet<String> = reflection_lower
+            .split_whitespace()
+            .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+            .filter(|w| w.len() > 3) // Only consider longer words
+            .collect();
+
+        let context_words: std::collections::HashSet<String> = context_lower
+            .split_whitespace()
+            .map(|w| w.trim_matches(|c: char| !c.is_alphanumeric()).to_string())
+            .filter(|w| w.len() > 3)
+            .collect();
+
+        // If reflection introduces many new entities not in context
+        let novel_entities = reflection_words.difference(&context_words).count();
+        if novel_entities > 3 {
+            // More than 3 novel entities
+            return true;
+        }
+
+        false
+    }
+
+    /// Calculate toxicity score based on content analysis
+    pub fn calculate_toxicity_score(content: &str) -> f32 {
+        let content_lower = content.to_lowercase();
+
+        // Simple toxicity indicators (in a real system, this would be more sophisticated)
+        let toxic_indicators = [
+            "hate", "harm", "violence", "abuse", "threat", "danger", "kill", "hurt", "destroy",
+            "damage", "toxic", "poison",
+        ];
+
+        let mut toxicity_score: f32 = 0.0;
+        for indicator in &toxic_indicators {
+            if content_lower.contains(indicator) {
+                toxicity_score += 0.2;
+            }
+        }
+
+        // Check for negative emotional language
+        let negative_emotions = [
+            "angry",
+            "furious",
+            "rage",
+            "hate",
+            "despise",
+            "loathe",
+            "disgust",
+            "revulsion",
+            "contempt",
+            "scorn",
+        ];
+
+        for emotion in &negative_emotions {
+            if content_lower.contains(emotion) {
+                toxicity_score += 0.1;
+            }
+        }
+
+        toxicity_score.min(1.0) // Cap at 1.0
     }
 }
