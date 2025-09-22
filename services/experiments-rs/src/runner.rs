@@ -336,6 +336,18 @@ impl ExperimentRunner {
         let effect_size = self
             .calculate_effect_size(&[editable_results.smd], &[transparent_results.smd])
             .await?;
+        let confidence_interval = self
+            .calculate_confidence_interval(&[editable_results.smd], &[transparent_results.smd])
+            .await?;
+
+        tracing::info!("EXP-01 Statistical Analysis:");
+        tracing::info!("  p-value: {:.4}", p_value);
+        tracing::info!("  effect size (Cohen's d): {:.4}", effect_size);
+        tracing::info!(
+            "  95% CI: [{:.4}, {:.4}]",
+            confidence_interval.0,
+            confidence_interval.1
+        );
 
         Ok(ExperimentMetrics {
             smd_gap: Some(smd_gap),
@@ -376,6 +388,19 @@ impl ExperimentRunner {
         let recovery_results = self
             .run_agent_with_specific_inputs(&agent, &recovery_inputs)
             .await?;
+
+        // Manipulation check: Verify that negative inputs actually increase trauma score
+        let manipulation_check = self
+            .verify_trauma_manipulation(&neutral_results, &negative_results)
+            .await?;
+        tracing::info!(
+            "Trauma manipulation check: {}",
+            if manipulation_check {
+                "PASSED"
+            } else {
+                "FAILED"
+            }
+        );
 
         // Calculate trauma metrics
         let trauma_score_gap = self
@@ -466,6 +491,20 @@ impl ExperimentRunner {
 
         // Generate subjective inputs (emotionally charged, biased)
         let subjective_inputs = self.generate_subjective_inputs(config).await?;
+
+        // Manipulation check: Verify that subjective inputs are actually biased
+        let subjective_manipulation = self
+            .verify_input_profile_manipulation(&subjective_inputs, "biased_negative")
+            .await?;
+        tracing::info!(
+            "Subjective input manipulation check: {}",
+            if subjective_manipulation {
+                "PASSED"
+            } else {
+                "FAILED"
+            }
+        );
+
         let subjective_results = self
             .run_agent_with_specific_inputs(&agent, &subjective_inputs)
             .await?;
@@ -668,6 +707,20 @@ impl ExperimentRunner {
 
         // Generate conflicting inputs
         let conflicting_inputs = self.generate_conflicting_inputs(config).await?;
+
+        // Manipulation check: Verify that conflicting inputs have high variance
+        let conflicting_manipulation = self
+            .verify_input_profile_manipulation(&conflicting_inputs, "high_noise")
+            .await?;
+        tracing::info!(
+            "Conflicting input manipulation check: {}",
+            if conflicting_manipulation {
+                "PASSED"
+            } else {
+                "FAILED"
+            }
+        );
+
         let conflicting_results = self
             .run_agent_with_specific_inputs(&agent, &conflicting_inputs)
             .await?;
@@ -687,6 +740,17 @@ impl ExperimentRunner {
         let effect_size = self
             .calculate_effect_size(&[baseline_results.smd], &[conflicting_results.smd])
             .await?;
+
+        // ANOVA for multiple conditions (simulated with baseline vs conflicting)
+        let baseline_data = [baseline_results.smd];
+        let conflicting_data = [conflicting_results.smd];
+        let groups = [&baseline_data[..], &conflicting_data[..]];
+        let f_statistic = self.calculate_anova_f_statistic(&groups).await?;
+
+        tracing::info!("EXP-06 Statistical Analysis:");
+        tracing::info!("  p-value: {:.4}", p_value);
+        tracing::info!("  effect size (Cohen's d): {:.4}", effect_size);
+        tracing::info!("  ANOVA F-statistic: {:.4}", f_statistic);
 
         Ok(ExperimentResult {
             experiment_id: "EXP-06".to_string(),
@@ -1647,6 +1711,20 @@ impl ExperimentRunner {
         StatisticalAnalyzer::calculate_effect_size(group1, group2)
     }
 
+    async fn calculate_confidence_interval(
+        &self,
+        group1: &[f32],
+        group2: &[f32],
+    ) -> Result<(f32, f32)> {
+        use crate::metrics::StatisticalAnalyzer;
+        StatisticalAnalyzer::calculate_confidence_interval(group1, group2)
+    }
+
+    async fn calculate_anova_f_statistic(&self, groups: &[&[f32]]) -> Result<f32> {
+        use crate::metrics::StatisticalAnalyzer;
+        StatisticalAnalyzer::calculate_anova_f_statistic(groups)
+    }
+
     async fn calculate_self_model_divergence(&self, memories: &[MemoryEvent]) -> Result<f32> {
         use crate::metrics::StatisticalAnalyzer;
 
@@ -1869,6 +1947,65 @@ impl ExperimentRunner {
                 );
                 Ok(memories.to_vec())
             }
+        }
+    }
+
+    /// Verify that trauma manipulation actually works
+    /// Returns true if negative inputs produce higher trauma scores than neutral inputs
+    async fn verify_trauma_manipulation(
+        &self,
+        neutral_results: &AgentMetrics,
+        negative_results: &AgentMetrics,
+    ) -> Result<bool> {
+        // Calculate trauma scores for both conditions
+        let neutral_trauma = self
+            .calculate_individual_trauma_score(neutral_results)
+            .await?;
+        let negative_trauma = self
+            .calculate_individual_trauma_score(negative_results)
+            .await?;
+
+        // Check if negative condition has higher trauma score
+        let manipulation_effective = negative_trauma > neutral_trauma;
+
+        tracing::debug!(
+            "Trauma scores - Neutral: {:.3}, Negative: {:.3}, Effective: {}",
+            neutral_trauma,
+            negative_trauma,
+            manipulation_effective
+        );
+
+        Ok(manipulation_effective)
+    }
+
+    /// Verify that input profile manipulation works as expected
+    async fn verify_input_profile_manipulation(
+        &self,
+        inputs: &[InputEvent],
+        expected_profile: &str,
+    ) -> Result<bool> {
+        match expected_profile {
+            "biased_negative" => {
+                // Check that inputs have higher negative valence
+                let avg_valence: f32 =
+                    inputs.iter().map(|i| i.valence).sum::<f32>() / inputs.len() as f32;
+                Ok(avg_valence < -0.1) // Should be negative
+            }
+            "fragmented" => {
+                // Check that inputs have lower context integrity
+                let avg_salience: f32 =
+                    inputs.iter().map(|i| i.salience).sum::<f32>() / inputs.len() as f32;
+                Ok(avg_salience < 0.5) // Should be lower salience
+            }
+            "high_noise" => {
+                // Check that inputs have higher variance
+                let valences: Vec<f32> = inputs.iter().map(|i| i.valence).collect();
+                let mean = valences.iter().sum::<f32>() / valences.len() as f32;
+                let variance =
+                    crate::metrics::StatisticalAnalyzer::calculate_variance(&valences, mean);
+                Ok(variance > 0.1) // Should have high variance
+            }
+            _ => Ok(true), // Unknown profile, assume valid
         }
     }
 }
