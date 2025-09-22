@@ -6,6 +6,7 @@ interface ExperimentSummaryProps {
   summary: ExperimentSummaryType | null;
   results: ExperimentResult[];
   isRunning: boolean;
+  runningExperimentId?: string | null;
   onRunExperiment: (experimentId: string) => void;
   onViewResults: () => void;
 }
@@ -14,6 +15,7 @@ export default function ExperimentSummary({
   summary,
   results,
   isRunning,
+  runningExperimentId,
   onRunExperiment,
   onViewResults,
 }: ExperimentSummaryProps) {
@@ -61,7 +63,7 @@ export default function ExperimentSummary({
               experiment={exp}
               expData={expData}
               result={result}
-              isRunning={isRunning}
+              isRunning={isRunning && runningExperimentId === exp.id}
               onRun={onRunExperiment}
               onViewResults={onViewResults}
             />

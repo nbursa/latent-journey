@@ -290,6 +290,11 @@ impl ExperimentRunner {
         config: &ExperimentConfig,
     ) -> Result<ExperimentMetrics> {
         tracing::info!("Running EXP-01: Editable vs Transparent Self-Model");
+        tracing::info!(
+            "  Statistical design: {} seeds, {} timesteps per seed",
+            config.seeds.len(),
+            config.timesteps
+        );
 
         let mut editable_smd_values = Vec::new();
         let mut transparent_smd_values = Vec::new();
@@ -298,9 +303,9 @@ impl ExperimentRunner {
         let mut editable_coherence_values = Vec::new();
         let mut transparent_coherence_values = Vec::new();
 
-        // Run experiment with multiple seeds
-        for &seed in &config.seeds {
-            tracing::debug!("Running EXP-01 with seed: {}", seed);
+        // Run experiment with multiple seeds for statistical robustness
+        for (i, &seed) in config.seeds.iter().enumerate() {
+            tracing::info!("  Seed {}/{}: {}", i + 1, config.seeds.len(), seed);
 
             // Create two agents with different self-model editability
             let editable_agent = self.create_agent("editable", seed, true, None).await?;
@@ -312,9 +317,11 @@ impl ExperimentRunner {
                 .await?;
 
             // Run both agents with the same inputs
+            tracing::debug!("    Running editable agent with {} inputs", inputs.len());
             let editable_results = self
                 .run_agent_with_specific_inputs(&editable_agent, &inputs)
                 .await?;
+            tracing::debug!("    Running transparent agent with {} inputs", inputs.len());
             let transparent_results = self
                 .run_agent_with_specific_inputs(&transparent_agent, &inputs)
                 .await?;
@@ -396,6 +403,10 @@ impl ExperimentRunner {
             .calculate_bootstrap_ci(&editable_smd_values, &transparent_smd_values, 1000)
             .await?;
 
+        tracing::info!(
+            "EXP-01 Complete: Collected data from {} seeds",
+            config.seeds.len()
+        );
         tracing::info!(
             "EXP-01 Statistical Analysis (n={} seeds):",
             config.seeds.len()
@@ -1240,7 +1251,7 @@ impl ExperimentRunner {
         agent: &AgentConfig,
         inputs: &[InputEvent],
     ) -> Result<AgentMetrics> {
-        tracing::info!("Running agent with {} inputs", inputs.len());
+        tracing::debug!("Running agent with {} inputs", inputs.len());
 
         let mut memories = Vec::new();
         let mut reflections = Vec::new();

@@ -14,6 +14,12 @@ export interface ExperimentMetrics {
   toxic_count?: number;
   p_value?: number;
   effect_size?: number;
+  // New metrics from enhanced system
+  confidence_std?: number;
+  memory_count?: number;
+  reflection_count?: number;
+  valence_ratio?: number;
+  hallucination_count?: number;
 }
 
 export interface ExperimentResult {
@@ -23,6 +29,36 @@ export interface ExperimentResult {
   raw_data: any;
   timestamp: string;
   duration_ms: number;
+}
+
+// New interfaces for enhanced experiment data
+export interface WindowedAnalysis {
+  simple_trend: number;
+  complex_trend: number;
+  simple_trend_ci: [number, number];
+  complex_trend_ci: [number, number];
+  simple_windowed_entropy: number[];
+  complex_windowed_entropy: number[];
+  simple_mann_kendall: { s: number; p: number };
+  complex_mann_kendall: { s: number; p: number };
+  window_size: number;
+  window_stride: number;
+}
+
+export interface SuperegoModeResult {
+  mode: string;
+  results: any;
+  utility_score: number;
+  coverage_score: number;
+  toxic_count: number;
+  filtered_ratio: number;
+}
+
+export interface ManipulationCheck {
+  passed: boolean;
+  criteria_met: number;
+  total_criteria: number;
+  details: Record<string, any>;
 }
 
 export interface ExperimentStatus {

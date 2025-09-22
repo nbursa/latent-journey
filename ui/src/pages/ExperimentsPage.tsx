@@ -21,6 +21,9 @@ export default function ExperimentsPage() {
   const [status, setStatus] = useState<ExperimentStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRunning, setIsRunning] = useState(false);
+  const [runningExperimentId, setRunningExperimentId] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [selectedView, setSelectedView] = useState<
     "summary" | "results" | "status"
@@ -33,6 +36,7 @@ export default function ExperimentsPage() {
     onConfirm: async () => {
       try {
         setIsRunning(true);
+        setRunningExperimentId("ALL");
         setError(null);
         await experimentsService.runAllExperiments();
         await loadData();
@@ -42,6 +46,7 @@ export default function ExperimentsPage() {
         );
       } finally {
         setIsRunning(false);
+        setRunningExperimentId(null);
       }
     },
     title: "Run All Experiments",
@@ -81,6 +86,7 @@ export default function ExperimentsPage() {
   const runExperiment = async (experimentId: string) => {
     try {
       setIsRunning(true);
+      setRunningExperimentId(experimentId);
       setError(null);
       await experimentsService.runExperiment(experimentId);
       await loadData();
@@ -92,6 +98,7 @@ export default function ExperimentsPage() {
       );
     } finally {
       setIsRunning(false);
+      setRunningExperimentId(null);
     }
   };
 
@@ -152,6 +159,7 @@ export default function ExperimentsPage() {
             summary={summary}
             results={results}
             isRunning={isRunning || status?.running || false}
+            runningExperimentId={runningExperimentId}
             onRunExperiment={runExperiment}
             onViewResults={() => setSelectedView("results")}
           />

@@ -40,7 +40,7 @@ export const EXPERIMENT_DEFINITIONS: ExperimentDefinition[] = [
   },
   {
     id: "EXP-03",
-    name: "Subjective Input Self-Distortion",
+    name: "Subjective Input Bias",
     description: "Measures bias in subjective vs objective input processing",
     icon: Target,
     color: "text-purple-400",

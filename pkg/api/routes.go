@@ -966,7 +966,7 @@ func postExperimentRun(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward request to experiments service
-	client := &http.Client{Timeout: 300 * time.Second} // 5 minutes timeout for individual experiments
+	client := &http.Client{} // No timeout - experiments can run for days
 	resp, err := client.Post("http://localhost:8086/api/experiments/run", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
@@ -988,7 +988,7 @@ func postExperimentRun(w http.ResponseWriter, r *http.Request) {
 
 func postExperimentRunAll(w http.ResponseWriter, r *http.Request) {
 	// Forward request to experiments service
-	client := &http.Client{Timeout: 300 * time.Second} // 5 minutes timeout for running all experiments
+	client := &http.Client{} // No timeout - experiments can run for days
 	resp, err := client.Post("http://localhost:8086/api/experiments/run-all", "application/json", bytes.NewReader([]byte("{}")))
 	if err != nil {
 		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
