@@ -1,6 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 import { useAppStore } from "../stores/appStore";
-import { Camera, Map, Brain, Trash2 } from "lucide-react";
+import { Camera, Map, Brain, Trash2, FlaskConical } from "lucide-react";
 import { useState, useEffect } from "react";
 import CommandPalette from "./CommandPalette";
 import { ConfirmationModal } from "./Modal";
@@ -39,6 +39,12 @@ export default function Navigation() {
       path: "/latent-space",
     },
     { id: "memory", label: "Memory Lab", icon: Brain, path: "/memory" },
+    {
+      id: "experiments",
+      label: "AI Experiments",
+      icon: FlaskConical,
+      path: "/experiments",
+    },
   ] as const;
 
   const isActive = (path: string) => {

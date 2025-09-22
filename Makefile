@@ -43,6 +43,7 @@ dev:
 	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:8086 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 	@echo "Waiting for cleanup..."
 	@sleep 5
@@ -63,6 +64,7 @@ dev:
 	@echo "LLM Service: http://localhost:8083"
 	@echo "Ego Service: http://localhost:8084"
 	@echo "Embeddings Service: http://localhost:8085"
+	@echo "Experiments Service: http://localhost:8086"
 	@echo "UI: http://localhost:5173"
 	@echo ""
 	@echo "⚠️  EXTERNAL DEPENDENCIES REQUIRED:"
@@ -111,7 +113,13 @@ dev:
 	EMBEDDINGS_PID=$$!; \
 	PORT=8085 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "6.Starting UI (Frontend)..."; \
+	echo "6.Starting Experiments Service..."; \
+	PORT=8086 $(MAKE) check-port; \
+	cd services/experiments-rs && cargo run & \
+	EXPERIMENTS_PID=$$!; \
+	PORT=8086 $(MAKE) wait-for-service; \
+	echo ""; \
+	echo "7.Starting UI (Frontend)..."; \
 	PORT=5173 $(MAKE) check-port; \
 	cd ui && npm run dev & \
 	UI_PID=$$!; \
@@ -126,6 +134,7 @@ dev:
 	echo "   • LLM: http://localhost:8083"; \
 	echo "   • Ego: http://localhost:8084"; \
 	echo "   • Embeddings: http://localhost:8085"; \
+	echo "   • Experiments: http://localhost:8086"; \
 	echo ""; \
 	wait
 
@@ -224,6 +233,7 @@ stop:
 	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
+	@lsof -ti:8086 | xargs kill -9 2>/dev/null || true
 	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
 	@echo "Force killing remaining processes..."
 	@pkill -9 -f "go run main.go" || true

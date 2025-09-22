@@ -3,6 +3,7 @@ import Layout from "./layouts/Layout";
 import ExplorationPage from "./pages/ExplorationPage";
 import LatentSpacePage from "./pages/LatentSpacePage";
 import MemoryAnalysisPage from "./pages/MemoryAnalysisPage";
+import ExperimentsPage from "./pages/ExperimentsPage";
 
 function AppContent() {
   return (
@@ -11,6 +12,7 @@ function AppContent() {
         <Route path="/" element={<ExplorationPage />} />
         <Route path="/latent-space" element={<LatentSpacePage />} />
         <Route path="/memory" element={<MemoryAnalysisPage />} />
+        <Route path="/experiments" element={<ExperimentsPage />} />
       </Routes>
     </Layout>
   );

@@ -14,6 +14,9 @@ var hub = NewSSEHub()
 // Global flag to pause status monitoring during AI generation
 var isAIGenerating = false
 
+// Global flag to pause status monitoring during experiments
+var isExperimentRunning = false
+
 // Store last known LLM status to preserve during generation
 var lastKnownLLMStatus = "unknown"
 
@@ -23,6 +26,7 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/speech/transcript", postSpeechTranscript)
 	mux.HandleFunc("/api/sentience/tokenize", postSentienceTokenize)
 	mux.HandleFunc("/api/llm/generate-thought", postGenerateThought)
+	mux.HandleFunc("/api/llm/experiment-thought", postExperimentThought)
 	mux.HandleFunc("/api/llm/consciousness-metrics", getConsciousnessMetrics)
 	mux.HandleFunc("/api/llm/thought-history", getThoughtHistory)
 	mux.HandleFunc("/api/memory", getMemory)
@@ -40,11 +44,22 @@ func RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("/api/ai/generation/start", postAIGenerationStart)
 	mux.HandleFunc("/api/ai/generation/stop", postAIGenerationStop)
 
+	// Experiment control routes
+	mux.HandleFunc("/api/experiments/start", postExperimentStart)
+	mux.HandleFunc("/api/experiments/stop", postExperimentStop)
+
 	// Embeddings service routes
 	mux.HandleFunc("/api/embeddings/add", postAddEmbedding)
 	mux.HandleFunc("/api/embeddings", getEmbeddings)
 	mux.HandleFunc("/api/embeddings/source/", getEmbeddingsBySource)
 	mux.HandleFunc("/api/embeddings/reduce-dimensions", postReduceDimensions)
+
+	// Experiments service routes
+	mux.HandleFunc("/api/experiments/run", postExperimentRun)
+	mux.HandleFunc("/api/experiments/run-all", postExperimentRunAll)
+	mux.HandleFunc("/api/experiments/results", getExperimentResults)
+	mux.HandleFunc("/api/experiments/status", getExperimentStatus)
+	mux.HandleFunc("/api/experiments/summary", getExperimentSummary)
 
 	// Health check proxy routes
 	mux.HandleFunc("/llm/health", getLLMHealth)
@@ -332,6 +347,45 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 			hub.Broadcast(string(evBytes))
 		}
 	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(b)
+}
+
+func postExperimentThought(w http.ResponseWriter, r *http.Request) {
+	const maxSize = 1 << 20 // 1MB
+	r.Body = http.MaxBytesReader(w, r.Body, maxSize)
+
+	var in thoughtRequest
+	if err := json.NewDecoder(r.Body).Decode(&in); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+
+	// call LLM service experiment endpoint
+	body, _ := json.Marshal(in)
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Post("http://localhost:8083/experiment-thought", "application/json", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode >= 400 {
+		http.Error(w, "llm service error", http.StatusBadGateway)
+		return
+	}
+
+	b, _ := io.ReadAll(resp.Body)
+
+	var out map[string]interface{}
+	if err := json.Unmarshal(b, &out); err != nil {
+		http.Error(w, "llm parse error", http.StatusBadGateway)
+		return
+	}
+
+	// Note: No SSE broadcast for experiment thoughts to avoid polluting main STM
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(b)
@@ -792,8 +846,8 @@ func startServiceStatusMonitor() {
 	for {
 		for service, port := range servicePorts {
 			go func(serviceName string, servicePort int) {
-				// Skip LLM check during generation, use last known status
-				if isAIGenerating && serviceName == "llm" {
+				// Skip LLM check during generation or experiments, use last known status
+				if (isAIGenerating || isExperimentRunning) && serviceName == "llm" {
 					statusEvent := map[string]interface{}{
 						"type":      "service.status",
 						"service":   serviceName,
@@ -885,4 +939,137 @@ func postAIGenerationStop(w http.ResponseWriter, r *http.Request) {
 	fmt.Println("AI generation stopped - resuming status checks")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status": "AI generation stopped"}`))
+}
+
+// Experiment control handlers
+func postExperimentStart(w http.ResponseWriter, r *http.Request) {
+	isExperimentRunning = true
+	fmt.Println("Experiment started - pausing LLM status checks")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "Experiment started"}`))
+}
+
+func postExperimentStop(w http.ResponseWriter, r *http.Request) {
+	isExperimentRunning = false
+	fmt.Println("Experiment stopped - resuming LLM status checks")
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte(`{"status": "Experiment stopped"}`))
+}
+
+// Experiments service handlers
+func postExperimentRun(w http.ResponseWriter, r *http.Request) {
+	// Read the request body
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read request body", http.StatusBadRequest)
+		return
+	}
+
+	// Forward request to experiments service
+	client := &http.Client{Timeout: 300 * time.Second} // 5 minutes timeout for individual experiments
+	resp, err := client.Post("http://localhost:8086/api/experiments/run", "application/json", bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func postExperimentRunAll(w http.ResponseWriter, r *http.Request) {
+	// Forward request to experiments service
+	client := &http.Client{Timeout: 300 * time.Second} // 5 minutes timeout for running all experiments
+	resp, err := client.Post("http://localhost:8086/api/experiments/run-all", "application/json", bytes.NewReader([]byte("{}")))
+	if err != nil {
+		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getExperimentResults(w http.ResponseWriter, r *http.Request) {
+	// Forward request to experiments service
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8086/api/experiments/results")
+	if err != nil {
+		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getExperimentStatus(w http.ResponseWriter, r *http.Request) {
+	// Forward request to experiments service
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8086/api/experiments/status")
+	if err != nil {
+		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+func getExperimentSummary(w http.ResponseWriter, r *http.Request) {
+	// Forward request to experiments service
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Get("http://localhost:8086/api/experiments/summary")
+	if err != nil {
+		http.Error(w, "Failed to call experiments service", http.StatusInternalServerError)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Copy response headers
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+
+	// Copy response body
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
 }

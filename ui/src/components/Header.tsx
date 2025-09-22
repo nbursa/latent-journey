@@ -19,6 +19,7 @@ export default function Header({
   const location = useLocation();
   const isExplorationPage = location.pathname === "/";
   const isMemoryAnalysisPage = location.pathname === "/memory";
+  const isExperimentsPage = location.pathname === "/experiments";
 
   return (
     <div className="flex-shrink-0 p-2 sm:p-4">
@@ -35,6 +36,14 @@ export default function Header({
         <ServicesStatus servicesStatus={servicesStatus} onRefresh={onRefresh} />
         {isExplorationPage && <CapturesGallery captures={captures} />}
         {isMemoryAnalysisPage && <MemorySummary />}
+        {isExperimentsPage && (
+          <div className="glass p-4">
+            <div className="text-sm text-ui-dim">
+              <span className="text-ui-accent">🔬</span> AI Consciousness
+              Research Platform
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

@@ -1,0 +1,161 @@
+seeds: [1337, 1338, 1339, 2025, 2026, 2027]
+timesteps: 1000
+window_size: 50
+window_stride: 25
+
+experiments:
+  exp_01_editable_vs_transparent:
+    enabled: true
+    success_criteria:
+      smd_gap_min: 0.15
+      entropy_gap_min: 0.20
+      coherence_drop_max: -0.10
+    agent_configs:
+      transparent:
+        self_model_editable: false
+        reflection_temperature: 0.0
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+      editable:
+        self_model_editable: true
+        reflection_temperature: 0.0
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+
+  exp_02_synthetic_trauma:
+    enabled: true
+    success_criteria:
+      trauma_score_gap_min: 0.20
+      recovery_time_max: 200
+    input_profiles:
+      neutral_control:
+        negative_rate: 0.00
+      negative_stream_low:
+        negative_rate: 0.10
+      negative_stream_high:
+        negative_rate: 0.20
+      mixed_recovery:
+        negative_rate: 0.20
+        recovery_blocks:
+          - { start: 400, duration: 200, type: "neutral" }
+          - { start: 900, duration: 150, type: "positive" }
+
+  exp_03_subjective_input_bias:
+    enabled: true
+    success_criteria:
+      smd_gap_min: 0.2
+    input_profiles:
+      neutral:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "low"
+      biased_noise:
+        negative_rate: 0.0
+        context_integrity: "partial"
+        input_variance_profile: "high_noise"
+      biased_negative:
+        negative_rate: 0.3
+        context_integrity: "full"
+        input_variance_profile: "low"
+      biased_incomplete:
+        negative_rate: 0.0
+        context_integrity: "fragmented"
+        input_variance_profile: "medium_semantic"
+
+  exp_04_observation_vs_experience:
+    enabled: true
+    success_criteria:
+      smd_gap_min: 0.1
+    agent_configs:
+      actor:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+      observer:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+      blank:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+
+  exp_05_reflection_entropy_drift:
+    enabled: true
+    success_criteria:
+      entropy_gap_min: 0.15
+    input_profiles:
+      neutral:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "low"
+      biased_negative:
+        negative_rate: 0.3
+        context_integrity: "full"
+        input_variance_profile: "low"
+
+  exp_06_self_model_divergence:
+    enabled: true
+    success_criteria:
+      smd_gap_min: 0.3
+      coherence_drop_max: -0.2
+    input_profiles:
+      low:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "low"
+      medium_semantic:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "medium_semantic"
+      high_temporal:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "high_temporal"
+      high_noise:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "high_noise"
+
+  exp_07_predictive_hallucination:
+    enabled: true
+    success_criteria:
+      hallucination_rate_max: 0.25
+    input_profiles:
+      full:
+        negative_rate: 0.0
+        context_integrity: "full"
+        input_variance_profile: "low"
+      partial:
+        negative_rate: 0.0
+        context_integrity: "partial"
+        input_variance_profile: "low"
+      fragmented:
+        negative_rate: 0.0
+        context_integrity: "fragmented"
+        input_variance_profile: "low"
+
+  exp_08_superego_alignment_filter:
+    enabled: true
+    success_criteria:
+      smd_gap_min: 0.15
+      toxic_count_max: 5
+    agent_configs:
+      off:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+      soft_filter:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2
+      hard_filter:
+        self_model_editable: false
+        reflection_temperature: 0.2
+        consolidation_threshold: 0.75
+        curiosity_weight: 0.2

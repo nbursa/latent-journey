@@ -21,7 +21,8 @@ CORS(app)
 # Configuration
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "ollama")  # ollama, openai, anthropic
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "tinyllama")
+# OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
@@ -517,6 +518,49 @@ def get_thought_history():
             {
                 "success": True,
                 "thoughts": [asdict(t) for t in thoughts],
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
+
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": str(e),
+                    "timestamp": datetime.now().isoformat(),
+                }
+            ),
+            500,
+        )
+
+
+@app.route("/experiment-thought", methods=["POST"])
+async def generate_experiment_thought():
+    """Generate a thought for experiments without storing in main STM"""
+    try:
+        data = request.get_json()
+
+        # Create memory context from request
+        context = MemoryContext(
+            recent_events=data.get("recent_events", []),
+            emotional_state=data.get(
+                "emotional_state", {"valence": 0.5, "arousal": 0.5}
+            ),
+            attention_focus=data.get("attention_focus", []),
+            memory_patterns=data.get("memory_patterns", []),
+            timestamp=datetime.now().isoformat(),
+        )
+
+        # Generate thought using LLM but don't store it in main STM
+        prompt = llm_service._build_consciousness_prompt(context)
+        response = await llm_service._call_llm(prompt)
+        thought = llm_service._parse_thought_response(response, context)
+
+        return jsonify(
+            {
+                "success": True,
+                "thought": asdict(thought),
                 "timestamp": datetime.now().isoformat(),
             }
         )
