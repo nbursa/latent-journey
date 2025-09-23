@@ -1,5 +1,5 @@
 seeds: [1337, 1338, 1339, 2025, 2026, 2027]
-timesteps: 3
+timesteps: 1000
 window_size: 50
 window_stride: 25
 
