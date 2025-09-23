@@ -107,7 +107,7 @@ dev:
 	EGO_PID=$$!; \
 	PORT=8084 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "5.Starting Embeddings Service (Real CLIP Embeddings)..."; \
+	echo "5.Starting Embeddings Service (CLIP Embeddings)..."; \
 	PORT=8085 $(MAKE) check-port; \
 	cd services/embeddings-rs && cargo run & \
 	EMBEDDINGS_PID=$$!; \
@@ -289,7 +289,7 @@ help:
 	@echo "  2. ID (Memory + Agent) - Port 8082"
 	@echo "  3. ML Service (Whisper + CLIP) + LLM Service (Ollama) - Ports 8081, 8083 (parallel)"
 	@echo "  4. Ego Service (AI Reflection) - Port 8084"
-	@echo "  5. Embeddings Service (Real CLIP Embeddings) - Port 8085"
+	@echo "  5. Embeddings Service (CLIP Embeddings) - Port 8085"
 	@echo "  6. UI (Frontend) - Port 5173"
 	@echo ""
 	@echo "Startup modes:"

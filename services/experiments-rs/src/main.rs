@@ -12,7 +12,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     info!("Starting Experiments service on port 8086");
 
     // Load experiment configuration
-    let config = ExperimentConfig::load_from_file("../../config/experiments.yaml")?;
+    let config = ExperimentConfig::load_from_file("config/experiments.yaml")?;
     let config = Arc::new(RwLock::new(config));
 
     // Initialize experiment runner

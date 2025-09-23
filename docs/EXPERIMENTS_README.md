@@ -6,15 +6,27 @@ This document describes the implementation of the 8 experiments from the structu
 
 The experiments are implemented as a new microservice (`experiments-rs`) that integrates with the existing latent-journey architecture to run real experiments on actual AI systems rather than simulated data.
 
+## Experimental Rationale
+
+The goal of these experiments is to evaluate whether structured symbolic memory architectures — specifically the SynthaMind system — can exhibit core features of synthetic cognition: self-model formation, emotional modulation, continuity of memory, and reflection-driven behavior.
+
+Each experiment probes a distinct cognitive dimension under controlled variation, using real-time perceptual input, reflective generation (LLM), and memory-driven behavior.
+
+The suite is designed to answer:
+
+- Can personality and cognition emerge from memory structure alone?
+- How resilient is the self-model to emotional or perceptual disruption?
+- Can we measure hallucination, identity drift, or ethical regulation in a synthetic agent?
+
 ## Architecture
 
 ```text
-┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
-│   Gateway       │    │   Experiments   │    │   Ego Service   │
-│   (Port 8080)   │◄──►│   (Port 8086)   │◄──►│   (Port 8084)   │
-└─────────────────┘    └─────────────────┘    └─────────────────┘
+┌─────────────────┐      ┌─────────────────┐     ┌─────────────────┐
+│   Gateway       │      │   Experiments   │     │   Ego Service   │
+│   (Port 8080)   │◄─► │   (Port 8086)   │◄─►│   (Port 8084)   │
+└─────────────────┘      └─────────────────┘     └─────────────────┘
          │                       │                       │
-         ▼                       ▼                       ▼
+         ▼                      ▼                      ▼
 ┌─────────────────┐    ┌─────────────────┐    ┌─────────────────┐
 │   ML Service    │    │   Memory        │    │   LLM Service   │
 │   (Port 8081)   │    │   Service       │    │   (Port 8083)   │
@@ -185,7 +197,7 @@ curl -X POST http://localhost:8086/api/experiments/run-all
 
 ## Configuration
 
-Experiments are configured in `config/experiments.yaml`:
+Experiments are configured in `services/experiments-rs/config/experiments.yaml`:
 
 ```yaml
 seeds: [1337, 1338, 1339, 2025, 2026, 2027]
