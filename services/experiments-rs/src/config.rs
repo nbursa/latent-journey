@@ -55,7 +55,7 @@ impl ExperimentConfig {
                 success_criteria: SuccessCriteria {
                     smd_gap_min: Some(0.15),
                     entropy_gap_min: Some(0.20),
-                    coherence_drop_max: Some(-0.10),
+                    coherence_drop_max: Some(0.10),
                     trauma_score_gap_min: None,
                     recovery_time_max: None,
                     hallucination_rate_max: None,
@@ -341,7 +341,7 @@ impl ExperimentConfig {
                 success_criteria: SuccessCriteria {
                     smd_gap_min: Some(0.3),
                     entropy_gap_min: None,
-                    coherence_drop_max: Some(-0.2),
+                    coherence_drop_max: Some(0.2),
                     trauma_score_gap_min: None,
                     recovery_time_max: None,
                     hallucination_rate_max: None,

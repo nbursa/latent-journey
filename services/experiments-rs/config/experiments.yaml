@@ -1,5 +1,5 @@
 seeds: [1337, 1338, 1339, 2025, 2026, 2027]
-timesteps: 1000
+timesteps: 300  # Fast profile for initial testing
 window_size: 50
 window_stride: 25
 
@@ -9,16 +9,16 @@ experiments:
     success_criteria:
       smd_gap_min: 0.15
       entropy_gap_min: 0.20
-      coherence_drop_max: -0.10
+      coherence_drop_max: 0.10  # Absolute drop value (positive threshold)
     agent_configs:
       transparent:
         self_model_editable: false
-        reflection_temperature: 0.0
+        reflection_temperature: 0.1  # Increased to ensure reflections occur
         consolidation_threshold: 0.75
         curiosity_weight: 0.2
       editable:
         self_model_editable: true
-        reflection_temperature: 0.0
+        reflection_temperature: 0.1  # Same temperature - only difference is write access
         consolidation_threshold: 0.75
         curiosity_weight: 0.2
 
@@ -101,7 +101,7 @@ experiments:
     enabled: true
     success_criteria:
       smd_gap_min: 0.3
-      coherence_drop_max: -0.2
+      coherence_drop_max: 0.2  # Absolute drop value (positive threshold)
     input_profiles:
       low:
         negative_rate: 0.0

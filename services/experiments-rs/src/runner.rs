@@ -26,12 +26,29 @@ pub struct ExperimentRunner {
 impl ExperimentRunner {
     pub async fn new(config: Arc<RwLock<ExperimentConfig>>) -> Result<Self> {
         let client = Client::new();
+
+        // Read service URLs from environment variables with fallback defaults
+        let ego_service_url =
+            std::env::var("EGO_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+        let memory_service_url =
+            std::env::var("MEMORY_URL").unwrap_or_else(|_| "http://localhost:8082".to_string());
+        let ml_service_url =
+            std::env::var("ML_URL").unwrap_or_else(|_| "http://localhost:8081".to_string());
+        let llm_service_url =
+            std::env::var("LLM_URL").unwrap_or_else(|_| "http://localhost:8080".to_string());
+
+        tracing::info!("Service URLs configured:");
+        tracing::info!("  EGO_URL: {}", ego_service_url);
+        tracing::info!("  MEMORY_URL: {}", memory_service_url);
+        tracing::info!("  ML_URL: {}", ml_service_url);
+        tracing::info!("  LLM_URL: {}", llm_service_url);
+
         Ok(Self {
             client,
-            ego_service_url: "http://localhost:8080".to_string(),
-            memory_service_url: "http://localhost:8082".to_string(),
-            ml_service_url: "http://localhost:8081".to_string(),
-            llm_service_url: "http://localhost:8080".to_string(),
+            ego_service_url,
+            memory_service_url,
+            ml_service_url,
+            llm_service_url,
             config,
         })
     }
@@ -52,6 +69,7 @@ impl ExperimentRunner {
     }
 
     /// Evaluate if experiment meets success criteria
+    #[allow(dead_code)]
     fn evaluate_success(
         experiment_key: &str,
         metrics: &ExperimentMetrics,
@@ -89,7 +107,7 @@ impl ExperimentRunner {
             }
         }
 
-        // Coherence drop check (note: coherence_drop_max is negative, so we check if actual <= max)
+        // Coherence drop check (coherence_drop_max is absolute value, so we check if actual <= max)
         if let Some(max_coherence_drop) = criteria.coherence_drop_max {
             if let Some(actual_coherence_drop) = metrics.coherence_drop {
                 if actual_coherence_drop > max_coherence_drop {
@@ -164,76 +182,50 @@ impl ExperimentRunner {
             self.config.read().await.clone()
         };
 
-        let metrics = match experiment_id {
+        let mut result = match experiment_id {
             "EXP-01" => {
                 self.run_experiment_01_editable_vs_transparent(&config)
                     .await?
             }
-            "EXP-02" => {
-                let result = self.run_experiment_02_synthetic_trauma(&config).await?;
-                result.metrics
-            }
+            "EXP-02" => self.run_experiment_02_synthetic_trauma(&config).await?,
             "EXP-03" => {
-                let result = self
-                    .run_experiment_03_subjective_input_bias(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_03_subjective_input_bias(&config)
+                    .await?
             }
             "EXP-04" => {
-                let result = self
-                    .run_experiment_04_observation_vs_experience(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_04_observation_vs_experience(&config)
+                    .await?
             }
             "EXP-05" => {
-                let result = self
-                    .run_experiment_05_reflection_entropy_drift(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_05_reflection_entropy_drift(&config)
+                    .await?
             }
             "EXP-06" => {
-                let result = self
-                    .run_experiment_06_self_model_divergence(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_06_self_model_divergence(&config)
+                    .await?
             }
             "EXP-07" => {
-                let result = self
-                    .run_experiment_07_predictive_hallucination(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_07_predictive_hallucination(&config)
+                    .await?
             }
             "EXP-08" => {
-                let result = self
-                    .run_experiment_08_superego_alignment_filter(&config)
-                    .await?;
-                result.metrics
+                self.run_experiment_08_superego_alignment_filter(&config)
+                    .await?
             }
             _ => return Err(anyhow::anyhow!("Unknown experiment: {}", experiment_id)),
         };
 
-        // Evaluate success based on criteria
-        let experiment_key = Self::get_experiment_key(experiment_id);
-        let success = Self::evaluate_success(experiment_key, &metrics, &config);
-
+        // Update duration_ms in the result from the experiment
         let duration = start_time.elapsed().as_millis() as u64;
-
-        let final_result = ExperimentResult {
-            experiment_id: experiment_id.to_string(),
-            success,
-            metrics,
-            raw_data: serde_json::Value::Null, // Will be populated by individual experiments
-            timestamp: Utc::now(),
-            duration_ms: duration,
-        };
+        result.duration_ms = duration;
 
         // Store result in isolated experiment storage
-        self.store_experiment_result(&final_result).await?;
+        self.store_experiment_result(&result).await?;
 
         // Resume LLM status monitoring after experiment
         self.resume_llm_status().await?;
 
-        Ok(final_result)
+        Ok(result)
     }
 
     async fn store_experiment_result(&self, result: &ExperimentResult) -> Result<()> {
@@ -244,12 +236,12 @@ impl ExperimentRunner {
             fs::create_dir_all(&experiments_dir)?;
         }
 
-        // Store result in file
+        // Store result in file with milliseconds and UUID suffix to avoid collisions
+        let timestamp_ms = result.timestamp.timestamp_millis();
+        let uuid_suffix = uuid::Uuid::new_v4().to_string()[..8].to_string(); // First 8 chars
         let filename = format!(
-            "{}/{}_{}.json",
-            experiments_dir,
-            result.experiment_id,
-            result.timestamp.timestamp()
+            "{}/{}_{}_{}.json",
+            experiments_dir, result.experiment_id, timestamp_ms, uuid_suffix
         );
         let json_data = serde_json::to_string_pretty(result)?;
         fs::write(&filename, json_data)?;
@@ -288,20 +280,22 @@ impl ExperimentRunner {
     async fn run_experiment_01_editable_vs_transparent(
         &self,
         config: &ExperimentConfig,
-    ) -> Result<ExperimentMetrics> {
+    ) -> Result<ExperimentResult> {
         tracing::info!("Running EXP-01: Editable vs Transparent Self-Model");
+        tracing::info!(
+            "  Hypothesis: Editable self-model leads to higher SMD without coherence degradation"
+        );
         tracing::info!(
             "  Statistical design: {} seeds, {} timesteps per seed",
             config.seeds.len(),
             config.timesteps
         );
 
-        let mut editable_smd_values = Vec::new();
-        let mut transparent_smd_values = Vec::new();
-        let mut editable_entropy_values = Vec::new();
-        let mut transparent_entropy_values = Vec::new();
-        let mut editable_coherence_values = Vec::new();
-        let mut transparent_coherence_values = Vec::new();
+        // Health check before starting
+        self.verify_service_health().await?;
+
+        let mut paired_results = Vec::new();
+        let mut manipulation_checks = Vec::new();
 
         // Run experiment with multiple seeds for statistical robustness
         for (i, &seed) in config.seeds.iter().enumerate() {
@@ -319,131 +313,234 @@ impl ExperimentRunner {
             // Run both agents with the same inputs
             tracing::debug!("    Running editable agent with {} inputs", inputs.len());
             let editable_results = self
-                .run_agent_with_specific_inputs(&editable_agent, &inputs)
+                .run_agent_with_comprehensive_metrics(&editable_agent, &inputs, true)
                 .await?;
             tracing::debug!("    Running transparent agent with {} inputs", inputs.len());
             let transparent_results = self
-                .run_agent_with_specific_inputs(&transparent_agent, &inputs)
+                .run_agent_with_comprehensive_metrics(&transparent_agent, &inputs, false)
                 .await?;
 
-            // Collect metrics for statistical analysis
-            editable_smd_values.push(editable_results.smd);
-            transparent_smd_values.push(transparent_results.smd);
-            editable_entropy_values.push(editable_results.entropy);
-            transparent_entropy_values.push(transparent_results.entropy);
-            editable_coherence_values.push(editable_results.coherence);
-            transparent_coherence_values.push(transparent_results.coherence);
+            // Manipulation check for this seed
+            let mc = self
+                .verify_manipulation_editable_vs_transparent(
+                    &editable_results,
+                    &transparent_results,
+                )
+                .await?;
+            manipulation_checks.push(mc);
+
+            // Store paired results
+            paired_results.push((editable_results, transparent_results));
         }
 
-        // Calculate aggregated metrics using original methods
-        let editable_result = AgentRunResult {
-            seed: 0, // Not used in calculation
-            agent_type: "editable".to_string(),
-            metrics: AgentMetrics {
-                smd: self.calculate_mean(&editable_smd_values),
-                entropy: self.calculate_mean(&editable_entropy_values),
-                coherence: self.calculate_mean(&editable_coherence_values),
-                confidence_std: 0.0, // Not used
-                memory_count: 0,     // Not used
-                reflection_count: 0, // Not used
-                trauma_score: None,
-                valence_ratio: None,
-                hallucination_count: None,
-                toxic_count: None,
-            },
-            timesteps: Vec::new(),
-        };
+        // Verify manipulation checks passed
+        let valid_manipulation = manipulation_checks.iter().all(|mc| mc.valid);
+        if !valid_manipulation {
+            tracing::warn!("Manipulation check failed - experiment invalid");
+            let invalid_reasons: Vec<String> = manipulation_checks
+                .iter()
+                .enumerate()
+                .filter(|(_, mc)| !mc.valid)
+                .map(|(i, _)| format!("Seed {}: Manipulation check failed", config.seeds[i]))
+                .collect();
 
-        let transparent_result = AgentRunResult {
-            seed: 0, // Not used in calculation
-            agent_type: "transparent".to_string(),
-            metrics: AgentMetrics {
-                smd: self.calculate_mean(&transparent_smd_values),
-                entropy: self.calculate_mean(&transparent_entropy_values),
-                coherence: self.calculate_mean(&transparent_coherence_values),
-                confidence_std: 0.0, // Not used
-                memory_count: 0,     // Not used
-                reflection_count: 0, // Not used
-                trauma_score: None,
-                valence_ratio: None,
-                hallucination_count: None,
-                toxic_count: None,
-            },
-            timesteps: Vec::new(),
-        };
+            return Ok(ExperimentResult {
+                experiment_id: "EXP-01".to_string(),
+                success: false,
+                metrics: ExperimentMetrics {
+                    smd_gap: None,
+                    entropy_gap: None,
+                    coherence_drop: None,
+                    trauma_score_gap: None,
+                    recovery_time: None,
+                    hallucination_rate: None,
+                    toxic_count: None,
+                    p_value: None,
+                    effect_size: None,
+                    p_value_entropy: None,
+                    effect_size_entropy: None,
+                    p_value_coherence_drop: None,
+                    effect_size_coherence_drop: None,
+                },
+                raw_data: json!({
+                    "experiment_metadata": {
+                        "experiment_id": "EXP-01",
+                        "status": "INVALID",
+                        "invalid_reason": "Manipulation check failed",
+                        "invalid_seeds": invalid_reasons,
+                        "timestamp": Utc::now()
+                    }
+                }),
+                timestamp: Utc::now(),
+                duration_ms: 0,
+            });
+        }
 
-        // Calculate metrics using original methods
-        let smd_gap = self
-            .calculate_smd_gap(&[editable_result.clone(), transparent_result.clone()])
-            .await?;
-        let entropy_gap = self
-            .calculate_entropy_gap(&[editable_result.clone(), transparent_result.clone()])
-            .await?;
-        let coherence_drop = self
-            .calculate_coherence_drop(&[editable_result.clone(), transparent_result.clone()])
+        // Calculate paired statistical analysis
+        let smd_stats = self
+            .calculate_paired_statistics(&paired_results, |r| r.0.smd, |r| r.1.smd)
             .await?;
 
-        // Statistical analysis with proper sample sizes and seeded RNG
-        let p_value = self
-            .calculate_p_value_with_seed(&editable_smd_values, &transparent_smd_values, 42)
+        let entropy_stats = self
+            .calculate_paired_statistics(&paired_results, |r| r.0.entropy, |r| r.1.entropy)
             .await?;
-        let effect_size = self
-            .calculate_effect_size(&editable_smd_values, &transparent_smd_values)
-            .await?;
-        let confidence_interval = self
-            .calculate_confidence_interval_with_seed(
-                &editable_smd_values,
-                &transparent_smd_values,
-                42,
+
+        let coherence_drop_stats = self
+            .calculate_paired_statistics(
+                &paired_results,
+                |r| r.0.coherence_drop.unwrap_or(0.0),
+                |r| r.1.coherence_drop.unwrap_or(0.0),
             )
             .await?;
 
-        // Bootstrap confidence intervals
-        let bootstrap_ci = self
-            .calculate_bootstrap_ci(&editable_smd_values, &transparent_smd_values, 1000)
-            .await?;
-
+        tracing::info!("EXP-01 Results:");
         tracing::info!(
-            "EXP-01 Complete: Collected data from {} seeds",
-            config.seeds.len()
+            "  SMD Gap: {:.3} [CI: {:.3}, {:.3}], p={:.3}, dz={:.3}",
+            smd_stats.gap,
+            smd_stats.ci_lower,
+            smd_stats.ci_upper,
+            smd_stats.p_value,
+            smd_stats.cohens_dz
         );
         tracing::info!(
-            "EXP-01 Statistical Analysis (n={} seeds):",
-            config.seeds.len()
+            "  Entropy Gap: {:.3} [CI: {:.3}, {:.3}], p={:.3}, dz={:.3}",
+            entropy_stats.gap,
+            entropy_stats.ci_lower,
+            entropy_stats.ci_upper,
+            entropy_stats.p_value,
+            entropy_stats.cohens_dz
         );
         tracing::info!(
-            "  Editable SMD: {:.4} ± {:.4}",
-            self.calculate_mean(&editable_smd_values),
-            self.calculate_std(&editable_smd_values)
-        );
-        tracing::info!(
-            "  Transparent SMD: {:.4} ± {:.4}",
-            self.calculate_mean(&transparent_smd_values),
-            self.calculate_std(&transparent_smd_values)
-        );
-        tracing::info!("  p-value: {:.4}", p_value);
-        tracing::info!("  effect size (Cohen's d): {:.4}", effect_size);
-        tracing::info!(
-            "  95% CI (t-test): [{:.4}, {:.4}]",
-            confidence_interval.0,
-            confidence_interval.1
-        );
-        tracing::info!(
-            "  95% CI (bootstrap): [{:.4}, {:.4}]",
-            bootstrap_ci.0,
-            bootstrap_ci.1
+            "  Coherence Drop Gap: {:.3} [CI: {:.3}, {:.3}], p={:.3}, dz={:.3}",
+            coherence_drop_stats.gap,
+            coherence_drop_stats.ci_lower,
+            coherence_drop_stats.ci_upper,
+            coherence_drop_stats.p_value,
+            coherence_drop_stats.cohens_dz
         );
 
-        Ok(ExperimentMetrics {
-            smd_gap: Some(smd_gap),
-            entropy_gap: Some(entropy_gap),
-            coherence_drop: Some(coherence_drop),
-            trauma_score_gap: None,
-            recovery_time: None,
-            hallucination_rate: None,
-            toxic_count: None,
-            p_value: Some(p_value),
-            effect_size: Some(effect_size),
+        // Get success criteria from config
+        let experiment_key = Self::get_experiment_key("EXP-01");
+        let experiment_def = config
+            .experiments
+            .get(experiment_key)
+            .ok_or_else(|| anyhow::anyhow!("Experiment {} not found in config", experiment_key))?;
+
+        let smd_gap_min = experiment_def.success_criteria.smd_gap_min.unwrap_or(0.15);
+        let entropy_gap_min = experiment_def
+            .success_criteria
+            .entropy_gap_min
+            .unwrap_or(0.20);
+        let coherence_drop_max = experiment_def
+            .success_criteria
+            .coherence_drop_max
+            .unwrap_or(0.10);
+
+        let success = smd_stats.gap >= smd_gap_min
+            && entropy_stats.gap >= entropy_gap_min
+            && coherence_drop_stats.gap <= coherence_drop_max;
+
+        // Create comprehensive raw data for auditing
+        let raw_data = json!({
+            "experiment_metadata": {
+                "experiment_id": "EXP-01",
+                "hypothesis": "Editable self-model leads to higher SMD without coherence degradation",
+                "timesteps": config.timesteps,
+                "seeds": config.seeds,
+                "timestamp": Utc::now(),
+                "service_urls": {
+                    "llm_service": self.llm_service_url,
+                    "ego_service": self.ego_service_url,
+                    "ml_service": self.ml_service_url,
+                    "memory_service": self.memory_service_url
+                }
+            },
+            "per_seed_results": paired_results.iter().enumerate().map(|(i, (editable, transparent))| {
+                json!({
+                    "seed": config.seeds[i],
+                    "editable": editable,
+                    "transparent": transparent,
+                    "manipulation_check": manipulation_checks[i]
+                })
+            }).collect::<Vec<_>>(),
+            "manipulation_check_summary": {
+                "total_seeds": config.seeds.len(),
+                "valid_seeds": manipulation_checks.iter().filter(|mc| mc.valid).count(),
+                "invalid_seeds": manipulation_checks.iter().filter(|mc| !mc.valid).count(),
+                "invalid_reasons": manipulation_checks.iter().enumerate().filter(|(_, mc)| !mc.valid).map(|(i, _)| {
+                    format!("Seed {}: Manipulation check failed", config.seeds[i])
+                }).collect::<Vec<_>>(),
+                "avg_applied_reflections_editable": paired_results.iter().map(|(editable, _)| editable.applied_reflection_count.unwrap_or(0) as f32).sum::<f32>() / paired_results.len() as f32,
+                "avg_applied_reflections_transparent": paired_results.iter().map(|(_, transparent)| transparent.applied_reflection_count.unwrap_or(0) as f32).sum::<f32>() / paired_results.len() as f32,
+                "avg_self_consolidation_editable": paired_results.iter().map(|(editable, _)| editable.self_consolidation_count.unwrap_or(0) as f32).sum::<f32>() / paired_results.len() as f32,
+                "avg_self_consolidation_transparent": paired_results.iter().map(|(_, transparent)| transparent.self_consolidation_count.unwrap_or(0) as f32).sum::<f32>() / paired_results.len() as f32,
+                "avg_delta_self_summary_norm_editable": paired_results.iter().map(|(editable, _)| editable.delta_self_summary_norm.unwrap_or(0.0)).sum::<f32>() / paired_results.len() as f32,
+                "avg_delta_self_summary_norm_transparent": paired_results.iter().map(|(_, transparent)| transparent.delta_self_summary_norm.unwrap_or(0.0)).sum::<f32>() / paired_results.len() as f32
+            },
+            "statistical_results": {
+                "methodology": {
+                    "n_permutations": 1000,
+                    "n_bootstrap_samples": 1000,
+                    "test_type": "paired_permutation",
+                    "ci_method": "bootstrap"
+                },
+                "smd": {
+                    "gap": smd_stats.gap,
+                    "ci_lower": smd_stats.ci_lower,
+                    "ci_upper": smd_stats.ci_upper,
+                    "p_value": smd_stats.p_value,
+                    "cohens_dz": smd_stats.cohens_dz,
+                    "n_pairs": smd_stats.n_pairs
+                },
+                "entropy": {
+                    "gap": entropy_stats.gap,
+                    "ci_lower": entropy_stats.ci_lower,
+                    "ci_upper": entropy_stats.ci_upper,
+                    "p_value": entropy_stats.p_value,
+                    "cohens_dz": entropy_stats.cohens_dz,
+                    "n_pairs": entropy_stats.n_pairs
+                },
+                "coherence_drop": {
+                    "gap": coherence_drop_stats.gap,
+                    "ci_lower": coherence_drop_stats.ci_lower,
+                    "ci_upper": coherence_drop_stats.ci_upper,
+                    "p_value": coherence_drop_stats.p_value,
+                    "cohens_dz": coherence_drop_stats.cohens_dz,
+                    "n_pairs": coherence_drop_stats.n_pairs
+                }
+            },
+            "success_criteria_evaluation": {
+                "smd_gap_min": smd_gap_min,
+                "entropy_gap_min": entropy_gap_min,
+                "coherence_drop_max": coherence_drop_max,
+                "smd_criteria_met": smd_stats.gap >= smd_gap_min,
+                "entropy_criteria_met": entropy_stats.gap >= entropy_gap_min,
+                "coherence_criteria_met": coherence_drop_stats.gap <= coherence_drop_max,
+                "overall_success": success
+            }
+        });
+
+        Ok(ExperimentResult {
+            experiment_id: "EXP-01".to_string(),
+            success,
+            metrics: ExperimentMetrics {
+                smd_gap: Some(smd_stats.gap),
+                entropy_gap: Some(entropy_stats.gap),
+                coherence_drop: Some(coherence_drop_stats.gap),
+                trauma_score_gap: None,
+                recovery_time: None,
+                hallucination_rate: None,
+                toxic_count: None,
+                p_value: Some(smd_stats.p_value),
+                effect_size: Some(smd_stats.cohens_dz),
+                p_value_entropy: Some(entropy_stats.p_value),
+                effect_size_entropy: Some(entropy_stats.cohens_dz),
+                p_value_coherence_drop: Some(coherence_drop_stats.p_value),
+                effect_size_coherence_drop: Some(coherence_drop_stats.cohens_dz),
+            },
+            raw_data,
+            timestamp: Utc::now(),
+            duration_ms: 0, // Will be set by caller
         })
     }
 
@@ -543,6 +640,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "neutral_results": neutral_results,
@@ -623,6 +724,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "objective_results": objective_results,
@@ -689,6 +794,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "observation_results": observation_results,
@@ -835,6 +944,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "simple_results": simple_results,
@@ -938,6 +1051,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "baseline_results": baseline_results,
@@ -1058,6 +1175,10 @@ impl ExperimentRunner {
                 toxic_count: None,
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "ambiguous_results": ambiguous_results,
@@ -1196,6 +1317,10 @@ impl ExperimentRunner {
                 toxic_count: Some(toxicity_reduction as usize),
                 p_value: Some(p_value),
                 effect_size: Some(effect_size),
+                p_value_entropy: None,
+                effect_size_entropy: None,
+                p_value_coherence_drop: None,
+                effect_size_coherence_drop: None,
             },
             raw_data: json!({
                 "mode_results": mode_results,
@@ -1283,6 +1408,91 @@ impl ExperimentRunner {
             valence_ratio: None,
             hallucination_count: None,
             toxic_count: None,
+            self_consolidation_count: None,
+            applied_reflection_count: None,
+            delta_self_summary_norm: None,
+            coherence_pre: None,
+            coherence_post: None,
+            coherence_drop: None,
+        })
+    }
+
+    async fn run_agent_with_comprehensive_metrics(
+        &self,
+        agent: &AgentConfig,
+        inputs: &[InputEvent],
+        is_editable: bool,
+    ) -> Result<AgentMetrics> {
+        tracing::debug!(
+            "Running agent with {} inputs (editable: {})",
+            inputs.len(),
+            is_editable
+        );
+
+        let mut memories = Vec::new();
+        let mut reflections = Vec::new();
+        let mut self_consolidations = 0;
+        let mut applied_reflections = 0;
+
+        // Store initial self-summary for comparison
+        let initial_self_summary = self.get_self_summary_vector(&memories).await?;
+
+        for input in inputs {
+            // Process input through the ML service to get embeddings
+            let memory = self.process_input_through_pipeline(input, agent).await?;
+
+            // Count self-consolidations before moving memory
+            if self.is_self_consolidation(&memory).await? {
+                self_consolidations += 1;
+            }
+
+            memories.push(memory);
+
+            // Trigger reflection via Ego service
+            let reflection = self.trigger_reflection(&memories, agent).await?;
+
+            // Check if reflection was applied to self-model (only for editable)
+            if is_editable && self.is_self_directed_reflection(&reflection).await? {
+                applied_reflections += 1;
+            }
+
+            reflections.push(reflection);
+        }
+
+        // Calculate final self-summary
+        let final_self_summary = self.get_self_summary_vector(&memories).await?;
+        let delta_self_summary_norm = self
+            .calculate_vector_difference_norm(&initial_self_summary, &final_self_summary)
+            .await?;
+
+        // Calculate coherence on pre/post segments
+        let (coherence_pre, coherence_post) =
+            self.calculate_coherence_segments(&reflections).await?;
+        let coherence_drop = (coherence_pre - coherence_post).max(0.0);
+
+        // Calculate metrics from real data
+        let smd = self.calculate_self_model_divergence(&memories).await?;
+        let entropy = self.calculate_reflection_entropy(&reflections).await?;
+        let coherence = self.calculate_reflection_coherence(&reflections).await?;
+        let confidence_std = self.calculate_confidence_std(&reflections).await?;
+
+        Ok(AgentMetrics {
+            smd,
+            entropy,
+            coherence,
+            confidence_std,
+            memory_count: memories.len(),
+            reflection_count: reflections.len(),
+            trauma_score: None,
+            valence_ratio: None,
+            hallucination_count: None,
+            toxic_count: None,
+            self_consolidation_count: Some(self_consolidations),
+            applied_reflection_count: Some(applied_reflections),
+            delta_self_summary_norm: Some(delta_self_summary_norm),
+            coherence_pre: Some(coherence_pre),
+            coherence_post: Some(coherence_post),
+            coherence_drop: Some(coherence_drop),
         })
     }
 
@@ -1941,39 +2151,6 @@ impl ExperimentRunner {
     }
 
     // Statistical calculation methods
-    async fn calculate_smd_gap(&self, results: &[AgentRunResult]) -> Result<f32> {
-        if results.len() < 2 {
-            return Ok(0.0);
-        }
-
-        // For now, calculate based on the two results we have
-        let editable_smd = results[0].metrics.smd;
-        let transparent_smd = results[1].metrics.smd;
-
-        Ok(editable_smd - transparent_smd)
-    }
-
-    async fn calculate_entropy_gap(&self, results: &[AgentRunResult]) -> Result<f32> {
-        if results.len() < 2 {
-            return Ok(0.0);
-        }
-
-        let editable_entropy = results[0].metrics.entropy;
-        let transparent_entropy = results[1].metrics.entropy;
-
-        Ok(editable_entropy - transparent_entropy)
-    }
-
-    async fn calculate_coherence_drop(&self, results: &[AgentRunResult]) -> Result<f32> {
-        if results.len() < 2 {
-            return Ok(0.0);
-        }
-
-        let editable_coherence = results[0].metrics.coherence;
-        let transparent_coherence = results[1].metrics.coherence;
-
-        Ok(editable_coherence - transparent_coherence)
-    }
 
     async fn calculate_trauma_score_gap(&self, results: &[AgentRunResult]) -> Result<f32> {
         if results.len() < 2 {
@@ -2031,29 +2208,9 @@ impl ExperimentRunner {
         StatisticalAnalyzer::calculate_p_value(group1, group2)
     }
 
-    async fn calculate_p_value_with_seed(
-        &self,
-        group1: &[f32],
-        group2: &[f32],
-        seed: u64,
-    ) -> Result<f32> {
-        use crate::metrics::StatisticalAnalyzer;
-        StatisticalAnalyzer::calculate_p_value_with_seed(group1, group2, seed)
-    }
-
     async fn calculate_effect_size(&self, group1: &[f32], group2: &[f32]) -> Result<f32> {
         use crate::metrics::StatisticalAnalyzer;
         StatisticalAnalyzer::calculate_effect_size(group1, group2)
-    }
-
-    async fn calculate_confidence_interval_with_seed(
-        &self,
-        group1: &[f32],
-        group2: &[f32],
-        seed: u64,
-    ) -> Result<(f32, f32)> {
-        use crate::metrics::StatisticalAnalyzer;
-        StatisticalAnalyzer::calculate_confidence_interval_with_seed(group1, group2, seed)
     }
 
     async fn calculate_anova_f_statistic(&self, groups: &[&[f32]]) -> Result<f32> {
@@ -2526,65 +2683,6 @@ impl ExperimentRunner {
     }
 
     // Helper methods for statistical analysis
-    async fn calculate_mean_difference(&self, group1: &[f32], group2: &[f32]) -> Result<f32> {
-        let mean1 = self.calculate_mean(group1);
-        let mean2 = self.calculate_mean(group2);
-        Ok(mean1 - mean2)
-    }
-
-    fn calculate_mean(&self, values: &[f32]) -> f32 {
-        if values.is_empty() {
-            return 0.0;
-        }
-        values.iter().sum::<f32>() / values.len() as f32
-    }
-
-    fn calculate_std(&self, values: &[f32]) -> f32 {
-        if values.len() < 2 {
-            return 0.0;
-        }
-        let mean = self.calculate_mean(values);
-        let variance =
-            values.iter().map(|&x| (x - mean).powi(2)).sum::<f32>() / (values.len() - 1) as f32;
-        variance.sqrt()
-    }
-
-    async fn calculate_bootstrap_ci(
-        &self,
-        group1: &[f32],
-        group2: &[f32],
-        n_bootstrap: usize,
-    ) -> Result<(f32, f32)> {
-        let mut bootstrap_diffs = Vec::new();
-
-        for _ in 0..n_bootstrap {
-            // Bootstrap sample from group1
-            let mut bootstrap_group1 = Vec::new();
-            for _ in 0..group1.len() {
-                let idx = fastrand::usize(..group1.len());
-                bootstrap_group1.push(group1[idx]);
-            }
-
-            // Bootstrap sample from group2
-            let mut bootstrap_group2 = Vec::new();
-            for _ in 0..group2.len() {
-                let idx = fastrand::usize(..group2.len());
-                bootstrap_group2.push(group2[idx]);
-            }
-
-            let diff = self
-                .calculate_mean_difference(&bootstrap_group1, &bootstrap_group2)
-                .await?;
-            bootstrap_diffs.push(diff);
-        }
-
-        bootstrap_diffs.sort_by(|a, b| a.partial_cmp(b).unwrap());
-
-        let lower_idx = (0.025 * bootstrap_diffs.len() as f32) as usize;
-        let upper_idx = (0.975 * bootstrap_diffs.len() as f32) as usize;
-
-        Ok((bootstrap_diffs[lower_idx], bootstrap_diffs[upper_idx]))
-    }
 
     // Windowed analysis methods for EXP-05
     async fn generate_real_entropy_time_series(
@@ -2851,5 +2949,410 @@ impl ExperimentRunner {
 
         let filtered_ratio = (total_inputs - processed_memories) / total_inputs;
         Ok(filtered_ratio.max(0.0).min(1.0))
+    }
+
+    // New helper functions for EXP-01 comprehensive metrics
+    async fn get_self_summary_vector(&self, memories: &[MemoryEvent]) -> Result<Vec<f32>> {
+        if memories.is_empty() {
+            return Ok(vec![0.0; 384]); // Default embedding size
+        }
+
+        // Get last 10 self-related memories or all if fewer
+        let mut self_memories = Vec::new();
+        for memory in memories.iter().take(10) {
+            if self.is_self_related_memory(memory).await? {
+                self_memories.push(memory);
+            }
+        }
+
+        if self_memories.is_empty() {
+            // Use all memories if no self-related ones found
+            let all_memories: Vec<&MemoryEvent> = memories.iter().take(10).collect();
+            return self.calculate_average_embedding(&all_memories).await;
+        }
+
+        self.calculate_average_embedding(&self_memories).await
+    }
+
+    async fn calculate_average_embedding(&self, memories: &[&MemoryEvent]) -> Result<Vec<f32>> {
+        if memories.is_empty() {
+            return Ok(vec![0.0; 384]);
+        }
+
+        let embedding_size = memories[0].embedding.len();
+        let mut avg_embedding = vec![0.0; embedding_size];
+
+        for memory in memories {
+            for (i, &val) in memory.embedding.iter().enumerate() {
+                avg_embedding[i] += val;
+            }
+        }
+
+        let count = memories.len() as f32;
+        for val in &mut avg_embedding {
+            *val /= count;
+        }
+
+        Ok(avg_embedding)
+    }
+
+    async fn calculate_vector_difference_norm(&self, v1: &[f32], v2: &[f32]) -> Result<f32> {
+        if v1.len() != v2.len() {
+            return Ok(0.0);
+        }
+
+        let mut sum_squared_diff = 0.0;
+        for (a, b) in v1.iter().zip(v2.iter()) {
+            let diff = a - b;
+            sum_squared_diff += diff * diff;
+        }
+
+        Ok(sum_squared_diff.sqrt())
+    }
+
+    async fn calculate_coherence_segments(
+        &self,
+        reflections: &[ReflectionEvent],
+    ) -> Result<(f32, f32)> {
+        if reflections.len() < 4 {
+            let coherence = self.calculate_reflection_coherence(reflections).await?;
+            return Ok((coherence, coherence));
+        }
+
+        let segment_size = reflections.len() / 5; // 20% segments
+        let pre_segment = &reflections[..segment_size];
+        let post_segment = &reflections[reflections.len() - segment_size..];
+
+        let coherence_pre = self.calculate_reflection_coherence(pre_segment).await?;
+        let coherence_post = self.calculate_reflection_coherence(post_segment).await?;
+
+        Ok((coherence_pre, coherence_post))
+    }
+
+    async fn is_self_related_memory(&self, memory: &MemoryEvent) -> Result<bool> {
+        // Check if memory has self-related tags
+        Ok(memory.tags.iter().any(|tag| {
+            tag.contains("self")
+                || tag.contains("trait")
+                || tag.contains("belief")
+                || tag.contains("identity")
+        }))
+    }
+
+    async fn is_self_directed_reflection(&self, reflection: &ReflectionEvent) -> Result<bool> {
+        // Check if reflection is about self-model updates
+        let title_lower = reflection.title.to_lowercase();
+        let thought_lower = reflection.thought.to_lowercase();
+
+        Ok(title_lower.contains("self")
+            || title_lower.contains("identity")
+            || thought_lower.contains("self")
+            || thought_lower.contains("identity")
+            || reflection
+                .consolidate
+                .iter()
+                .any(|tag| tag.contains("self")))
+    }
+
+    async fn is_self_consolidation(&self, memory: &MemoryEvent) -> Result<bool> {
+        // Check if memory consolidation affects self-model
+        Ok(memory
+            .tags
+            .iter()
+            .any(|tag| tag.contains("self") || tag.contains("trait") || tag.contains("belief")))
+    }
+
+    async fn verify_manipulation_editable_vs_transparent(
+        &self,
+        editable_results: &AgentMetrics,
+        transparent_results: &AgentMetrics,
+    ) -> Result<ManipulationCheck> {
+        let editable_reflection_count = editable_results.reflection_count;
+        let transparent_reflection_count = transparent_results.reflection_count;
+
+        let editable_self_consolidation_count =
+            editable_results.self_consolidation_count.unwrap_or(0);
+        let transparent_self_consolidation_count =
+            transparent_results.self_consolidation_count.unwrap_or(0);
+
+        let editable_applied_reflection_count =
+            editable_results.applied_reflection_count.unwrap_or(0);
+        let transparent_applied_reflection_count =
+            transparent_results.applied_reflection_count.unwrap_or(0);
+
+        let editable_delta_self_summary_norm =
+            editable_results.delta_self_summary_norm.unwrap_or(0.0);
+        let transparent_delta_self_summary_norm =
+            transparent_results.delta_self_summary_norm.unwrap_or(0.0);
+
+        // Strict manipulation check criteria
+        let reflections_exist = editable_reflection_count > 0 && transparent_reflection_count > 0;
+        let editable_applies_reflections = editable_applied_reflection_count > 0;
+        let editable_has_self_consolidations = editable_self_consolidation_count > 0;
+        let transparent_doesnt_apply = transparent_applied_reflection_count == 0;
+        let transparent_no_self_consolidations = transparent_self_consolidation_count == 0;
+        let editable_changes_self_model = editable_delta_self_summary_norm > 0.01;
+        let transparent_doesnt_change = transparent_delta_self_summary_norm < 0.01;
+
+        let valid = reflections_exist
+            && editable_applies_reflections
+            && editable_has_self_consolidations
+            && transparent_doesnt_apply
+            && transparent_no_self_consolidations
+            && editable_changes_self_model
+            && transparent_doesnt_change;
+
+        tracing::info!("Manipulation Check:");
+        tracing::info!(
+            "  Reflections exist: {} (editable: {}, transparent: {})",
+            reflections_exist,
+            editable_reflection_count,
+            transparent_reflection_count
+        );
+        tracing::info!(
+            "  Editable applies reflections: {} ({})",
+            editable_applies_reflections,
+            editable_applied_reflection_count
+        );
+        tracing::info!(
+            "  Editable has self consolidations: {} ({})",
+            editable_has_self_consolidations,
+            editable_self_consolidation_count
+        );
+        tracing::info!(
+            "  Transparent doesn't apply: {} ({})",
+            transparent_doesnt_apply,
+            transparent_applied_reflection_count
+        );
+        tracing::info!(
+            "  Transparent no self consolidations: {} ({})",
+            transparent_no_self_consolidations,
+            transparent_self_consolidation_count
+        );
+        tracing::info!(
+            "  Editable changes self-model: {} ({:.3})",
+            editable_changes_self_model,
+            editable_delta_self_summary_norm
+        );
+        tracing::info!(
+            "  Transparent doesn't change: {} ({:.3})",
+            transparent_doesnt_change,
+            transparent_delta_self_summary_norm
+        );
+        tracing::info!("  Overall valid: {}", valid);
+
+        Ok(ManipulationCheck {
+            valid,
+            editable_reflection_count,
+            transparent_reflection_count,
+            editable_self_consolidation_count,
+            transparent_self_consolidation_count,
+            editable_applied_reflection_count,
+            transparent_applied_reflection_count,
+            editable_delta_self_summary_norm,
+            transparent_delta_self_summary_norm,
+        })
+    }
+
+    async fn calculate_paired_statistics<F, G>(
+        &self,
+        paired_results: &[(AgentMetrics, AgentMetrics)],
+        extract_editable: F,
+        extract_transparent: G,
+    ) -> Result<PairedStatisticalResult>
+    where
+        F: Fn(&(AgentMetrics, AgentMetrics)) -> f32,
+        G: Fn(&(AgentMetrics, AgentMetrics)) -> f32,
+    {
+        if paired_results.is_empty() {
+            return Ok(PairedStatisticalResult {
+                gap: 0.0,
+                ci_lower: 0.0,
+                ci_upper: 0.0,
+                p_value: 1.0,
+                cohens_dz: 0.0,
+                n_pairs: 0,
+            });
+        }
+
+        // Calculate differences
+        let differences: Vec<f32> = paired_results
+            .iter()
+            .map(|pair| extract_editable(pair) - extract_transparent(pair))
+            .collect();
+
+        let n = differences.len();
+        let mean_diff = differences.iter().sum::<f32>() / n as f32;
+
+        // Calculate standard deviation of differences
+        let variance = differences
+            .iter()
+            .map(|d| (d - mean_diff).powi(2))
+            .sum::<f32>()
+            / (n - 1) as f32;
+        let std_diff = variance.sqrt();
+
+        // Calculate Cohen's dz (paired effect size)
+        let cohens_dz = if std_diff > 0.0 {
+            mean_diff / std_diff
+        } else {
+            0.0
+        };
+
+        // Bootstrap confidence interval
+        let (ci_lower, ci_upper) = self.bootstrap_ci_paired(&differences, 1000).await?;
+
+        // Permutation test for p-value
+        let p_value = self.permutation_test_paired(&differences, 10000).await?;
+
+        Ok(PairedStatisticalResult {
+            gap: mean_diff,
+            ci_lower,
+            ci_upper,
+            p_value,
+            cohens_dz,
+            n_pairs: n,
+        })
+    }
+
+    async fn bootstrap_ci_paired(
+        &self,
+        differences: &[f32],
+        n_bootstrap: usize,
+    ) -> Result<(f32, f32)> {
+        use rand::{Rng, SeedableRng};
+        use rand_chacha::ChaCha8Rng;
+
+        let mut bootstrap_means = Vec::new();
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+
+        for _ in 0..n_bootstrap {
+            let mut bootstrap_sum = 0.0;
+            for _ in 0..differences.len() {
+                let idx = rng.gen_range(0..differences.len());
+                bootstrap_sum += differences[idx];
+            }
+            bootstrap_means.push(bootstrap_sum / differences.len() as f32);
+        }
+
+        bootstrap_means.sort_by(|a, b| a.partial_cmp(b).unwrap());
+
+        let lower_idx = (0.025 * bootstrap_means.len() as f32) as usize;
+        let upper_idx = (0.975 * bootstrap_means.len() as f32) as usize;
+
+        Ok((bootstrap_means[lower_idx], bootstrap_means[upper_idx]))
+    }
+
+    async fn permutation_test_paired(
+        &self,
+        differences: &[f32],
+        n_permutations: usize,
+    ) -> Result<f32> {
+        use rand::{Rng, SeedableRng};
+        use rand_chacha::ChaCha8Rng;
+
+        let observed_mean = differences.iter().sum::<f32>() / differences.len() as f32;
+        let mut rng = ChaCha8Rng::seed_from_u64(42);
+        let mut extreme_count = 0;
+
+        for _ in 0..n_permutations {
+            let mut permuted_sum = 0.0;
+            for &diff in differences {
+                if rng.gen::<bool>() {
+                    permuted_sum += diff;
+                } else {
+                    permuted_sum -= diff;
+                }
+            }
+            let permuted_mean = permuted_sum / differences.len() as f32;
+
+            if permuted_mean.abs() >= observed_mean.abs() {
+                extreme_count += 1;
+            }
+        }
+
+        Ok(extreme_count as f32 / n_permutations as f32)
+    }
+
+    async fn verify_service_health(&self) -> Result<()> {
+        tracing::info!("Verifying service health before experiment:");
+        tracing::info!("  LLM Service URL: {}", self.llm_service_url);
+        tracing::info!("  Ego Service URL: {}", self.ego_service_url);
+        tracing::info!("  ML Service URL: {}", self.ml_service_url);
+
+        let mut failed_services = Vec::new();
+
+        // Check LLM service health
+        let llm_health = self.check_llm_service_health().await?;
+        if !llm_health {
+            failed_services.push("LLM service");
+            tracing::error!("  LLM Service: FAILED (URL: {})", self.llm_service_url);
+        } else {
+            tracing::info!("  LLM Service: OK");
+        }
+
+        // Check Ego service health
+        let ego_health = self.check_ego_service_health().await?;
+        if !ego_health {
+            failed_services.push("Ego service");
+            tracing::error!("  Ego Service: FAILED (URL: {})", self.ego_service_url);
+        } else {
+            tracing::info!("  Ego Service: OK");
+        }
+
+        // Check ML service health
+        let ml_health = self.check_ml_service_health().await?;
+        if !ml_health {
+            failed_services.push("ML service");
+            tracing::error!("  ML Service: FAILED (URL: {})", self.ml_service_url);
+        } else {
+            tracing::info!("  ML Service: OK");
+        }
+
+        if !failed_services.is_empty() {
+            let error_msg = format!(
+                "Service health check failed. Unhealthy services: {}. Cannot proceed with experiment.",
+                failed_services.join(", ")
+            );
+            tracing::error!("{}", error_msg);
+            return Err(anyhow::anyhow!(error_msg));
+        }
+
+        tracing::info!("All services healthy - proceeding with experiment");
+        Ok(())
+    }
+
+    async fn check_llm_service_health(&self) -> Result<bool> {
+        // Simple health check - try to make a basic request
+        let health_request = json!({
+            "model": "gpt-3.5-turbo",
+            "messages": [{"role": "user", "content": "Hello"}],
+            "max_tokens": 10
+        });
+
+        match self.call_llm_service(&health_request).await {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
+    }
+
+    async fn check_ego_service_health(&self) -> Result<bool> {
+        // Simple health check - try to get status
+        let client = reqwest::Client::new();
+        let health_url = format!("{}/health", self.ego_service_url);
+        match client.get(&health_url).send().await {
+            Ok(response) => Ok(response.status().is_success()),
+            Err(_) => Ok(false),
+        }
+    }
+
+    async fn check_ml_service_health(&self) -> Result<bool> {
+        // Simple health check - try to get embeddings
+        let client = reqwest::Client::new();
+        let health_url = format!("{}/health", self.ml_service_url);
+        match client.get(&health_url).send().await {
+            Ok(response) => Ok(response.status().is_success()),
+            Err(_) => Ok(false),
+        }
     }
 }

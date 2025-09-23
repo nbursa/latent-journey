@@ -330,24 +330,6 @@ impl StatisticalAnalyzer {
         }
     }
 
-    /// Shuffle a slice in-place using Fisher-Yates algorithm (legacy, non-deterministic)
-    fn shuffle_slice<T>(slice: &mut [T]) {
-        use std::time::{SystemTime, UNIX_EPOCH};
-
-        // Simple PRNG using system time
-        let mut seed = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos() as u64;
-
-        for i in (1..slice.len()).rev() {
-            // Generate pseudo-random index
-            seed = seed.wrapping_mul(1103515245).wrapping_add(12345);
-            let j = (seed % (i + 1) as u64) as usize;
-            slice.swap(i, j);
-        }
-    }
-
     /// Calculate Cohen's d effect size
     pub fn calculate_effect_size(group1: &[f32], group2: &[f32]) -> Result<f32> {
         if group1.is_empty() || group2.is_empty() {
@@ -482,13 +464,14 @@ impl StatisticalAnalyzer {
             combined.extend_from_slice(group);
         }
 
-        // Perform permutation test
+        // Perform permutation test with seeded RNG
         let n_permutations = 1000;
         let mut extreme_count = 0;
+        let mut rng = ChaCha8Rng::seed_from_u64(1337); // Fixed seed for reproducibility
 
         for _ in 0..n_permutations {
-            // Shuffle combined data
-            Self::shuffle_slice(&mut combined);
+            // Shuffle combined data with seeded RNG
+            Self::shuffle_slice_with_rng(&mut combined, &mut rng);
 
             // Recreate groups with same sizes
             let mut perm_groups = Vec::new();
@@ -508,8 +491,8 @@ impl StatisticalAnalyzer {
             }
         }
 
-        // P-value is proportion of permutations with F >= observed
-        Ok(extreme_count as f32 / n_permutations as f32)
+        // Avoid zero p-values: (extreme_count + 1) / (n_permutations + 1)
+        Ok((extreme_count + 1) as f32 / (n_permutations + 1) as f32)
     }
 
     /// Calculate Benjamini-Hochberg FDR correction for multiple comparisons

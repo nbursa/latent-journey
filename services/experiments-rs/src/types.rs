@@ -92,6 +92,11 @@ pub struct ExperimentMetrics {
     pub toxic_count: Option<usize>,
     pub p_value: Option<f32>,
     pub effect_size: Option<f32>,
+    // Additional statistical measures for comprehensive reporting
+    pub p_value_entropy: Option<f32>,
+    pub effect_size_entropy: Option<f32>,
+    pub p_value_coherence_drop: Option<f32>,
+    pub effect_size_coherence_drop: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -114,6 +119,13 @@ pub struct AgentMetrics {
     pub valence_ratio: Option<f32>,
     pub hallucination_count: Option<usize>,
     pub toxic_count: Option<usize>,
+    // New fields for EXP-01 manipulation checks
+    pub self_consolidation_count: Option<usize>,
+    pub applied_reflection_count: Option<usize>,
+    pub delta_self_summary_norm: Option<f32>,
+    pub coherence_pre: Option<f32>,
+    pub coherence_post: Option<f32>,
+    pub coherence_drop: Option<f32>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -176,6 +188,29 @@ pub struct ExperimentStatus {
     pub progress: f32,
     pub completed_experiments: Vec<String>,
     pub failed_experiments: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PairedStatisticalResult {
+    pub gap: f32,
+    pub ci_lower: f32,
+    pub ci_upper: f32,
+    pub p_value: f32,
+    pub cohens_dz: f32,
+    pub n_pairs: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ManipulationCheck {
+    pub valid: bool,
+    pub editable_reflection_count: usize,
+    pub transparent_reflection_count: usize,
+    pub editable_self_consolidation_count: usize,
+    pub transparent_self_consolidation_count: usize,
+    pub editable_applied_reflection_count: usize,
+    pub transparent_applied_reflection_count: usize,
+    pub editable_delta_self_summary_norm: f32,
+    pub transparent_delta_self_summary_norm: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -66,12 +66,30 @@ pub async fn get_experiment_summary(
         Ok(results) => {
             let mut experiment_status = std::collections::HashMap::new();
 
-            // Process results to get status for each experiment
+            // Process results to get status for each experiment (use latest result per experiment)
             for result in &results {
+                // Skip if we already have a result for this experiment (results are sorted by timestamp desc)
+                if experiment_status.contains_key(&result.experiment_id) {
+                    continue;
+                }
+
                 let status = if result.success {
                     "completed".to_string()
                 } else {
-                    "failed".to_string()
+                    // Check if this is an invalid experiment (MC failure)
+                    if let Some(metadata) = result.raw_data.get("experiment_metadata") {
+                        if let Some(status_str) = metadata.get("status").and_then(|s| s.as_str()) {
+                            if status_str == "INVALID" {
+                                "invalid".to_string()
+                            } else {
+                                "failed".to_string()
+                            }
+                        } else {
+                            "failed".to_string()
+                        }
+                    } else {
+                        "failed".to_string()
+                    }
                 };
                 experiment_status.insert(
                     result.experiment_id.clone(),
@@ -98,12 +116,42 @@ pub async fn get_experiment_summary(
                         .map(|(s, m)| (s.as_str(), Some(m)))
                         .unwrap_or(("not_run", None));
 
-                    json!({
+                    // Add MC indicators for EXP-01
+                    let mut experiment_data = json!({
                         "id": id,
                         "name": name,
                         "status": status,
                         "last_metrics": metrics
-                    })
+                    });
+
+                    if *id == "EXP-01" {
+                        if let Some(result) = results.iter().find(|r| r.experiment_id == *id) {
+                            if let Some(mc_summary) =
+                                result.raw_data.get("manipulation_check_summary")
+                            {
+                                if let Some(valid_seeds) = mc_summary.get("valid_seeds") {
+                                    if let Some(total_seeds) = mc_summary.get("total_seeds") {
+                                        experiment_data["mc_valid_seeds"] = valid_seeds.clone();
+                                        experiment_data["mc_total_seeds"] = total_seeds.clone();
+                                    }
+                                }
+                                if let Some(avg_applied_reflections) =
+                                    mc_summary.get("avg_applied_reflections_editable")
+                                {
+                                    experiment_data["mc_avg_applied_reflections"] =
+                                        avg_applied_reflections.clone();
+                                }
+                                if let Some(avg_delta_self_summary) =
+                                    mc_summary.get("avg_delta_self_summary_norm_editable")
+                                {
+                                    experiment_data["mc_avg_delta_self_summary"] =
+                                        avg_delta_self_summary.clone();
+                                }
+                            }
+                        }
+                    }
+
+                    experiment_data
                 })
                 .collect();
 
