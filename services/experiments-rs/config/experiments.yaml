@@ -9,7 +9,7 @@ experiments:
     success_criteria:
       smd_gap_min: 0.15
       entropy_gap_min: 0.20
-      coherence_drop_max: 0.10  # Apsolutni pad
+      coherence_drop_max: 0.10 
     agent_configs:
       transparent:
         self_model_editable: false
@@ -101,7 +101,7 @@ experiments:
     enabled: true
     success_criteria:
       smd_gap_min: 0.3
-      coherence_drop_max: 0.2  # Absolute drop value (positive threshold)
+      coherence_drop_max: 0.2  
     input_profiles:
       low:
         negative_rate: 0.0
