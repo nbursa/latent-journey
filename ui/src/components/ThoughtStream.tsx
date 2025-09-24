@@ -4,6 +4,7 @@ import { useEgo } from "../hooks/useEgo";
 import { useSTMData } from "../hooks/useSTMData";
 import { Memory } from "../types/memory";
 import { useServicesStatus } from "../hooks/useServicesStatus";
+import { useLLMModel } from "../hooks/useLLMModel";
 
 interface Thought {
   content: string;
@@ -39,6 +40,7 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   const [metrics, setMetrics] = useState<ConsciousnessMetrics | null>(null);
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
   const { servicesStatus } = useServicesStatus();
+  const { modelInfo } = useLLMModel();
 
   const {
     currentThought,
@@ -280,7 +282,10 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                   <strong>Pull Model:</strong>
                 </div>
                 <div className="text-xs">
-                  • <code>ollama pull llama3.1:8b-instruct</code>
+                  •{" "}
+                  <code>
+                    ollama pull {modelInfo?.model || "No model specified"}
+                  </code>
                 </div>
               </div>
             </div>
@@ -407,15 +412,24 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
             <span>Service: Ego</span>
             <span
               className={`flex items-center gap-1 ${
-                ollamaAvailable ? "text-green-400" : "text-red-400"
+                modelInfo?.statusColor === "green"
+                  ? "text-green-400"
+                  : modelInfo?.statusColor === "yellow"
+                  ? "text-yellow-400"
+                  : "text-red-400"
               }`}
             >
               <div
                 className={`w-2 h-2 rounded-full ${
-                  ollamaAvailable ? "bg-green-400" : "bg-red-400"
+                  modelInfo?.statusColor === "green"
+                    ? "bg-green-400"
+                    : modelInfo?.statusColor === "yellow"
+                    ? "bg-yellow-400"
+                    : "bg-red-400"
                 }`}
               ></div>
-              Ollama
+              {modelInfo?.model || "No model specified"} (
+              {modelInfo?.statusText || "Unknown"})
             </span>
           </div>
         </div>

@@ -1,6 +1,7 @@
 import { ServicesStatus as ServicesStatusType } from "../types";
 import { Server, Brain, Zap, MessageSquare, Cpu, Database } from "lucide-react";
 import StatusBar from "./StatusBar";
+import { useLLMModel } from "../hooks/useLLMModel";
 
 interface ServicesStatusProps {
   servicesStatus: ServicesStatusType;
@@ -11,7 +12,24 @@ export default function ServicesStatus({
   servicesStatus,
   onRefresh,
 }: ServicesStatusProps) {
-  const getStatusClass = (status: string) => {
+  const { modelInfo } = useLLMModel();
+
+  const getStatusClass = (status: string, serviceKey: string) => {
+    // Special handling for LLM service to use model status color
+    if (serviceKey === "llm" && modelInfo) {
+      switch (modelInfo.statusColor) {
+        case "green":
+          return "online";
+        case "yellow":
+          return "degraded";
+        case "red":
+          return "offline";
+        default:
+          return "unknown";
+      }
+    }
+
+    // Default handling for other services
     switch (status) {
       case "online":
         return "online";
@@ -65,7 +83,10 @@ export default function ServicesStatus({
         {services.map(({ key, label, icon: Icon }) => (
           <div key={key} className="flex items-center gap-2">
             <div
-              className={`status-dot ${getStatusClass(servicesStatus[key])}`}
+              className={`status-dot ${getStatusClass(
+                servicesStatus[key],
+                key
+              )}`}
             />
             <Icon className="w-3 h-3" />
             <span className="text-xs">{label}</span>

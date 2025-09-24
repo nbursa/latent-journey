@@ -16,7 +16,8 @@ impl Default for Config {
         Self {
             port: 8084,
             ollama_url: "http://localhost:11434".to_string(),
-            model: "llama3.2:3b".to_string(),
+            // model: "llama3.2:3b".to_string(),
+            model: "tinyllama:latest".to_string(),
             temperature: 0.2,
             top_p: 0.9,
             max_memories: 24,

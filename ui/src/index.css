@@ -577,6 +577,10 @@ html::before {
   background: var(--status-unknown);
 }
 
+.status-dot.degraded {
+  background: var(--status-unknown); /* Use yellow for degraded */
+}
+
 @keyframes pulse {
   0%,
   100% {

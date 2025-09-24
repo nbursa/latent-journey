@@ -19,6 +19,8 @@ export default defineConfig({
     proxy: {
       "/api": "http://localhost:8080",
       "/events": "http://localhost:8080",
+      "/llm": "http://localhost:8080",
+      "/ego": "http://localhost:8080",
       "/ml": {
         target: "http://localhost:8081",
         changeOrigin: true,
