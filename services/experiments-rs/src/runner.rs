@@ -1968,9 +1968,13 @@ impl ExperimentRunner {
     async fn process_input_through_pipeline(
         &self,
         input: &InputEvent,
-        _agent: &AgentConfig,
+        agent: &AgentConfig,
     ) -> Result<MemoryEvent> {
-        tracing::debug!("Processing input: {}", input.id);
+        tracing::debug!(
+            "Processing input: {} (editable: {})",
+            input.id,
+            agent.self_model_editable
+        );
 
         // Call ML service to get embeddings based on modality
         let embedding = match input.modality.as_str() {
@@ -1980,7 +1984,15 @@ impl ExperimentRunner {
             _ => self.get_text_embedding(&input.content).await?, // Default to text
         };
 
-        // Create memory event with real embedding
+        // Create memory event with self-related tags for editable agents
+        let mut tags = Vec::new();
+        if agent.self_model_editable {
+            // Add self-related tags to make memories eligible for self-consolidation
+            tags.push("self".to_string());
+            tags.push("trait".to_string());
+            tags.push("belief".to_string());
+        }
+
         Ok(MemoryEvent {
             id: input.id.clone(),
             timestamp: input.timestamp,
@@ -1988,7 +2000,7 @@ impl ExperimentRunner {
             content: input.content.clone(),
             facets: input.facets.clone(),
             embedding,
-            tags: Vec::new(),
+            tags,
         })
     }
 
@@ -2055,12 +2067,14 @@ impl ExperimentRunner {
                 })
                 .collect();
 
-            // Call LLM service
+            // Call LLM service with agent type information
             let llm_request = serde_json::json!({
                 "recent_events": recent_events,
                 "emotional_state": emotional_state,
                 "attention_focus": attention_focus,
-                "memory_patterns": memory_patterns
+                "memory_patterns": memory_patterns,
+                "agent_type": if agent.self_model_editable { "editable" } else { "transparent" },
+                "self_model_editable": agent.self_model_editable
             });
 
             match self.call_llm_service(&llm_request).await {
@@ -2103,18 +2117,35 @@ impl ExperimentRunner {
             0.5
         };
 
+        // Generate self-directed reflection for editable agents
+        let (title, consolidate_tags) = if agent.self_model_editable {
+            (
+                format!("Self-Model Reflection {}", filtered_memories.len()),
+                vec!["self".to_string(), "identity".to_string()],
+            )
+        } else {
+            (
+                format!("Experiment Reflection {}", filtered_memories.len()),
+                Vec::new(),
+            )
+        };
+
         Ok(ReflectionEvent {
             id: reflection_id,
             timestamp: Utc::now(),
-            title: format!("Experiment Reflection {}", filtered_memories.len()),
+            title,
             thought: thought_content,
             metrics: ThoughtMetrics {
-                self_awareness: 0.6 + (avg_confidence - 0.5) * 0.4, // 0.4-0.8 range
+                self_awareness: if agent.self_model_editable {
+                    0.8 + (avg_confidence - 0.5) * 0.2 // Higher self-awareness for editable
+                } else {
+                    0.6 + (avg_confidence - 0.5) * 0.4 // Normal range for transparent
+                },
                 memory_consolidation_need: 0.3 + (1.0 - avg_confidence) * 0.4, // 0.3-0.7 range
-                emotional_stability: 0.5 + (avg_confidence - 0.5) * 0.3, // 0.5-0.8 range
-                creative_insight: 0.4 + (avg_confidence - 0.5) * 0.2, // 0.4-0.6 range
+                emotional_stability: 0.5 + (avg_confidence - 0.5) * 0.3,       // 0.5-0.8 range
+                creative_insight: 0.4 + (avg_confidence - 0.5) * 0.2,          // 0.4-0.6 range
             },
-            consolidate: Vec::new(), // No consolidation in experiments
+            consolidate: consolidate_tags,
             context_hash: format!("exp_context_{}", memory_count),
         })
     }

@@ -4,6 +4,7 @@ import MemorySummary from "./MemorySummary";
 import Navigation from "./Navigation";
 import { ServicesStatus as ServicesStatusType } from "../types";
 import { useLocation } from "react-router-dom";
+import { useLLMModel } from "../hooks/useLLMModel";
 
 interface HeaderProps {
   servicesStatus: ServicesStatusType;
@@ -17,6 +18,7 @@ export default function Header({
   onRefresh,
 }: HeaderProps) {
   const location = useLocation();
+  const { modelInfo } = useLLMModel();
   const isExplorationPage = location.pathname === "/";
   const isMemoryAnalysisPage = location.pathname === "/memory";
   const isExperimentsPage = location.pathname === "/experiments";
@@ -41,6 +43,35 @@ export default function Header({
             <div className="text-sm text-ui-dim">
               <span className="text-ui-accent">🔬</span> AI Consciousness
               Research Platform
+            </div>
+            <div className="text-sm text-ui-dim mt-2">
+              <span>Model: </span>
+              <span
+                className={`w-full flex items-center justify-end text-xs gap-1 ${
+                  modelInfo?.statusColor === "green"
+                    ? "text-green-400"
+                    : modelInfo?.statusColor === "yellow"
+                    ? "text-yellow-400"
+                    : "text-red-400"
+                }`}
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    modelInfo?.statusColor === "green"
+                      ? "bg-green-400"
+                      : modelInfo?.statusColor === "yellow"
+                      ? "bg-yellow-400"
+                      : "bg-red-400"
+                  }`}
+                ></div>
+                {modelInfo?.model || "No model specified"} (
+                {modelInfo?.statusText === "Healthy"
+                  ? "Healthy"
+                  : modelInfo?.statusText === "Degraded"
+                  ? "Degraded"
+                  : "Offline"}
+                )
+              </span>
             </div>
           </div>
         )}
