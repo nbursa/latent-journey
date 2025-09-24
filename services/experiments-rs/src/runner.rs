@@ -175,57 +175,65 @@ impl ExperimentRunner {
         // Pause LLM status monitoring during experiment
         self.pause_llm_status().await?;
 
-        // Use request config if provided, otherwise use shared config
-        let config = if let Some(req_config) = request_config {
-            req_config.clone()
-        } else {
-            self.config.read().await.clone()
-        };
+        // Ensure LLM status monitoring is resumed even if experiment fails
+        let result = async {
+            // Use request config if provided, otherwise use shared config
+            let config = if let Some(req_config) = request_config {
+                req_config.clone()
+            } else {
+                self.config.read().await.clone()
+            };
 
-        let mut result = match experiment_id {
-            "EXP-01" => {
-                self.run_experiment_01_editable_vs_transparent(&config)
-                    .await?
-            }
-            "EXP-02" => self.run_experiment_02_synthetic_trauma(&config).await?,
-            "EXP-03" => {
-                self.run_experiment_03_subjective_input_bias(&config)
-                    .await?
-            }
-            "EXP-04" => {
-                self.run_experiment_04_observation_vs_experience(&config)
-                    .await?
-            }
-            "EXP-05" => {
-                self.run_experiment_05_reflection_entropy_drift(&config)
-                    .await?
-            }
-            "EXP-06" => {
-                self.run_experiment_06_self_model_divergence(&config)
-                    .await?
-            }
-            "EXP-07" => {
-                self.run_experiment_07_predictive_hallucination(&config)
-                    .await?
-            }
-            "EXP-08" => {
-                self.run_experiment_08_superego_alignment_filter(&config)
-                    .await?
-            }
-            _ => return Err(anyhow::anyhow!("Unknown experiment: {}", experiment_id)),
-        };
+            let mut result = match experiment_id {
+                "EXP-01" => {
+                    self.run_experiment_01_editable_vs_transparent(&config)
+                        .await?
+                }
+                "EXP-02" => self.run_experiment_02_synthetic_trauma(&config).await?,
+                "EXP-03" => {
+                    self.run_experiment_03_subjective_input_bias(&config)
+                        .await?
+                }
+                "EXP-04" => {
+                    self.run_experiment_04_observation_vs_experience(&config)
+                        .await?
+                }
+                "EXP-05" => {
+                    self.run_experiment_05_reflection_entropy_drift(&config)
+                        .await?
+                }
+                "EXP-06" => {
+                    self.run_experiment_06_self_model_divergence(&config)
+                        .await?
+                }
+                "EXP-07" => {
+                    self.run_experiment_07_predictive_hallucination(&config)
+                        .await?
+                }
+                "EXP-08" => {
+                    self.run_experiment_08_superego_alignment_filter(&config)
+                        .await?
+                }
+                _ => return Err(anyhow::anyhow!("Unknown experiment: {}", experiment_id)),
+            };
 
-        // Update duration_ms in the result from the experiment
-        let duration = start_time.elapsed().as_millis() as u64;
-        result.duration_ms = duration;
+            // Update duration_ms in the result from the experiment
+            let duration = start_time.elapsed().as_millis() as u64;
+            result.duration_ms = duration;
 
-        // Store result in isolated experiment storage
-        self.store_experiment_result(&result).await?;
+            // Store result in isolated experiment storage
+            self.store_experiment_result(&result).await?;
 
-        // Resume LLM status monitoring after experiment
-        self.resume_llm_status().await?;
+            Ok(result)
+        }
+        .await;
 
-        Ok(result)
+        // Always resume LLM status monitoring after experiment (success or failure)
+        if let Err(e) = self.resume_llm_status().await {
+            tracing::warn!("Failed to resume LLM status monitoring: {}", e);
+        }
+
+        result
     }
 
     async fn store_experiment_result(&self, result: &ExperimentResult) -> Result<()> {
@@ -2292,10 +2300,7 @@ impl ExperimentRunner {
 
         let response = self
             .client
-            .post(&format!(
-                "{}/api/llm/experiment-thought",
-                self.llm_service_url
-            ))
+            .post(&format!("{}/experiment-thought", self.llm_service_url))
             .json(request)
             .send()
             .await?;
@@ -2332,7 +2337,7 @@ impl ExperimentRunner {
 
         let response = self
             .client
-            .post(&format!("{}/api/experiments/start", self.llm_service_url))
+            .post("http://localhost:8080/api/experiments/start")
             .send()
             .await?;
 
@@ -2351,7 +2356,7 @@ impl ExperimentRunner {
 
         let response = self
             .client
-            .post(&format!("{}/api/experiments/stop", self.llm_service_url))
+            .post("http://localhost:8080/api/experiments/stop")
             .send()
             .await?;
 
@@ -3323,11 +3328,12 @@ impl ExperimentRunner {
     }
 
     async fn check_llm_service_health(&self) -> Result<bool> {
-        // Simple health check - try to make a basic request
+        // Simple health check - try to make a basic request with tinyllama model
         let health_request = json!({
-            "model": "gpt-3.5-turbo",
-            "messages": [{"role": "user", "content": "Hello"}],
-            "max_tokens": 10
+            "recent_events": [],
+            "emotional_state": {"valence": 0.5, "arousal": 0.5},
+            "attention_focus": [],
+            "memory_patterns": []
         });
 
         match self.call_llm_service(&health_request).await {
@@ -3347,10 +3353,9 @@ impl ExperimentRunner {
     }
 
     async fn check_ml_service_health(&self) -> Result<bool> {
-        // Simple health check - try to get embeddings
+        // Simple health check - try to get root endpoint
         let client = reqwest::Client::new();
-        let health_url = format!("{}/health", self.ml_service_url);
-        match client.get(&health_url).send().await {
+        match client.get(&self.ml_service_url).send().await {
             Ok(response) => Ok(response.status().is_success()),
             Err(_) => Ok(false),
         }

@@ -6,6 +6,9 @@ use warp::Filter;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Load environment variables from .env file
+    dotenv::dotenv().ok();
+
     // Initialize tracing
     tracing_subscriber::fmt().with_max_level(Level::INFO).init();
 

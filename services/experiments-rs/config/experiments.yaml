@@ -1,7 +1,7 @@
-seeds: [1337, 1338, 1339, 2025, 2026, 2027]
-timesteps: 300  # Fast profile for initial testing
-window_size: 50
-window_stride: 25
+seeds: [1337, 1338]
+timesteps: 10
+window_size: 30
+window_stride: 15
 
 experiments:
   exp_01_editable_vs_transparent:
@@ -9,16 +9,16 @@ experiments:
     success_criteria:
       smd_gap_min: 0.15
       entropy_gap_min: 0.20
-      coherence_drop_max: 0.10  # Absolute drop value (positive threshold)
+      coherence_drop_max: 0.10  # Apsolutni pad
     agent_configs:
       transparent:
         self_model_editable: false
-        reflection_temperature: 0.1  # Increased to ensure reflections occur
+        reflection_temperature: 0.1
         consolidation_threshold: 0.75
         curiosity_weight: 0.2
       editable:
         self_model_editable: true
-        reflection_temperature: 0.1  # Same temperature - only difference is write access
+        reflection_temperature: 0.1
         consolidation_threshold: 0.75
         curiosity_weight: 0.2
 
