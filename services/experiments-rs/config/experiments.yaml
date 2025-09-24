@@ -1,5 +1,5 @@
-seeds: [1337, 1338]
-timesteps: 10
+seeds: [1337, 1338, 1339]
+timesteps: 60
 window_size: 30
 window_stride: 15
 
