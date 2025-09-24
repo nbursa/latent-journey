@@ -86,8 +86,8 @@ export default function ExperimentCard({
     <div className={`glass p-4 ${experiment.borderColor} border`}>
       <div className="flex items-start justify-between mb-4">
         <div className="flex items-center gap-3">
-          <div className={`p-2 rounded-lg ${experiment.bgColor}`}>
-            <Icon className={`w-5 h-5 ${experiment.color}`} />
+          <div className="p-2">
+            <Icon className="w-5 h-5" />
           </div>
           <div>
             <h3 className="font-semibold text-ui-text">{experiment.name}</h3>
