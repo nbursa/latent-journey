@@ -64,3 +64,4 @@ logs/
 agent.sentience
 services/id-rs/data/
 services/ego-rs/data/
+services/experiments-rs/data/
