@@ -35,6 +35,7 @@ dev:
 	@pkill -f "id-rs" || true
 	@pkill -f "ml-py" || true
 	@pkill -f "llm-py" || true
+	@pkill -f "refnet-py" || true
 	@pkill -f "ego-rs" || true
 	@echo "Killing processes on ports..."
 	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
@@ -60,15 +61,14 @@ dev:
 	@echo "Gateway: http://localhost:8080"
 	@echo "ML Service: http://localhost:8081"
 	@echo "ID Service: http://localhost:8082"
-	@echo "LLM Service: http://localhost:8083"
-	@echo "Ego Service: http://localhost:8084"
+	@echo "RefNet Service: http://localhost:8084"
 	@echo "Embeddings Service: http://localhost:8085"
 	@echo "UI: http://localhost:5173"
 	@echo ""
-	@echo "⚠️  EXTERNAL DEPENDENCIES REQUIRED:"
-	@echo "   - Ollama: Run 'ollama serve' in a separate terminal"
-	@echo "   - Model: Run 'ollama pull llama3.2:3b' to download the model"
-	@echo "   - Or configure a different LLM provider in services/llm-py/app.py"
+	@echo "ℹ️  USING REFNET INSTEAD OF LLM:"
+	@echo "   - RefNet model trained on LJ data is already included"
+	@echo "   - No external LLM dependencies required"
+	@echo "   - Faster inference with deterministic outputs"
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@echo ""
@@ -87,22 +87,17 @@ dev:
 	ID_PID=$$!; \
 	PORT=8082 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "3.Starting ML Service (Whisper + CLIP) and LLM Service (Ollama Interface) in parallel..."; \
+	echo "3.Starting ML Service (Whisper + CLIP) and RefNet Service (AI Reflection) in parallel..."; \
 	PORT=8081 $(MAKE) check-port; \
 	cd services/ml-py && python app.py & \
 	ML_PID=$$!; \
-	PORT=8083 $(MAKE) check-port; \
-	cd services/llm-py && python app.py & \
-	LLM_PID=$$!; \
 	echo "   Waiting for ML Service..."; \
 	PORT=8081 $(MAKE) wait-for-service; \
-	echo "   Waiting for LLM Service..."; \
-	PORT=8083 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "4.Starting Ego Service (AI Reflection)..."; \
+	echo "4.Starting RefNet Service (AI Reflection)..."; \
 	PORT=8084 $(MAKE) check-port; \
-	cd services/ego-rs && cargo run & \
-	EGO_PID=$$!; \
+	cd services/refnet-py && python app.py & \
+	REFNET_PID=$$!; \
 	PORT=8084 $(MAKE) wait-for-service; \
 	echo ""; \
 	echo "5.Starting Embeddings Service (Real CLIP Embeddings)..."; \
@@ -123,8 +118,7 @@ dev:
 	echo "   • Gateway: http://localhost:8080"; \
 	echo "   • ML: http://localhost:8081"; \
 	echo "   • ID: http://localhost:8082"; \
-	echo "   • LLM: http://localhost:8083"; \
-	echo "   • Ego: http://localhost:8084"; \
+	echo "   • RefNet: http://localhost:8084"; \
 	echo "   • Embeddings: http://localhost:8085"; \
 	echo ""; \
 	wait
@@ -216,6 +210,7 @@ stop:
 	@pkill -f "id-rs" || true
 	@pkill -f "ml-py" || true
 	@pkill -f "llm-py" || true
+	@pkill -f "refnet-py" || true
 	@pkill -f "ego-rs" || true
 	@echo "Killing processes on ports..."
 	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true

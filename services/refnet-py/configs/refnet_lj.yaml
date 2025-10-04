@@ -1,0 +1,37 @@
+# RefNet trained on Latent Journey data
+# Optimized for LJ's vision/speech event patterns
+
+device: auto
+data:
+  train_path: data/lj_events_train.jsonl
+  val_path: data/lj_events_val.jsonl
+  max_len: 64
+  batch_size: 16  # Smaller batch for limited LJ data
+
+model:
+  d_model: 256
+  n_heads: 8
+  n_layers: 6
+  dropout: 0.1
+  use_edge_attention: true  # Enable Cortex graph integration
+  edge_bias:
+    causes: 1.0
+    refers_to: 0.8
+    contradicts: -0.5
+    supports: 0.6
+    global_scale: 1.0
+
+optim:
+  lr: 0.0003
+  weight_decay: 0.01
+  epochs: 50  # More epochs for small dataset
+  warmup_steps: 100  # Fewer warmup steps
+
+loss:
+  lambda_valence: 1.0
+  lambda_smd: 1.0
+  lambda_quality: 0.5
+  lambda_action: 0.5
+  action_weights: null
+
+seed: 42

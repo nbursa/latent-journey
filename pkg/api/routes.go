@@ -298,10 +298,10 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// call LLM service
+	// call RefNet service (replaces LLM service)
 	body, _ := json.Marshal(in)
 	client := &http.Client{Timeout: 60 * time.Second}
-	resp, err := client.Post("http://localhost:8083/generate-thought", "application/json", bytes.NewReader(body))
+	resp, err := client.Post("http://localhost:8084/generate-thought", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -309,7 +309,7 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		http.Error(w, "llm service error", http.StatusBadGateway)
+		http.Error(w, "refnet service error", http.StatusBadGateway)
 		return
 	}
 
@@ -317,7 +317,7 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 
 	var out map[string]interface{}
 	if err := json.Unmarshal(b, &out); err != nil {
-		http.Error(w, "llm parse error", http.StatusBadGateway)
+		http.Error(w, "refnet parse error", http.StatusBadGateway)
 		return
 	}
 
@@ -339,7 +339,7 @@ func postGenerateThought(w http.ResponseWriter, r *http.Request) {
 
 func getConsciousnessMetrics(w http.ResponseWriter, r *http.Request) {
 	client := &http.Client{Timeout: 5 * time.Second}
-	resp, err := client.Get("http://localhost:8083/consciousness-metrics")
+	resp, err := client.Get("http://localhost:8084/consciousness-metrics")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return
@@ -347,7 +347,7 @@ func getConsciousnessMetrics(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		http.Error(w, "llm service error", http.StatusBadGateway)
+		http.Error(w, "refnet service error", http.StatusBadGateway)
 		return
 	}
 
@@ -366,7 +366,7 @@ func getThoughtHistory(w http.ResponseWriter, r *http.Request) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode >= 400 {
-		http.Error(w, "llm service error", http.StatusBadGateway)
+		http.Error(w, "refnet service error", http.StatusBadGateway)
 		return
 	}
 
