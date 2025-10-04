@@ -42,7 +42,18 @@ impl ReflectionEngine {
         user_query: Option<&str>,
     ) -> Result<EgoThought> {
         let prompt = self.create_single_reflection_prompt(memories, user_query);
-        let response = self.call_ollama(&prompt).await?;
+
+        // First try RefNet with actual memory context
+        let response = match self.call_refnet_with_memories(memories).await {
+            Ok(refnet_response) => {
+                tracing::info!("Successfully called RefNet for reflection generation");
+                refnet_response
+            }
+            Err(e) => {
+                tracing::warn!("RefNet call failed, falling back to Ollama: {}", e);
+                self.call_ollama(&prompt).await?
+            }
+        };
 
         let thought_data = self.parse_reflection_response(&response)?;
 
@@ -193,6 +204,7 @@ MEMORIES:
     }
 
     pub async fn call_ollama(&self, prompt: &str) -> Result<String> {
+        // Fallback to original Ollama implementation
         let request_body = json!({
             "model": self.model,
             "prompt": prompt,
@@ -228,6 +240,108 @@ MEMORIES:
         }
 
         Ok(result.trim().to_string())
+    }
+
+    async fn call_refnet_with_memories(&self, memories: &[&Memory]) -> Result<String> {
+        // Convert memories to RefNet format
+        let mut recent_events = Vec::new();
+
+        for memory in memories.iter().take(5) {
+            // Limit to recent 5 memories
+            let modality = match memory.modality {
+                crate::types::Modality::Vision => "vision",
+                crate::types::Modality::Speech => "speech",
+                crate::types::Modality::Text => "text",
+                crate::types::Modality::Concept => "concept",
+            };
+
+            // Extract emotional context from facets
+            let valence = memory
+                .facets
+                .get("affect.valence")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.5);
+            let _arousal = memory
+                .facets
+                .get("affect.arousal")
+                .and_then(|v| v.as_f64())
+                .unwrap_or(0.5);
+
+            let event = json!({
+                "content": memory.content,
+                "source": modality,
+                "facets": {
+                    "self_awareness": memory.facets.get("affect.valence").and_then(|v| v.as_f64()).unwrap_or(0.7),
+                    "emotional_stability": (valence * 2.0 - 1.0).clamp(-1.0, 1.0),
+                    "creative_insight": memory.facets.get("affect.arousal").and_then(|v| v.as_f64()).unwrap_or(0.8)
+                }
+            });
+
+            recent_events.push(event);
+        }
+
+        // If no memories, create a basic context
+        if recent_events.is_empty() {
+            recent_events.push(json!({
+                "content": "No recent memories available",
+                "source": "text",
+                "facets": {
+                    "self_awareness": 0.5,
+                    "emotional_stability": 0.5,
+                    "creative_insight": 0.5
+                }
+            }));
+        }
+
+        let request_body = json!({
+            "recent_events": recent_events,
+            "emotional_state": {
+                "valence": 0.5,
+                "arousal": 0.5
+            },
+            "attention_focus": ["reflection"],
+            "memory_context": memories.len(),
+            "timestamp": chrono::Utc::now().to_rfc3339()
+        });
+
+        let response = self
+            .client
+            .post("http://localhost:8084/generate-thought")
+            .json(&request_body)
+            .send()
+            .await?;
+
+        if !response.status().is_success() {
+            anyhow::bail!("RefNet API error: {}", response.status());
+        }
+
+        let text = response.text().await?;
+        let parsed: serde_json::Value = serde_json::from_str(&text)?;
+
+        // Extract the thought content from RefNet response
+        if let Some(thought_data) = parsed.get("thought") {
+            let content = thought_data
+                .get("content")
+                .and_then(|v| v.as_str())
+                .unwrap_or("Generated reflection from RefNet");
+
+            // Wrap RefNet content in the expected JSON format for ego parsing
+            let wrapped_response = json!({
+                "title": "AI-Generated Reflection",
+                "thought": content,
+                "metrics": {
+                    "self_awareness": 0.8,
+                    "memory_consolidation_need": 0.4,
+                    "emotional_stability": 0.7,
+                    "creative_insight": thought_data.get("creative_insight").and_then(|v| v.as_bool()).unwrap_or(true) as u8 as f32
+                },
+                "consolidate": []
+            });
+
+            Ok(wrapped_response.to_string())
+        } else {
+            anyhow::bail!("Invalid RefNet response format")
+        }
     }
 
     fn parse_reflection_response(&self, response: &str) -> Result<ReflectionResponse> {

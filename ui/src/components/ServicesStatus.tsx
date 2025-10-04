@@ -36,7 +36,7 @@ export default function ServicesStatus({
     },
     {
       key: "llm" as keyof ServicesStatusType,
-      label: "LLM Service",
+      label: "RefNet Service",
       icon: MessageSquare,
     },
     {

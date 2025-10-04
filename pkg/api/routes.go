@@ -418,7 +418,7 @@ func postEgoReflect(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{}
-	resp, err := client.Post("http://localhost:8084/api/ego/reflect", "application/json", bytes.NewReader(body))
+	resp, err := client.Post("http://localhost:8086/api/ego/reflect", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -463,7 +463,7 @@ func postEgoConsolidate(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Post("http://localhost:8084/api/ego/consolidate", "application/json", bytes.NewReader(body))
+	resp, err := client.Post("http://localhost:8086/api/ego/consolidate", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -501,7 +501,7 @@ func getEgoMemories(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := "http://localhost:8084/api/ego/memories" + r.URL.RawQuery
+	url := "http://localhost:8086/api/ego/memories" + r.URL.RawQuery
 	resp, err := client.Get(url)
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
@@ -529,7 +529,7 @@ func getEgoStatus(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := "http://localhost:8084/api/ego/status"
+	url := "http://localhost:8086/api/ego/status"
 	resp, err := client.Get(url)
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
@@ -557,7 +557,7 @@ func getEgoExperiences(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{Timeout: 10 * time.Second}
-	url := "http://localhost:8084/api/ego/experiences" + r.URL.RawQuery
+	url := "http://localhost:8086/api/ego/experiences" + r.URL.RawQuery
 	resp, err := client.Get(url)
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
@@ -592,7 +592,7 @@ func postEgoClearLTM(w http.ResponseWriter, r *http.Request) {
 
 	// Forward request to ego service
 	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Post("http://localhost:8084/api/ego/clear-ltm", "application/json", bytes.NewReader(body))
+	resp, err := client.Post("http://localhost:8086/api/ego/clear-ltm", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)
 		return
@@ -782,8 +782,8 @@ func startServiceStatusMonitor() {
 		"gateway":    8080,
 		"ml":         8081,
 		"sentience":  8082,
-		"llm":        8083,
-		"ego":        8084,
+		"llm":        8084, // RefNet service replaces LLM on port 8084
+		"ego":        8086, // Ego service runs on port 8086
 		"embeddings": 8085,
 	}
 

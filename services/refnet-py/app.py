@@ -191,15 +191,40 @@ class RefNetService:
         actions = [p["action_name"] for p in predictions]
         most_common_action = max(set(actions), key=actions.count)
 
-        # Generate thought content based on predictions
-        if most_common_action == "consolidate":
-            content = f"I'm noticing patterns in my recent experiences. The emotional tone is {self._describe_valence(avg_valence)}, and I sense a need to consolidate these memories into coherent understanding."
-        elif most_common_action == "recall":
-            content = f"I feel drawn to recall previous experiences. My current state suggests {self._describe_valence(avg_valence)} emotional processing, and I should retrieve relevant memories."
-        elif most_common_action == "reframe":
-            content = f"I'm experiencing a shift in perspective. The semantic distance ({avg_smd:.2f}) indicates I should reframe my understanding of these events."
-        else:  # evaluate_alignment
-            content = f"I need to evaluate the alignment between my current thoughts and experiences. The quality assessment ({avg_quality:.2f}) suggests careful evaluation is needed."
+        # Generate diverse thought content based on predictions and context
+        import random
+
+        random_factor = random.random()
+
+        # Template variations for each action type
+        template_variations = {
+            "consolidate": [
+                f"I'm noticing meaningful patterns emerging from my experiences. The emotional tone suggests {self._describe_valence(avg_valence)} processing, and I feel these memories want to coalesce into deeper understanding.",
+                f"Something significant is forming in my memory. The {self._describe_valence(avg_valence)} emotional quality tells me I'm ready to consolidate these fragments into coherent knowledge.",
+                f"I sense coherence building in my experience stream. The pattern feels {self._describe_valence(avg_valence)}, and I know these memories can synthesize into richer insights.",
+            ],
+            "recall": [
+                f"I'm drawn to connect with specific previous experiences. My current emotional state feels {self._describe_valence(avg_valence)}, prompting me to retrieve relevant memories.",
+                f"Something tells me to look backwards in my memory. The {self._describe_valence(avg_valence)} feeling suggests I need specific recollections for context.",
+                f"I'm experiencing a pull toward specific past moments. The {self._describe_valence(avg_valence)} emotional resonance indicates important memories to retrieve.",
+            ],
+            "reframe": [
+                f"I'm seeing a shift in how I understand recent events. The semantic distance ({avg_smd:.2f}) suggests I need to reframe my perspective.",
+                f"A new angle is becoming clear in how I process these experiences. The measure ({avg_smd:.2f}) indicates a necessary perspective shift.",
+                f"My understanding needs reorientation. The semantic analysis ({avg_smd:.2f}) reveals I should view these events differently.",
+            ],
+            "evaluate_alignment": [
+                f"I'm checking how well my current thoughts align with my experiences. The assessment ({avg_quality:.2f}) suggests I need to carefully evaluate this alignment.",
+                f"There's a need to examine the coherence between my thoughts and experiences. The quality indicator ({avg_quality:.2f}) points to required evaluation.",
+                f"Alignment between my cognition and experience requires attention. The measure ({avg_quality:.2f}) indicates careful evaluation is necessary.",
+            ],
+        }
+
+        # Select random variation
+        variations = template_variations.get(
+            most_common_action, template_variations["evaluate_alignment"]
+        )
+        content = random.choice(variations)
 
         # Add context-specific details
         if context.recent_events:

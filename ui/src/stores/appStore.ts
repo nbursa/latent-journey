@@ -157,7 +157,7 @@ export const useAppStore = create<AppState>()(
           });
 
           // Clear Ego service data
-          await fetch("http://localhost:8084/api/ego/clear", {
+          await fetch("/api/ego/clear-ltm", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
           });

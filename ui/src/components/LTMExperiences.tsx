@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from "react";
 import { Layers, RefreshCw, AlertCircle, Play, Pause } from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
+import { useAutoGeneration } from "../hooks/useAutoGeneration";
 import { useServicesStatus } from "../hooks/useServicesStatus";
 import { Memory } from "../types/memory";
+import { useAppStore } from "../stores/appStore";
 
 interface Experience {
   id: string;
@@ -33,8 +35,11 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
   const [error, setError] = useState<string | null>(null);
   const { servicesStatus } = useServicesStatus();
 
+  // Get events from app store for threshold monitoring
+  const events = useAppStore((state) => state.events);
+
   // Use the simplified ego service
-  const { totalMemories } = useEgo({
+  const {} = useEgo({
     memories,
     autoGenerate: false,
     intervalMs: 30000,
@@ -42,7 +47,15 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
 
   // Get service status directly from useServicesStatus
   const isEgoAvailable = servicesStatus.ego === "online";
-  const ollamaAvailable = servicesStatus.llm === "online";
+  const refnetAvailable = servicesStatus.llm === "online"; // RefNet service is now on the llm status slot
+
+  // Auto generation hook for threshold-based automatic generation
+  const autoGeneration = useAutoGeneration({
+    eventThreshold: 10,
+    thoughtThreshold: 10,
+    checkIntervalMs: 5000,
+    enabled: isAutoGenerate,
+  });
 
   // Load LTM experiences
   const loadExperiences = async () => {
@@ -187,15 +200,15 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           {/* Auto-generate toggle */}
           <button
             onClick={toggleAutoGenerate}
-            disabled={!isEgoAvailable || !ollamaAvailable}
+            disabled={!isEgoAvailable || !refnetAvailable}
             className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
               isAutoGenerate ? "btn-primary" : "btn-secondary"
-            } ${!isEgoAvailable || !ollamaAvailable ? "opacity-50" : ""}`}
+            } ${!isEgoAvailable || !refnetAvailable ? "opacity-50" : ""}`}
             title={
               !isEgoAvailable
                 ? "Ego service not available"
-                : !ollamaAvailable
-                ? "Ollama not available - needed for AI generation"
+                : !refnetAvailable
+                ? "RefNet service not available - needed for AI generation"
                 : isAutoGenerate
                 ? "Stop auto-generation"
                 : "Start auto-generation"
@@ -212,13 +225,13 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           {/* Manual consolidate */}
           <button
             onClick={consolidateMemories}
-            disabled={isConsolidating || !isEgoAvailable || !ollamaAvailable}
+            disabled={isConsolidating || !isEgoAvailable || !refnetAvailable}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
             title={
               !isEgoAvailable
                 ? "Ego service not available"
-                : !ollamaAvailable
-                ? "Ollama not available - needed for AI consolidation"
+                : !refnetAvailable
+                ? "RefNet service not available - needed for AI consolidation"
                 : "Consolidate thoughts into experiences"
             }
           >
@@ -249,45 +262,34 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           </div>
         )}
 
-        {/* Ollama Status */}
-        {!ollamaAvailable && (
+        {/* RefNet Status */}
+        {!refnetAvailable && (
           <div className="m-1 sm:m-3 p-2 sm:p-3 bg-yellow-500/20 text-yellow-300 text-xs sm:text-sm">
             <div className="font-semibold mb-1 sm:mb-2 flex items-center gap-2">
               <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Ollama Not Available</span>
-              <span className="sm:hidden">Ollama Missing</span>
+              <span className="hidden sm:inline">
+                RefNet Service Not Available
+              </span>
+              <span className="sm:hidden">RefNet Missing</span>
             </div>
             <div className="space-y-1 sm:space-y-2 text-xs">
               <p className="hidden sm:block">
-                To enable AI experience consolidation, you need to install and
-                run Ollama:
+                To enable AI experience consolidation, RefNet service needs to
+                be running. Make sure all services are started with "make dev"
               </p>
-              <p className="sm:hidden">Install Ollama to enable AI features:</p>
+              <p className="sm:hidden">
+                Start RefNet service to enable AI features
+              </p>
               <div className="bg-black/20 p-1 sm:p-2 rounded font-mono text-xs">
                 <div className="hidden sm:block">
-                  <strong>Install:</strong>
+                  <strong>Services:</strong>
                 </div>
                 <div className="text-xs">
-                  • macOS: <code>brew install ollama</code>
+                  • Start all services: <code>make dev</code>
                 </div>
+                <div className="text-xs">• RefNet runs on port 8084</div>
                 <div className="text-xs">
-                  • Linux:{" "}
-                  <code>curl -fsSL https://ollama.ai/install.sh | sh</code>
-                </div>
-                <div className="text-xs">
-                  • Windows: Download from https://ollama.ai/download
-                </div>
-                <div className="mt-1 sm:mt-2 hidden sm:block">
-                  <strong>Run:</strong>
-                </div>
-                <div className="text-xs">
-                  • <code>ollama serve</code>
-                </div>
-                <div className="mt-1 sm:mt-2 hidden sm:block">
-                  <strong>Pull Model:</strong>
-                </div>
-                <div className="text-xs">
-                  • <code>ollama pull llama3.1:8b-instruct</code>
+                  • Uses trained model from RefNet training
                 </div>
               </div>
             </div>
@@ -309,8 +311,8 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
                     <div className="text-sm">
                       {!isEgoAvailable
                         ? "Ego service not available"
-                        : !ollamaAvailable
-                        ? "Ollama not available - install and run Ollama to enable AI experience consolidation"
+                        : !refnetAvailable
+                        ? "RefNet service not available - start services with 'make dev' to enable AI experience consolidation"
                         : isAutoGenerate
                         ? "Auto-generation enabled - experiences will appear here"
                         : "Click Consolidate to create experiences from thoughts"}
@@ -369,20 +371,21 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
             <span>Mode: {isAutoGenerate ? "Auto" : "Manual"}</span>
           </div>
           <div className="flex flex-wrap gap-y-2 items-center gap-4">
+            <span>Events: {events.length}</span>
+            <span>Thoughts: {autoGeneration.thoughtCount}</span>
             <span>Experiences: {experiences.length}</span>
-            <span>Memories: {totalMemories}</span>
-            <span>Service: Ego</span>
+            <span>Service: RefNet</span>
             <span
               className={`flex items-center gap-1 ${
-                ollamaAvailable ? "text-green-400" : "text-red-400"
+                refnetAvailable ? "text-green-400" : "text-red-400"
               }`}
             >
               <div
                 className={`w-2 h-2 rounded-full ${
-                  ollamaAvailable ? "bg-green-400" : "bg-red-400"
+                  refnetAvailable ? "bg-green-400" : "bg-red-400"
                 }`}
               ></div>
-              Ollama
+              {refnetAvailable ? "Linked" : "Disconnected"}
             </span>
           </div>
         </div>

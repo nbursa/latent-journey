@@ -14,7 +14,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            port: 8084,
+            port: 8086,
             ollama_url: "http://localhost:11434".to_string(),
             model: "llama3.2:3b".to_string(),
             temperature: 0.2,

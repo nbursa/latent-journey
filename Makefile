@@ -1,5 +1,21 @@
 .PHONY: dev build clean install
 
+# Service and port definitions
+SERVICES := go run main.go python app.py cargo run vite gateway id-rs ml-py llm-py refnet-py ego-rs embeddings-rs
+PORTS := 8080 8081 8082 8084 8085 8086 5173
+
+# Kill all services
+kill-services:
+	@for service in $(SERVICES); do pkill -f "$$service" || true; done
+
+# Kill processes on ports
+kill-ports:
+	@for port in $(PORTS); do lsof -ti:$$port | xargs kill -9 2>/dev/null || true; done
+
+# Force kill all services
+force-kill-services:
+	@for service in $(SERVICES); do pkill -9 -f "$$service" || true; done
+
 # Check if port is available
 check-port:
 	@if lsof -ti:$(PORT) >/dev/null 2>&1; then \
@@ -27,35 +43,13 @@ wait-for-service:
 # Development mode - run all services
 dev:
 	@echo "Stopping any existing services..."
-	@pkill -f "go run main.go" || true
-	@pkill -f "python app.py" || true
-	@pkill -f "cargo run" || true
-	@pkill -f "vite" || true
-	@pkill -f "gateway" || true
-	@pkill -f "id-rs" || true
-	@pkill -f "ml-py" || true
-	@pkill -f "llm-py" || true
-	@pkill -f "refnet-py" || true
-	@pkill -f "ego-rs" || true
+	@$(MAKE) kill-services
 	@echo "Killing processes on ports..."
-	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8081 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8082 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	@$(MAKE) kill-ports
 	@echo "Waiting for cleanup..."
 	@sleep 5
 	@echo "Cleaning up any remaining processes..."
-	@pkill -9 -f "go run main.go" || true
-	@pkill -9 -f "python app.py" || true
-	@pkill -9 -f "cargo run" || true
-	@pkill -9 -f "vite" || true
-	@pkill -9 -f "gateway" || true
-	@pkill -9 -f "id-rs" || true
-	@pkill -9 -f "ml-py" || true
-	@pkill -9 -f "llm-py" || true
+	@$(MAKE) force-kill-services
 	@sleep 2
 	@echo "Starting all services..."
 	@echo "Gateway: http://localhost:8080"
@@ -72,7 +66,7 @@ dev:
 	@echo ""
 	@echo "Press Ctrl+C to stop all services"
 	@echo ""
-	@trap 'echo "Stopping all services..."; pkill -f "go run main.go"; pkill -f "python app.py"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ml-py"; pkill -f "llm-py"; pkill -f "ego-rs"; pkill -f "embeddings-rs"; echo "Killing processes on ports..."; lsof -ti:8080 | xargs kill -9 2>/dev/null || true; lsof -ti:8081 | xargs kill -9 2>/dev/null || true; lsof -ti:8082 | xargs kill -9 2>/dev/null || true; lsof -ti:8083 | xargs kill -9 2>/dev/null || true; lsof -ti:8084 | xargs kill -9 2>/dev/null || true; lsof -ti:8085 | xargs kill -9 2>/dev/null || true; lsof -ti:5173 | xargs kill -9 2>/dev/null || true; exit 0' INT; \
+	@trap 'echo "Stopping all services..."; $(MAKE) kill-services; echo "Killing processes on ports..."; $(MAKE) kill-ports; exit 0' INT; \
 	echo "Starting services in optimized order..."; \
 	echo ""; \
 	echo "1.Starting Gateway (API Router)..."; \
@@ -87,7 +81,7 @@ dev:
 	ID_PID=$$!; \
 	PORT=8082 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "3.Starting ML Service (Whisper + CLIP) and RefNet Service (AI Reflection) in parallel..."; \
+	echo "3.Starting ML Service (Whisper + CLIP)..."; \
 	PORT=8081 $(MAKE) check-port; \
 	cd services/ml-py && python app.py & \
 	ML_PID=$$!; \
@@ -100,13 +94,19 @@ dev:
 	REFNET_PID=$$!; \
 	PORT=8084 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "5.Starting Embeddings Service (Real CLIP Embeddings)..."; \
+	echo "5.Starting Ego Service (Memory Management)..."; \
+	PORT=8086 $(MAKE) check-port; \
+	cd services/ego-rs && cargo run & \
+	EGO_PID=$$!; \
+	PORT=8086 $(MAKE) wait-for-service; \
+	echo ""; \
+	echo "6.Starting Embeddings Service (Real CLIP Embeddings)..."; \
 	PORT=8085 $(MAKE) check-port; \
 	cd services/embeddings-rs && cargo run & \
 	EMBEDDINGS_PID=$$!; \
 	PORT=8085 $(MAKE) wait-for-service; \
 	echo ""; \
-	echo "6.Starting UI (Frontend)..."; \
+	echo "7.Starting UI (Frontend)..."; \
 	PORT=5173 $(MAKE) check-port; \
 	cd ui && npm run dev & \
 	UI_PID=$$!; \
@@ -119,6 +119,7 @@ dev:
 	echo "   • ML: http://localhost:8081"; \
 	echo "   • ID: http://localhost:8082"; \
 	echo "   • RefNet: http://localhost:8084"; \
+	echo "   • Ego: http://localhost:8086"; \
 	echo "   • Embeddings: http://localhost:8085"; \
 	echo ""; \
 	wait
@@ -127,7 +128,7 @@ dev:
 quick:
 	@echo "Quick start - essential services only..."
 	@echo "Starting Gateway + ID + Ego + UI..."
-	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ego-rs"; exit 0' INT; \
+	@trap 'echo "Stopping services..."; $(MAKE) kill-services; exit 0' INT; \
 	echo "1.Gateway..."; \
 	PORT=8080 $(MAKE) check-port; \
 	cd cmd/gateway && go run main.go & \
@@ -150,7 +151,7 @@ quick:
 fast:
 	@echo "Fast start - UI development mode..."
 	@echo "Starting Gateway + ID + Ego + UI (no ML/LLM)..."
-	@trap 'echo "Stopping services..."; pkill -f "go run main.go"; pkill -f "cargo run"; pkill -f "vite"; pkill -f "gateway"; pkill -f "id-rs"; pkill -f "ego-rs"; exit 0' INT; \
+	@trap 'echo "Stopping services..."; $(MAKE) kill-services; exit 0' INT; \
 	echo "1.Gateway..."; \
 	PORT=8080 $(MAKE) check-port; \
 	cd cmd/gateway && go run main.go & \
@@ -187,7 +188,7 @@ install:
 	@cd cmd/gateway && go mod tidy
 	@echo "Installing Python dependencies..."
 	@cd services/ml-py && pip install -r requirements.txt
-	@cd services/llm-py && pip install -r requirements.txt
+	@cd services/refnet-py && pip install -r requirements.txt
 	@echo "Installing Rust dependencies..."
 	@cd services/id-rs && cargo build
 	@cd services/ego-rs && cargo build
@@ -198,37 +199,16 @@ install:
 install-python:
 	@echo "Reinstalling Python dependencies..."
 	@cd services/ml-py && pip install -r requirements.txt
+	@cd services/refnet-py && pip install -r requirements.txt
 
 # Stop all services
 stop:
 	@echo "Stopping all services..."
-	@pkill -f "go run main.go" || true
-	@pkill -f "python app.py" || true
-	@pkill -f "cargo run" || true
-	@pkill -f "vite" || true
-	@pkill -f "gateway" || true
-	@pkill -f "id-rs" || true
-	@pkill -f "ml-py" || true
-	@pkill -f "llm-py" || true
-	@pkill -f "refnet-py" || true
-	@pkill -f "ego-rs" || true
+	@$(MAKE) kill-services
 	@echo "Killing processes on ports..."
-	@lsof -ti:8080 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8081 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8082 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8083 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8084 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:8085 | xargs kill -9 2>/dev/null || true
-	@lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+	@$(MAKE) kill-ports
 	@echo "Force killing remaining processes..."
-	@pkill -9 -f "go run main.go" || true
-	@pkill -9 -f "python app.py" || true
-	@pkill -9 -f "cargo run" || true
-	@pkill -9 -f "vite" || true
-	@pkill -9 -f "gateway" || true
-	@pkill -9 -f "id-rs" || true
-	@pkill -9 -f "ml-py" || true
-	@pkill -9 -f "llm-py" || true
+	@$(MAKE) force-kill-services
 	@echo "All services stopped"
 
 # Clean restart - stop everything and start fresh
@@ -252,8 +232,10 @@ test:
 	@curl -s http://localhost:8081/ping || echo "ML Service not running"
 	@echo "Testing ID Service..."
 	@curl -s http://localhost:8082/ping || echo "ID Service not running"
-	@echo "Testing LLM Service..."
-	@curl -s http://localhost:8083/health || echo "LLM Service not running"
+	@echo "Testing RefNet Service..."
+	@curl -s http://localhost:8084/health || echo "RefNet Service not running"
+	@echo "Testing Ego Service..."
+	@curl -s http://localhost:8086/health || echo "Ego Service not running"
 
 # Help
 help:
@@ -272,10 +254,11 @@ help:
 	@echo "Service startup order (dev):"
 	@echo "  1. Gateway (API Router) - Port 8080"
 	@echo "  2. ID (Memory + Agent) - Port 8082"
-	@echo "  3. ML Service (Whisper + CLIP) + LLM Service (Ollama) - Ports 8081, 8083 (parallel)"
-	@echo "  4. Ego Service (AI Reflection) - Port 8084"
-	@echo "  5. Embeddings Service (Real CLIP Embeddings) - Port 8085"
-	@echo "  6. UI (Frontend) - Port 5173"
+	@echo "  3. ML Service (Whisper + CLIP) - Port 8081"
+	@echo "  4. RefNet Service (AI Reflection) - Port 8084"
+	@echo "  5. Ego Service (Memory Management) - Port 8086"
+	@echo "  6. Embeddings Service (Real CLIP Embeddings) - Port 8085"
+	@echo "  7. UI (Frontend) - Port 5173"
 	@echo ""
 	@echo "Startup modes:"
 	@echo "  dev    - Full functionality (all services, ~15-20 seconds)"

@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { Brain, RefreshCw, AlertCircle, Play, Pause } from "lucide-react";
+import {
+  Brain,
+  RefreshCw,
+  AlertCircle,
+  Play,
+  Pause,
+  Zap,
+  Clock,
+} from "lucide-react";
 import { useEgo } from "../hooks/useEgo";
 import { useSTMData } from "../hooks/useSTMData";
+import { useAutoGeneration } from "../hooks/useAutoGeneration";
 import { Memory } from "../types/memory";
 import { useServicesStatus } from "../hooks/useServicesStatus";
+import { useAppStore } from "../stores/appStore";
 
 interface Thought {
   content: string;
@@ -40,21 +50,30 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
   const [isAutoGenerate, setIsAutoGenerate] = useState(false);
   const { servicesStatus } = useServicesStatus();
 
-  const {
-    currentThought,
-    isGenerating,
-    error,
-    generateThought,
-    clearHistory,
-    totalMemories,
-  } = useEgo({
+  // Get events from app store for threshold monitoring
+  const events = useAppStore((state) => state.events);
+
+  const { currentThought, error, clearHistory, totalMemories } = useEgo({
     memories,
     autoGenerate: isAutoGenerate,
     intervalMs: 30000,
   });
 
   const isEgoAvailable = servicesStatus.ego === "online";
-  const ollamaAvailable = servicesStatus.llm === "online";
+  const refnetAvailable = servicesStatus.llm === "online"; // RefNet service is now on the llm status slot
+
+  // Auto generation hook for threshold-based automatic generation
+  const autoGeneration = useAutoGeneration({
+    eventThreshold: 10,
+    thoughtThreshold: 10,
+    checkIntervalMs: 5000,
+    enabled: isAutoGenerate,
+  });
+
+  // Use manual generation loading state for buttons
+  const isManualGenerating =
+    autoGeneration.isGeneratingThought ||
+    autoGeneration.isConsolidatingExperience;
 
   // Get STM data
   const {
@@ -173,15 +192,15 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           {/* Auto-generate toggle */}
           <button
             onClick={toggleAutoGenerate}
-            disabled={!isEgoAvailable || !ollamaAvailable}
+            disabled={!isEgoAvailable || !refnetAvailable}
             className={`px-2 py-1 text-xs flat flex items-center gap-1 ${
               isAutoGenerate ? "btn-primary" : "btn-secondary"
-            } ${!isEgoAvailable || !ollamaAvailable ? "opacity-50" : ""}`}
+            } ${!isEgoAvailable || !refnetAvailable ? "opacity-50" : ""}`}
             title={
               !isEgoAvailable
                 ? "Ego service not available"
-                : !ollamaAvailable
-                ? "Ollama not available - needed for AI generation"
+                : !refnetAvailable
+                ? "RefNet service not available - needed for AI generation"
                 : isAutoGenerate
                 ? "Stop auto-generation"
                 : "Start auto-generation"
@@ -195,33 +214,96 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
             {isAutoGenerate ? "Pause" : "Auto"}
           </button>
 
-          {/* Manual refresh */}
+          {/* Manual thought generation */}
           <button
-            onClick={() => generateThought()}
-            disabled={isGenerating || !isEgoAvailable || !ollamaAvailable}
+            onClick={() => autoGeneration.triggerThoughtGeneration()}
+            disabled={isManualGenerating || !isEgoAvailable || !refnetAvailable}
             className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
             title={
               !isEgoAvailable
                 ? "Ego service not available"
-                : !ollamaAvailable
-                ? "Ollama not available - needed for AI generation"
-                : "Generate new thought manually"
+                : !refnetAvailable
+                ? "RefNet service not available - needed for AI generation"
+                : autoGeneration.isGeneratingThought
+                ? "Generating thought..."
+                : "Generate new thought manually from current events"
             }
           >
             <RefreshCw
-              className={`w-3 h-3 ${isGenerating ? "animate-spin" : ""}`}
+              className={`w-3 h-3 ${
+                autoGeneration.isGeneratingThought ? "animate-spin" : ""
+              }`}
             />
-            Manual
+            Generate Thought
+          </button>
+
+          {/* Manual experience consolidation */}
+          <button
+            onClick={() => autoGeneration.triggerExperienceConsolidation()}
+            disabled={isManualGenerating || !isEgoAvailable || !refnetAvailable}
+            className="px-2 py-1 text-xs flat flex items-center gap-1 btn-secondary disabled:opacity-50"
+            title={
+              !isEgoAvailable
+                ? "Ego service not available"
+                : !refnetAvailable
+                ? "ResNet service not available - needed for AI consolidation"
+                : autoGeneration.isConsolidatingExperience
+                ? "Consolidating experiences..."
+                : "Consolidate current thoughts into experiences manually"
+            }
+          >
+            <Zap
+              className={`w-3 h-3 ${
+                autoGeneration.isConsolidatingExperience ? "animate-pulse" : ""
+              }`}
+            />
+            Consolidate
           </button>
         </div>
       </div>
 
       {/* Auto-generation status */}
       {isAutoGenerate && (
-        <div className="mb-2 p-2 bg-green-500/10 text-xs text-green-300">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-            <span>Auto-generating thoughts every 30 seconds</span>
+        <div className="mb-2 space-y-2">
+          <div className="p-2 bg-green-500/10 text-xs text-green-300 rounded">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+              <span>Automatic generation enabled</span>
+            </div>
+          </div>
+
+          {/* Threshold indicators */}
+          <div className="p-2 bg-blue-500/10 text-xs text-blue-300 rounded">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="flex items-center gap-2">
+                <Clock className="w-3 h-3" />
+                <span>
+                  {autoGeneration.eventsUntilThought > 0
+                    ? `${autoGeneration.eventsUntilThought} events until thought`
+                    : autoGeneration.awaitingThought
+                    ? "Triggering thought generation..."
+                    : "Ready for more events"}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Zap className="w-3 h-3" />
+                <span>
+                  {autoGeneration.thoughtsUntilExperience > 0
+                    ? `${autoGeneration.thoughtsUntilExperience} thoughts until experience`
+                    : autoGeneration.awaitingExperience
+                    ? "Triggering experience..."
+                    : "Ready for more thoughts"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Event/Thought counters */}
+          <div className="p-2 bg-purple-500/10 text-xs text-purple-300 rounded">
+            <div className="grid grid-cols-2 gap-2">
+              <div>Events: {events.length}</div>
+              <div>Thoughts: {autoGeneration.thoughtCount}</div>
+            </div>
           </div>
         </div>
       )}
@@ -242,45 +324,34 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
           </div>
         )}
 
-        {/* Ollama Status */}
-        {!ollamaAvailable && (
+        {/* RefNet Status */}
+        {!refnetAvailable && (
           <div className="m-1 sm:m-3 p-2 sm:p-3 bg-yellow-500/20 text-yellow-300 text-xs sm:text-sm">
             <div className="font-semibold mb-1 sm:mb-2 flex items-center gap-2">
               <AlertCircle className="w-3 h-3 sm:w-4 sm:h-4" />
-              <span className="hidden sm:inline">Ollama Not Available</span>
-              <span className="sm:hidden">Ollama Missing</span>
+              <span className="hidden sm:inline">
+                RefNet Service Not Available
+              </span>
+              <span className="sm:hidden">RefNet Missing</span>
             </div>
             <div className="space-y-1 sm:space-y-2 text-xs">
               <p className="hidden sm:block">
-                To enable AI thought generation, you need to install and run
-                Ollama:
+                To enable AI thought generation, RefNet service needs to be
+                running. Make sure all services are started with "make dev"
               </p>
-              <p className="sm:hidden">Install Ollama to enable AI features:</p>
+              <p className="sm:hidden">
+                Start RefNet service to enable AI features
+              </p>
               <div className="bg-black/20 p-1 sm:p-2 font-mono text-xs">
                 <div className="hidden sm:block">
-                  <strong>Install:</strong>
+                  <strong>Services:</strong>
                 </div>
                 <div className="text-xs">
-                  • macOS: <code>brew install ollama</code>
+                  • Start all services: <code>make dev</code>
                 </div>
+                <div className="text-xs">• RefNet runs on port 8084</div>
                 <div className="text-xs">
-                  • Linux:{" "}
-                  <code>curl -fsSL https://ollama.ai/install.sh | sh</code>
-                </div>
-                <div className="text-xs">
-                  • Windows: Download from https://ollama.ai/download
-                </div>
-                <div className="mt-1 sm:mt-2 hidden sm:block">
-                  <strong>Run:</strong>
-                </div>
-                <div className="text-xs">
-                  • <code>ollama serve</code>
-                </div>
-                <div className="mt-1 sm:mt-2 hidden sm:block">
-                  <strong>Pull Model:</strong>
-                </div>
-                <div className="text-xs">
-                  • <code>ollama pull llama3.1:8b-instruct</code>
+                  • Uses trained model from RefNet training
                 </div>
               </div>
             </div>
@@ -332,20 +403,24 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
                 </div>
               ) : thoughts.length === 0 ? (
                 <div className="text-center text-ui-muted py-8">
-                  {isGenerating ? (
+                  {isManualGenerating ? (
                     <div className="flex items-center justify-center gap-2">
                       <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>Generating thought...</span>
+                      <span>
+                        {autoGeneration.isGeneratingThought
+                          ? "Generating thought..."
+                          : "Consolidating experiences..."}
+                      </span>
                     </div>
                   ) : (
                     <div className="text-sm">
                       {!isEgoAvailable
                         ? "Ego service not available"
-                        : !ollamaAvailable
-                        ? "Ollama not available - install and run Ollama to enable AI thought generation"
+                        : !refnetAvailable
+                        ? "RefNet service not available - start services with 'make dev' to enable AI thought generation"
                         : isAutoGenerate
                         ? "Auto-generation enabled - thoughts will appear here"
-                        : "Click Auto to enable auto-generation or Manual for manual generation"}
+                        : "Click Auto to enable auto-generation or Generate Thought for manual generation"}
                     </div>
                   )}
                 </div>
@@ -402,20 +477,21 @@ const ThoughtStream: React.FC<ThoughtStreamProps> = ({
             <span>Mode: {isAutoGenerate ? "Auto" : "Manual"}</span>
           </div>
           <div className="flex flex-wrap gap-y-2 items-center gap-4">
+            <span>Events: {events.length}</span>
             <span>Thoughts: {thoughts.length}</span>
             <span>Memories: {totalMemories}</span>
-            <span>Service: Ego</span>
+            <span>Service: RefNet</span>
             <span
               className={`flex items-center gap-1 ${
-                ollamaAvailable ? "text-green-400" : "text-red-400"
+                refnetAvailable ? "text-green-400" : "text-red-400"
               }`}
             >
               <div
                 className={`w-2 h-2 rounded-full ${
-                  ollamaAvailable ? "bg-green-400" : "bg-red-400"
+                  refnetAvailable ? "bg-green-400" : "bg-red-400"
                 }`}
               ></div>
-              Ollama
+              {refnetAvailable ? "Linked" : "Disconnected"}
             </span>
           </div>
         </div>
