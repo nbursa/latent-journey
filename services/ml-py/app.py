@@ -123,23 +123,24 @@ def infer_clip():
     if not b64:
         return jsonify({"error": "missing image_base64"}), 400
 
-    # If CLIP model failed to load, return mock data
-    if clip_model is None or clip_processor is None:
-        import numpy as np
+        # If CLIP model failed to load, return mock data
+        if clip_model is None or clip_processor is None:
+            print("ERROR: CLIP model or processor not loaded, returning mock data")
+            import numpy as np
 
-        return jsonify(
-            {
-                "topk": [
-                    {"label": "object", "score": 0.8},
-                    {"label": "thing", "score": 0.6},
-                    {"label": "item", "score": 0.4},
-                ],
-                "embedding": np.random.randn(128).tolist(),
-                "dominant_color": "blue",
-                "affect_valence": 0.5,
-                "affect_arousal": 0.5,
-            }
-        )
+            return jsonify(
+                {
+                    "topk": [
+                        {"label": "object", "score": 0.8},
+                        {"label": "thing", "score": 0.6},
+                        {"label": "item", "score": 0.4},
+                    ],
+                    "embedding": np.random.randn(128).tolist(),
+                    "dominant_color": "unknown",
+                    "affect_valence": 0.5,
+                    "affect_arousal": 0.5,
+                }
+            )
 
     try:
         # decode image
@@ -149,8 +150,12 @@ def infer_clip():
         try:
             inputs = clip_processor(images=img, return_tensors="pt")
             inputs = {k: v.to(device) for k, v in inputs.items()}
+            print(f"Successfully processed image with CLIP processor")
         except Exception as clip_error:
             print(f"CLIP processing error: {clip_error}")
+            import traceback
+
+            traceback.print_exc()
             # Return mock data if CLIP fails
             import numpy as np
 
@@ -162,19 +167,30 @@ def infer_clip():
                         {"label": "item", "score": 0.4},
                     ],
                     "embedding": np.random.randn(128).tolist(),
-                    "dominant_color": "blue",
+                    "dominant_color": "unknown",
                     "affect_valence": 0.5,
                     "affect_arousal": 0.5,
                 }
             )
 
         # Get image features
+        print("Processing image with CLIP model...")
         with torch.no_grad():
             image_features = clip_model.get_image_features(**inputs)
             image_features = image_features / image_features.norm(dim=-1, keepdim=True)
+            print(f"Successfully extracted image features: {image_features.shape}")
 
-            # Get text features for common labels
+            # Get text features for comprehensive object detection
             text_labels = [
+                # People and faces
+                "a photo of a person",
+                "a photo of a man",
+                "a photo of a woman",
+                "a photo of a human face",
+                "a photo of someone smiling",
+                "a photo of a person with glasses",
+                "a photo of a person wearing a shirt",
+                # Common objects
                 "a photo of a banana",
                 "a photo of an apple",
                 "a photo of an orange",
@@ -187,26 +203,60 @@ def infer_clip():
                 "a photo of a car",
                 "a photo of a dog",
                 "a photo of a cat",
-                "a photo of a person",
                 "a photo of food",
                 "a photo of a building",
+                # Generic categories
+                "a photo of furniture",
+                "a photo of electronics",
+                "a photo of clothing",
+                "a photo of a room",
+                "a photo of an indoor scene",
+                "a photo of an outdoor scene",
+                "a photo of nature",
+                "a photo of a landscape",
+                "a photo of a city",
+                # Abstract concepts
+                "a photo of something colorful",
+                "a photo of something bright",
+                "a photo of something dark",
+                "a photo of something large",
+                "a photo of something small",
+                "a photo of something interesting",
+                "a photo of something beautiful",
             ]
 
             # Get text features for color detection
             color_labels = [
-                "a red object",
-                "a blue object",
-                "a green object",
-                "a yellow object",
-                "a orange object",
-                "a purple object",
-                "a pink object",
-                "a brown object",
-                "a black object",
-                "a white object",
-                "a gray object",
-                "a silver object",
-                "a gold object",
+                "a red colored object",
+                "a blue colored object",
+                "a green colored object",
+                "a yellow colored object",
+                "a orange colored object",
+                "a purple colored object",
+                "a pink colored object",
+                "a brown colored object",
+                "a black colored object",
+                "a white colored object",
+                "a gray colored object",
+                "a silver colored object",
+                "a gold colored object",
+                "a beige colored object",
+                "a navy colored object",
+                "a maroon colored object",
+                "a turquoise colored object",
+                "a magenta colored object",
+                "a cyan colored object",
+                "a lime colored object",
+                "a indigo colored object",
+                "a violet colored object",
+                "a tan colored object",
+                "a olive colored object",
+                "a coral colored object",
+                "a salmon colored object",
+                "a khaki colored object",
+                "a burgundy colored object",
+                "a crimson colored object",
+                "a teal colored object",
             ]
 
             # Get text features for affect detection
@@ -224,6 +274,7 @@ def infer_clip():
             ]
 
             # Process object detection
+            print(f"Processing object detection with {len(text_labels)} labels...")
             text_inputs = clip_processor(
                 text=text_labels, return_tensors="pt", padding=True
             )
@@ -234,6 +285,9 @@ def infer_clip():
             # Calculate object similarities
             similarities = (100.0 * image_features @ text_features.T).softmax(dim=-1)
             values, indices = similarities[0].topk(5)
+            print(
+                f"Top 5 object detection results: {[(text_labels[idx], float(value)) for value, idx in zip(values, indices)]}"
+            )
 
             # Format object results
             topk = []
@@ -247,6 +301,7 @@ def infer_clip():
                 topk.append({"label": label, "score": float(value)})
 
             # Process color detection
+            print(f"Processing color detection with {len(color_labels)} colors...")
             color_inputs = clip_processor(
                 text=color_labels, return_tensors="pt", padding=True
             )
@@ -258,12 +313,18 @@ def infer_clip():
             color_similarities = (100.0 * image_features @ color_features.T).softmax(
                 dim=-1
             )
-            color_values, color_indices = color_similarities[0].topk(1)
+            color_values, color_indices = color_similarities[0].topk(3)
+            print(
+                f"Top 3 color detection results: {[(color_labels[idx], float(value)) for value, idx in zip(color_values, color_indices)]}"
+            )
 
             # Get the most likely color
             dominant_color = (
-                color_labels[color_indices[0]].replace("a ", "").replace(" object", "")
+                color_labels[color_indices[0]]
+                .replace("a ", "")
+                .replace(" colored object", "")
             )
+            print(f"Detected dominant color: {dominant_color}")
 
             # Process affect detection
             affect_inputs = clip_processor(

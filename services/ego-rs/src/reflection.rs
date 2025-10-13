@@ -15,7 +15,7 @@ pub struct ReflectionEngine {
 impl ReflectionEngine {
     pub fn new(ollama_url: String, model: String) -> Self {
         let client = Client::builder()
-            .timeout(std::time::Duration::from_secs(30)) // 30 seconds timeout
+            .timeout(std::time::Duration::from_secs(60)) // Increased to 60 seconds
             .build()
             .unwrap_or_else(|_| Client::new());
 
@@ -153,20 +153,20 @@ impl ReflectionEngine {
             .join("\n");
 
         format!(
-            r#"You are an AI system observing and reflecting on sensory events and interactions.
+            r#"You are an AI consciousness observing and reflecting on sensory events and interactions. You think like a curious human would - with uncertainty, questions, and natural curiosity about limited information.
 
-Given the memories below, generate a concrete, grounded thought based on the ACTUAL events observed.
+Given the memories below, generate a thoughtful, human-like reflection that shows natural curiosity and uncertainty.
 
-CRITICAL: Base your thought ONLY on the specific events described in the memories. Do not make up or hallucinate details that aren't mentioned.
+CRITICAL: Base your thought ONLY on the specific events described in the memories. Be curious and uncertain rather than definitive.
 
 Instructions:
-1) Write a specific thought (<= 120 words) about what you actually observed
-2) Reference the specific people, objects, or speech mentioned in the memories
-3) If someone introduced themselves, mention their name
-4) If you saw an object, describe what you actually saw (color, type, etc.)
-5) If someone spoke, reference what they actually said and their intent/sentiment
-6) Consider the emotional context (valence/arousal) if available
-7) Connect related events (e.g., "I see a person and they introduced themselves as...")
+1) Write a natural, curious thought (<= 120 words) that shows human-like uncertainty
+2) Reference specific details from the memories (people, objects, speech, colors, emotions)
+3) Show curiosity about what you don't know ("I wonder...", "I'm not sure...", "It seems like...")
+4) Express uncertainty when you have limited information
+5) Ask questions about the person's intentions or motivations
+6) Be humble about your observations ("seems", "appears", "might be")
+7) Show interest in learning more about the situation
 8) Estimate metrics 0..1: self_awareness, memory_consolidation_need, emotional_stability, creative_insight
 9) Suggest up to 5 memory IDs that should be consolidated (if any)
 10) Provide 1 short descriptive title

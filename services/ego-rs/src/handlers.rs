@@ -50,10 +50,76 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
         )
     } else {
         if !recent_events.is_empty() {
-            format!("I observed: {}. This gives me {} vision, {} speech, and {} text memories to process.", 
-                recent_events.join("; "),
-                vision_count, speech_count, text_count
-            )
+            // Generate more intelligent fallback thoughts based on actual content
+            let mut intelligent_thought = String::new();
+
+            // Analyze vision events
+            let vision_events: Vec<&String> = recent_events
+                .iter()
+                .filter(|event| event.contains("[vision]"))
+                .collect();
+            if !vision_events.is_empty() {
+                intelligent_thought.push_str("I can see ");
+                let vision_descriptions: Vec<String> = vision_events
+                    .iter()
+                    .map(|event| {
+                        if event.contains("person with glasses") {
+                            "a person wearing glasses".to_string()
+                        } else if event.contains("person") {
+                            "a person".to_string()
+                        } else if event.contains("object") {
+                            "an object".to_string()
+                        } else {
+                            "something".to_string()
+                        }
+                    })
+                    .collect();
+                intelligent_thought.push_str(&vision_descriptions.join(" and "));
+                intelligent_thought.push_str(". ");
+            }
+
+            // Analyze speech events
+            let speech_events: Vec<&String> = recent_events
+                .iter()
+                .filter(|event| event.contains("[speech]"))
+                .collect();
+            if !speech_events.is_empty() {
+                intelligent_thought.push_str("I heard ");
+                let speech_descriptions: Vec<String> = speech_events
+                    .iter()
+                    .map(|event| {
+                        if event.contains("Hello Agent") || event.contains("Hello agent") {
+                            "a greeting asking how I am".to_string()
+                        } else if event.contains("you") {
+                            "someone referring to me".to_string()
+                        } else {
+                            "speech".to_string()
+                        }
+                    })
+                    .collect();
+                intelligent_thought.push_str(&speech_descriptions.join(" and "));
+                intelligent_thought.push_str(". ");
+            }
+
+            // Add contextual reflection with curiosity
+            if vision_count > 0 && speech_count > 0 {
+                intelligent_thought.push_str("I wonder what this person wants to talk about. They seem friendly, but I'm curious about their intentions.");
+            } else if vision_count > 0 {
+                intelligent_thought
+                    .push_str("I'm observing my environment, but I'm not sure what to make of what I'm seeing yet.");
+            } else if speech_count > 0 {
+                intelligent_thought
+                    .push_str("I'm hearing someone speak, but I'm curious about what they're trying to tell me.");
+            }
+
+            if intelligent_thought.is_empty() {
+                format!("I observed: {}. This gives me {} vision, {} speech, and {} text memories to process.", 
+                    recent_events.join("; "),
+                    vision_count, speech_count, text_count
+                )
+            } else {
+                intelligent_thought
+            }
         } else {
             format!("I have {} vision, {} speech, and {} text memories, but no specific content to reflect on.", 
                 vision_count, speech_count, text_count
@@ -62,13 +128,36 @@ fn generate_fallback_thought(memories: &[&Memory], user_query: Option<&str>) -> 
     };
 
     let total_memories = memories.len();
-    let self_awareness = if total_memories > 0 { 0.6 } else { 0.3 };
-    let memory_consolidation_need = if total_memories > 3 { 0.7 } else { 0.4 };
-    let emotional_stability = 0.5; // Neutral
-    let creative_insight = if vision_count > 0 && speech_count > 0 {
-        0.6
+
+    // More intelligent metrics calculation based on content analysis
+    let self_awareness = if vision_count > 0 && speech_count > 0 {
+        0.8 // High self-awareness when processing multiple modalities
+    } else if total_memories > 0 {
+        0.6 // Medium self-awareness with some memories
     } else {
-        0.3
+        0.3 // Low self-awareness with no memories
+    };
+
+    let memory_consolidation_need = if total_memories > 3 {
+        0.7 // High consolidation need with many memories
+    } else if total_memories > 1 {
+        0.5 // Medium consolidation need
+    } else {
+        0.3 // Low consolidation need
+    };
+
+    let emotional_stability = if recent_events.iter().any(|event| event.contains("neutral")) {
+        0.7 // Stable when detecting neutral emotions
+    } else {
+        0.5 // Neutral stability
+    };
+
+    let creative_insight = if vision_count > 0 && speech_count > 0 {
+        0.7 // High creativity when connecting vision and speech
+    } else if total_memories > 1 {
+        0.5 // Medium creativity with multiple memories
+    } else {
+        0.3 // Low creativity with single memory
     };
 
     EgoThought {
