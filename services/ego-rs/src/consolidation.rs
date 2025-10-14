@@ -13,7 +13,7 @@ pub struct ConsolidationEngine {
 impl ConsolidationEngine {
     pub fn new() -> Self {
         Self {
-            min_thoughts_for_consolidation: 3,
+            min_thoughts_for_consolidation: 2,
             consolidation_threshold: 0.6,
             reflection_engine: None,
         }
@@ -21,7 +21,7 @@ impl ConsolidationEngine {
 
     pub fn new_with_llm(reflection_engine: ReflectionEngine) -> Self {
         Self {
-            min_thoughts_for_consolidation: 3,
+            min_thoughts_for_consolidation: 2,
             consolidation_threshold: 0.6,
             reflection_engine: Some(reflection_engine),
         }
@@ -97,7 +97,7 @@ impl ConsolidationEngine {
         let union = words1.union(&words2).count();
 
         let similarity = intersection as f32 / union as f32;
-        similarity > 0.3
+        similarity > 0.1
     }
 
     pub async fn create_experience_from_thoughts(
