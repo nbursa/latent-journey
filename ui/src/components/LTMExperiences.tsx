@@ -96,6 +96,7 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           force: true,
           max_experiences: 5,
         }),
+        signal: AbortSignal.timeout(300000),
       });
 
       if (!response.ok) {
@@ -118,9 +119,15 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
       }
     } catch (err) {
       console.error("Failed to consolidate memories:", err);
-      setError(
-        err instanceof Error ? err.message : "Failed to consolidate memories"
-      );
+      if (err instanceof Error && err.name === "TimeoutError") {
+        setError(
+          "Consolidation is taking longer than expected (5 minutes). Please wait and try again."
+        );
+      } else {
+        setError(
+          err instanceof Error ? err.message : "Failed to consolidate memories"
+        );
+      }
     } finally {
       setIsConsolidating(false);
     }
@@ -236,6 +243,19 @@ const LTMExperiences: React.FC<LTMExperiencesProps> = ({
           <div className="flex items-center gap-2">
             <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
             <span>Auto-generating thoughts every 30 seconds</span>
+          </div>
+        </div>
+      )}
+
+      {/* Consolidation status */}
+      {isConsolidating && (
+        <div className="mb-2 p-2 bg-blue-500/10 text-xs text-blue-300">
+          <div className="flex items-center gap-2">
+            <div className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></div>
+            <span>
+              Consolidating memories into experiences... This may take up to 5
+              minutes
+            </span>
           </div>
         </div>
       )}

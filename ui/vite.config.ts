@@ -17,7 +17,10 @@ export default defineConfig({
     port: 5173,
     host: true,
     proxy: {
-      "/api": "http://localhost:8080",
+      "/api": {
+        target: "http://localhost:8080",
+        timeout: 300000, // 5 minutes timeout for API calls
+      },
       "/events": "http://localhost:8080",
       "/ml": {
         target: "http://localhost:8081",

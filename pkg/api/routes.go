@@ -462,7 +462,7 @@ func postEgoConsolidate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Forward request to ego service
-	client := &http.Client{Timeout: 30 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Minute}
 	resp, err := client.Post("http://localhost:8084/api/ego/consolidate", "application/json", bytes.NewReader(body))
 	if err != nil {
 		http.Error(w, "Failed to call ego service", http.StatusInternalServerError)

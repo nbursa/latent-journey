@@ -1,11 +1,12 @@
 use crate::{
     consolidation::ConsolidationEngine,
-    memory::{select_relevant_memories, MemoryStore},
+    memory::MemoryStore,
     reflection::ReflectionEngine,
     types::{
         ApiResponse, ConsolidationRequest, ConsolidationResult, EgoThought, Experience, Memory,
         MemoryQuery,
     },
+    Modality,
 };
 use anyhow::Result;
 use chrono::Utc;
@@ -187,26 +188,49 @@ pub async fn reflect(
     reflection_engine: Arc<ReflectionEngine>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
     // Get existing thoughts from store (release read lock immediately)
-    let existing_thoughts: Vec<Memory> = {
+    // Get all memories to track which events have been processed
+    let all_memories: Vec<Memory> = {
         let store = memory_store.read().await;
         store.get_all_memories().into_iter().cloned().collect()
     };
 
-    // Combine existing thoughts with incoming context memories for reflection
-    let mut all_memories = existing_thoughts;
-    all_memories.extend(request.memories.iter().cloned());
+    // Extract processed event IDs from existing thoughts (Text memories)
+    // Only consider thoughts that have processed_events facet (new format)
+    let processed_event_ids: std::collections::HashSet<String> = all_memories
+        .iter()
+        .filter(|memory| matches!(memory.modality, Modality::Text))
+        .filter_map(|memory| {
+            // Only extract if processed_events facet exists
+            memory
+                .facets
+                .get("processed_events")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|v| v.as_str())
+                        .map(|s| s.to_string())
+                        .collect::<Vec<String>>()
+                })
+        })
+        .flatten()
+        .collect();
 
-    // Select relevant memories
-    let all_memories_refs: Vec<&Memory> = all_memories.iter().collect();
-    let selected_memories =
-        select_relevant_memories(&all_memories_refs, request.focus_embedding.as_deref(), 5);
+    // Filter to only include unprocessed raw events (Vision/Speech)
+    let unprocessed_events: Vec<&Memory> = all_memories
+        .iter()
+        .filter(|memory| matches!(memory.modality, Modality::Vision | Modality::Speech))
+        .filter(|memory| !processed_event_ids.contains(&memory.id))
+        .collect();
 
-    // If no memories selected, use limited memories for fallback (max 5)
-    let memories_to_use = if selected_memories.is_empty() {
-        &all_memories_refs[..all_memories_refs.len().min(5)]
-    } else {
-        &selected_memories
-    };
+    // Add incoming context memories (these are always new unprocessed events)
+    let mut memories_for_reflection = unprocessed_events;
+    memories_for_reflection.extend(request.memories.iter().map(|m| m as &Memory));
+
+    // Sort by recency and limit to most recent unprocessed events only
+    memories_for_reflection.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+    memories_for_reflection.truncate(5);
+
+    let memories_to_use = &memories_for_reflection;
 
     // Debug: Log what memories are being sent to the LLM
     tracing::info!(
@@ -292,6 +316,17 @@ pub async fn reflect(
                     "context_hash".to_string(),
                     serde_json::Value::String(thought.context_hash.clone()),
                 );
+
+                // Track which events were processed in this thought
+                let processed_event_ids: Vec<serde_json::Value> = memories_to_use
+                    .iter()
+                    .map(|memory| serde_json::Value::String(memory.id.clone()))
+                    .collect();
+                facets.insert(
+                    "processed_events".to_string(),
+                    serde_json::Value::Array(processed_event_ids),
+                );
+
                 facets
             },
             tags: vec!["thought".to_string(), "ego".to_string()],
@@ -359,22 +394,32 @@ pub async fn get_memories(
 pub async fn clear_data(
     memory_store: Arc<RwLock<MemoryStore>>,
 ) -> Result<impl warp::Reply, warp::Rejection> {
-    tracing::info!("Clearing all ego data...");
+    tracing::info!("Clearing all ego data (STM and LTM)...");
 
     let mut store = memory_store.write().await;
 
-    // Clear all memories from the store
+    // Clear all memories from STM
     store.clear_all_memories();
 
-    // Save the empty store to file
+    // Clear all experiences from LTM
+    store.clear_all_experiences();
+
+    // Save the empty store to files
     if let Err(e) = store.save_all_memories() {
-        tracing::error!("Failed to save empty memory store: {}", e);
+        tracing::error!("Failed to save empty STM store: {}", e);
         return Ok(json(&ApiResponse::<()>::error(
-            "Failed to clear data".to_string(),
+            "Failed to clear STM data".to_string(),
         )));
     }
 
-    tracing::info!("Successfully cleared all ego data");
+    if let Err(e) = store.save_ltm_to_jsonl() {
+        tracing::error!("Failed to save empty LTM store: {}", e);
+        return Ok(json(&ApiResponse::<()>::error(
+            "Failed to clear LTM data".to_string(),
+        )));
+    }
+
+    tracing::info!("Successfully cleared all ego data (STM and LTM)");
     Ok(json(&ApiResponse::success(())))
 }
 
@@ -419,11 +464,34 @@ pub async fn consolidate_stm_to_ltm(
 
     let consolidation_engine = ConsolidationEngine::new_with_llm((*reflection_engine).clone());
 
-    // Get all memories from STM
-    let memories: Vec<Memory> = {
+    // Get all memories and experiences from STM
+    let (all_memories, existing_experiences) = {
         let store = memory_store.read().await;
-        store.get_all_memories().into_iter().cloned().collect()
+        (
+            store
+                .get_all_memories()
+                .into_iter()
+                .cloned()
+                .collect::<Vec<Memory>>(),
+            store
+                .get_experiences()
+                .into_iter()
+                .cloned()
+                .collect::<Vec<crate::types::Experience>>(),
+        )
     };
+
+    // Extract IDs of thoughts that have already been consolidated
+    let consolidated_thought_ids: std::collections::HashSet<String> = existing_experiences
+        .iter()
+        .flat_map(|exp| exp.consolidated_from.clone())
+        .collect();
+
+    // Filter out already-consolidated thoughts
+    let memories: Vec<Memory> = all_memories
+        .into_iter()
+        .filter(|memory| !consolidated_thought_ids.contains(&memory.id))
+        .collect();
 
     if memories.is_empty() {
         return Ok(json(&ApiResponse::<ConsolidationResult>::success(
